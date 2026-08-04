@@ -169,5 +169,39 @@ console.log('\n— KESİNTİSİZ SAAT PRİMİ —')
   check('arka arkaya 4 saat primi deftere yazılır', g.events.some(e => e.includes('kesintisiz')))
 }
 
+
+console.log('\n— ÇIRAK / TELEFON HATTI / REKLAM —')
+{
+  const g = new Game()
+  check('temel kuyruk 4 istek', g.queueCap() === 4)
+  g.money = 50_000
+  check('2. hat alınır', g.buy('phone2').ok)
+  check('2. hatla kuyruk 6 olur', g.queueCap() === 6)
+  check('reklam alınır', g.buy('ads').ok)
+  check('reklam yayındayken tekrar verilemez', !g.buy('ads').ok)
+  g.day = 1; g.endDay(); g.day = 2; g.endDay()
+  check('reklam 2 gün sonra biter', g.adDays === 0)
+  check('bitince tekrar verilebilir', g.buy('ads').ok)
+
+  const c = new Game(); c.money = 50_000
+  check('çırak alınır', c.buy('cirak').ok)
+  let r = null
+  for (let i = 0; i < 900 && !r; i++) r = c.spawnReservation()
+  if (r) {
+    r.patience = r.maxPatience * 0.1        // sabrı bitmek üzere
+    c.tick(0.1)
+    check('çırak sabrı biten isteği YERLEŞTİRİR', c.bookings.length === 1 && c.queue.length === 0)
+    check('çırak yerleştirmesi bildirim üretir', c.notices.some(n => n.includes('Çırak')))
+  }
+  const noC = new Game()
+  let r2 = null
+  for (let i = 0; i < 900 && !r2; i++) r2 = noC.spawnReservation()
+  if (r2) {
+    r2.patience = r2.maxPatience * 0.1
+    noC.tick(0.1)
+    check('çıraksız istek kendiliğinden yerleşmez', noC.bookings.length === 0)
+  }
+}
+
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

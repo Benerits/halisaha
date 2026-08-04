@@ -87,7 +87,7 @@ function renderQueue() {
     const lever = pat > 0.55 && (r.hour >= 20 || r.segment === 'kurumsal')
     const tip = r.haggled ? 'pazarlık bitti'
       : lever ? 'sıkı müşteri — pazarlık şansı yüksek'
-      : pat < 0.4 ? 'acelesi var, üstüne gitme' : 'normal'
+      : pat < 0.4 ? 'acelesi var, üstüne gitme' : ''
     return `<div class="rcard ${selected === r.id ? 'sel' : ''}" data-id="${r.id}">
       <div class="team">${r.team}</div>${r.weeks ? `<span class="tagsub">${r.weeks} HAFTA</span>` : ''}
       <div class="when">${when}${r.flexible ? '<span class="flex">ESNEK</span>' : ''}</div>
@@ -99,7 +99,7 @@ function renderQueue() {
         <button data-hg="2" data-id="${r.id}" title="Sert pazarlık — kalkıp gidebilir">
           <b>₺${tl(Math.round(r.price * 1.5 / 10) * 10)}</b><i>iste · riskli</i></button>
       </div>`}
-      <div class="hint2 ${lever ? 'up' : pat < 0.4 ? 'dn' : ''}">${tip}</div>
+      ${tip ? `<div class="hint2 ${lever ? 'up' : 'dn'}">${tip}</div>` : ''}
       <div class="bar"><i style="width:${pat * 100}%"></i></div>
     </div>`
   }).join('')
@@ -327,6 +327,7 @@ function frame() {
 
   const prevDay = game.day
   game.tick(dt)
+  while (game.notices.length) { toast(game.notices.shift()!, 'g'); audio.place() }
   if (game.day !== prevDay) {
     audio.day()
     toast(`Gün ${game.day} · dün ₺${tl(game.lastDayProfit)} kâr`, game.lastDayProfit >= 0 ? 'g' : 'b'); save()

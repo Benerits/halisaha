@@ -81,7 +81,6 @@ export class World {
     this.buildGround()
     this.buildPitch(0, PITCH_Y)
     this.buildClubhouse()
-    this.buildFence()
     this.buildParking()
     this.buildStreet()
     this.spawnPlayers()
@@ -229,26 +228,6 @@ export class World {
     this.scene.add(g)
   }
 
-  private buildFence() {
-    const mat = new THREE.MeshLambertMaterial({ color: 0x7f8d99, transparent: true, opacity: 0.34, side: THREE.DoubleSide })
-    const seg = (w: number, x: number, y: number, rot: number, h = 2.6) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat)
-      m.position.set(x, y, h / 2); m.rotation.x = Math.PI / 2; m.rotation.y = rot
-      this.scene.add(m)
-      // direkler
-      const n = Math.floor(w / 3)
-      for (let i = 0; i <= n; i++) {
-        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, h, 6), lam(0x6f7d88))
-        p.rotation.x = Math.PI / 2
-        const t = -w / 2 + (w / n) * i
-        p.position.set(x + (rot ? 0 : t), y + (rot ? t : 0), h / 2)
-        this.scene.add(p)
-      }
-    }
-    // Arsa ızgarası (y < -9) çitin DIŞINDA — oralar henüz tesise dahil değil
-    seg(36, 0, 13, 0); seg(36, 0, -9.5, 0)
-    seg(22.5, -18, 1.75, Math.PI / 2); seg(22.5, 18, 1.75, Math.PI / 2)
-  }
 
   private buildParking() {
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(9, 6.5), lam(0x585f66))
@@ -633,8 +612,8 @@ export class World {
     const fwd = new THREE.Vector3().subVectors(this.target, this.camera.position).setZ(0).normalize()
     const right = new THREE.Vector3(-fwd.y, fwd.x, 0)
     const up = new THREE.Vector3(fwd.x, fwd.y, 0)
-    this.target.addScaledVector(right, dxPx * wPerPx)
-    this.target.addScaledVector(up, -dyPx * hPerPx)
+    this.target.addScaledVector(right, -dxPx * wPerPx)
+    this.target.addScaledVector(up, dyPx * hPerPx)
     this.target.x = Math.max(-45, Math.min(45, this.target.x))
     this.target.y = Math.max(-40, Math.min(40, this.target.y))
     this.applyCam()

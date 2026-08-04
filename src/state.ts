@@ -89,6 +89,7 @@ const TEAM_NAMES = [
 export type BuyId =
   | 'pitch2' | 'canteen' | 'fridge' | 'cleats' | 'lights' | 'shower'
   | 'schooldeal' | 'tearoom' | 'corporate' | 'staff' | 'docs' | 'billboard' | 'roadsign'
+  | 'phone2' | 'cirak' | 'ads'
 
 export interface ShopItem {
   id: BuyId
@@ -213,7 +214,7 @@ export class Game {
   // ---- rezervasyon üretimi ----
   /** Talep: itibar + ışık + saat katsayısı. Sıfır sürtünme: kart üstünde her şey yazılı. */
   spawnReservation(): Reservation | null {
-    if (this.queue.length >= 4) return null
+    if (this.queue.length >= this.queueCap()) return null
     const open = (Object.keys(SEGMENTS) as SegmentId[]).filter(s => this.segmentOpen(s))
     const seg = SEGMENTS[open[Math.floor(Math.random() * open.length)]]
     const day = Math.floor(Math.random() * 7)
@@ -222,6 +223,7 @@ export class Game {
     // o saatte talep var mı?
     const demand = hourDemand(hour, day) * (0.65 + this.rep * 0.12)
       * (this.hasLights && hour >= 19 ? 1.25 : 1) * (this.hasRoadSign ? 1.2 : 1)
+      * (this.adDays > 0 ? 1.5 : 1)
     if (Math.random() > demand) return null
     if (this.bookingAt(day, hour) && this.pitches < 2) return null
     const weeks = Math.random() < 0.28 ? (Math.random() < 0.5 ? 4 : 8) : 0
@@ -318,6 +320,15 @@ export class Game {
 
   /** müdavim sadakati — sıkıştırdıkça düşer, aboneliği yenilemeyi belirler */
   loyalty: Record<string, number> = {}
+  /** 2. telefon hattı: sırada 6 istek bekleyebilir (4 yerine) */
+  hasPhone2 = false
+  /** ÇIRAK: sabrı bitmek üzere olan istekleri kendisi yerleştirir (kayıp istek = kayıp para bitiyor) */
+  hasCirak = false
+  /** sosyal medya reklamı: kalan gün — sürerken talep +%50 */
+  adDays = 0
+  /** oyun-içi otomatik olaylar için bildirim kuyruğu (UI toast'a çevirir) */
+  notices: string[] = []
+  queueCap(): number { return this.hasPhone2 ? 6 : 4 }
 
   /** her saniye */
   tick(dt: number) {
@@ -329,6 +340,20 @@ export class Game {
     if (this.t >= DAY_SECONDS) {
       this.t -= DAY_SECONDS
       this.endDay()
+    }
+    // ÇIRAK: sabrı azalan isteği oyuncu adına yerleştirir
+    if (this.hasCirak) {
+      for (const r of [...this.queue]) {
+        if (r.patience > r.maxPatience * 0.25) continue
+        const days = r.flexible ? r.flexDays : [r.day]
+        const hours = r.flexible ? r.flexHours : [r.hour]
+        outer: for (const d of days) for (const h of hours) {
+          if (this.place(r.id, d, h).ok) {
+            this.notices.push(`Çırak telefona baktı: ${r.team} → ${DAY_NAMES[d]} ${h}:00`)
+            break outer
+          }
+        }
+      }
     }
     // kart sabrı
     for (let i = this.queue.length - 1; i >= 0; i--) {
@@ -376,6 +401,10 @@ export class Game {
     this.lastDayProfit = income - upkeep
     this.incomeToday = income
     this.expenseToday = upkeep
+    if (this.adDays > 0) {
+      this.adDays--
+      if (this.adDays === 0) this.notices.push('Sosyal medya reklamı bitti — istersen yenisini ver.')
+    }
     // KİRA GÜNÜ
     if (this.day >= this.rentDueDay) {
       const rent = this.rentAmount()
@@ -430,6 +459,13 @@ export class Game {
         desc: 'Saha kenarına yerel esnaf reklamı asarsın; kira her maçta cebe girer.', owned: this.hasBillboard, locked: null },
       { id: 'roadsign', label: 'Yol Tabelası', gain: 'Tüm talep +%20', cost: 16_000, upkeep: 60,
         desc: 'Ana caddeden görünen büyük tabela — yoldan geçen daha çok kişi arar.', owned: this.hasRoadSign, locked: null },
+      { id: 'phone2', label: '2. Telefon Hattı', gain: 'Sırada 6 istek bekler (4 yerine)', cost: 5_500, upkeep: 40,
+        desc: 'Hat meşgulken arayan müşteri kaçıyordu — ikinci hat kuyruk kapasitesini artırır.', owned: this.hasPhone2, locked: null },
+      { id: 'cirak', label: 'Çırak', gain: 'Sabrı biten istekleri o yerleştirir', cost: 8_000, upkeep: 350,
+        desc: 'Telefona bakar: sen yetişemezsen bekleyen isteği uygun boş saate kendisi yazar. Pazarlık yapmaz.', owned: this.hasCirak, locked: null },
+      { id: 'ads', label: 'Sosyal Medya Reklamı', gain: '2 gün talep +%50', cost: 2_500, upkeep: 0,
+        desc: 'Mahalle gruplarında sponsorlu ilan. Bitince tekrar verebilirsin.', owned: false,
+        locked: this.adDays > 0 ? `Reklam yayında (${this.adDays} gün kaldı)` : null },
       { id: 'staff', label: 'Tesis Görevlisi', gain: 'Saha bakımı otomatik', cost: 6_000, upkeep: 400,
         desc: 'Yovmiyesi var ama bakım işini üstlenir.', owned: this.staff >= 1, locked: null },
       { id: 'docs', label: 'Belge Takip Servisi', gain: 'Evraklar otomatik yenilenir', cost: 9_500, upkeep: 250,
@@ -459,6 +495,9 @@ export class Game {
       case 'docs': this.docService = true; break
       case 'billboard': this.hasBillboard = true; break
       case 'roadsign': this.hasRoadSign = true; break
+      case 'phone2': this.hasPhone2 = true; break
+      case 'cirak': this.hasCirak = true; break
+      case 'ads': this.adDays = 2; break
     }
     this.events.push(`${it.label} alındı.`)
     return { ok: true, msg: `${it.label} hazır — ${it.gain}` }
@@ -604,6 +643,7 @@ export class Game {
       staff: this.staff, docService: this.docService, docs: this.docs,
       hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,
       rentDueDay: this.rentDueDay, rentMissed: this.rentMissed, loyalty: this.loyalty,
+      hasPhone2: this.hasPhone2, hasCirak: this.hasCirak, adDays: this.adDays,
       ownedParcels: this.ownedParcels, builds: this.builds,
     }
   }
@@ -618,6 +658,7 @@ export class Game {
     this.hasBillboard = b('hasBillboard'); this.hasRoadSign = b('hasRoadSign')
     if (Array.isArray(d.bookings)) this.bookings = d.bookings as Booking[]
     this.rentDueDay = n('rentDueDay', 7); this.rentMissed = n('rentMissed', 0)
+    this.hasPhone2 = d.hasPhone2 === true; this.hasCirak = d.hasCirak === true; this.adDays = n('adDays', 0)
     if (d.loyalty && typeof d.loyalty === 'object') this.loyalty = d.loyalty as Record<string, number>
     if (Array.isArray(d.ownedParcels)) this.ownedParcels = d.ownedParcels as string[]
     if (Array.isArray(d.builds)) this.builds = d.builds as PlacedBuild[]
