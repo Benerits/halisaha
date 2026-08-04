@@ -327,6 +327,17 @@ export class World {
   private markOwned(key: string, x: number, y: number) {
     if (this.stakes.has(key)) return
     const g = new THREE.Group()
+    // TAPU SINIRI: dört kenarda belirgin krem şerit — 'burası senin' uzaktan okunur
+    const bm = lam(0xf1ecd9)
+    const t = 0.22
+    for (const [w, d, px, py] of [
+      [PARCEL_W, t, 0, PARCEL_D / 2 - t / 2], [PARCEL_W, t, 0, -PARCEL_D / 2 + t / 2],
+      [t, PARCEL_D, PARCEL_W / 2 - t / 2, 0], [t, PARCEL_D, -PARCEL_W / 2 + t / 2, 0],
+    ] as [number, number, number, number][]) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(w, d), bm)
+      strip.position.set(px, py, 0.045)
+      g.add(strip)
+    }
     for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as [number, number][]) {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.62, 6), lam(0xf3efe2))
       post.rotation.x = Math.PI / 2
@@ -347,7 +358,7 @@ export class World {
     for (const [key, tile] of this.parcelTiles) {
       const mat = tile.material as THREE.MeshLambertMaterial
       if (owned.includes(key)) {
-        mat.color.setHex(0x8cab68)  // biçilmiş, bakımlı çim
+        mat.color.setHex(0x94b26f)  // biçilmiş, bakımlı çim — boş parselden net ayrışır
         this.markOwned(key, tile.position.x, tile.position.y)
       } else {
         mat.color.setHex(0x7fa05e)  // zeminle aynı — dümdüz çimen
