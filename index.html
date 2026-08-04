@@ -36,7 +36,7 @@
   .chip.warn b { color:var(--clay); }
 
   /* ===== SOL: GELEN İSTEKLER (akan şerit) ===== */
-  #queue { position:fixed; left:10px; top:52px; max-height:calc(100vh - 62px); width:196px; z-index:12;
+  #queue { position:fixed; left:10px; top:82px; max-height:calc(100vh - 62px); width:196px; z-index:12;
     background:var(--paper); border-radius:var(--r-lg); box-shadow:var(--shadow);
     display:flex; flex-direction:column; overflow:hidden; }
   .desk-head { background:var(--head); color:var(--head-ink); font-size:9.5px; font-weight:800;
@@ -181,6 +181,12 @@
   .tip button:hover { filter:brightness(1.07); }
 
   /* ===== OFİS ===== */
+  #locbar { position:fixed; top:44px; left:10px; z-index:11; display:flex; gap:4px; }
+  .loc { background:var(--paper); color:var(--ink); font-weight:800; font-size:10px; letter-spacing:.5px;
+    padding:5px 11px; border-radius:6px; box-shadow:var(--shadow); border-bottom:3px solid #b9c9ae; }
+  .loc.on { background:var(--green); color:#fff; border-bottom-color:var(--green-dark); }
+  .loc.locked { color:var(--muted); }
+  .loc.locked:hover { color:var(--ink); border-bottom-color:var(--sun); }
   #yazpill { position:fixed; z-index:9; transform:translate(-50%,-100%); cursor:pointer;
     background:var(--head); color:var(--head-ink); font-weight:800; font-size:10px;
     letter-spacing:.8px; padding:5px 12px; border-radius:99px; box-shadow:0 4px 12px rgba(20,35,25,.3);
@@ -229,9 +235,15 @@
   /* ===== TOAST ===== */
   #toasts { position:fixed; left:50%; transform:translateX(-50%); top:76px; z-index:50;
     display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none; }
-  .toast { background:var(--green-deep); color:#eaf6ec; font-weight:800; font-size:13.5px; padding:10px 20px;
+  .toast { background:var(--paper); color:var(--ink); font-weight:750; font-size:12.5px; padding:9px 16px 9px 13px;
+    border-left:4px solid var(--head); box-shadow:0 6px 20px rgba(20,40,25,.18);
+    animation:tin .25s cubic-bezier(.2,.9,.3,1.15);
     border-radius:99px; box-shadow:var(--shadow); animation:pop .22s; }
-  .toast.g { background:var(--green); } .toast.b { background:var(--clay); }
+  .toast.g { border-left-color:var(--green); }
+  .toast.g::before { content:'✓ '; color:var(--green-dark); font-weight:800; }
+  .toast.b { border-left-color:var(--clay); }
+  .toast.b::before { content:'! '; color:var(--clay); font-weight:800; }
+  @keyframes tin { from { transform:translateY(-14px); opacity:0 } to { transform:none; opacity:1 } }
   @keyframes pop { from { transform:translateY(-8px); opacity:0 } }
 </style>
 </head>
@@ -248,6 +260,8 @@
 </div>
 
 <div id="rail"><div id="goals"></div><div id="tips"></div></div>
+
+<div id="locbar"></div>
 
 <div id="pickbar"></div>
 

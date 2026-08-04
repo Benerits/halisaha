@@ -21,7 +21,10 @@ function box(w: number, d: number, h: number, c: number, x: number, y: number, z
 
 interface Ply { g: THREE.Group; team: 0 | 1; hx: number; hy: number; sp: number; cd: number; ang: number }
 
+export type LocTheme = 'mahalle' | 'sanayi' | 'sahil'
+
 export class World {
+  private theme: LocTheme
   scene = new THREE.Scene()
   camera: THREE.OrthographicCamera
   renderer: THREE.WebGLRenderer
@@ -49,8 +52,9 @@ export class World {
   private parcelBuilds = new Map<string, THREE.Group>()
   private ray = new THREE.Raycaster()
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.scene.background = new THREE.Color(0xa8dcef)
+  constructor(canvas: HTMLCanvasElement, theme: LocTheme = 'mahalle') {
+    this.theme = theme
+    this.scene.background = new THREE.Color(theme === 'sahil' ? 0xaee2f2 : 0xa8dcef)
     this.scene.fog = new THREE.Fog(0xa8dcef, 78, 165)
     const a = innerWidth / innerHeight
     this.camera = new THREE.OrthographicCamera(-this.zoom * a / 2, this.zoom * a / 2, this.zoom / 2, -this.zoom / 2, -120, 220)
@@ -100,8 +104,16 @@ export class World {
   }
 
   private buildGround() {
-    const g = new THREE.Mesh(new THREE.PlaneGeometry(340, 340), lam(0x7fa05e))
+    const groundCol = this.theme === 'sanayi' ? 0x97946f : this.theme === 'sahil' ? 0x88ab60 : 0x7fa05e
+    const g = new THREE.Mesh(new THREE.PlaneGeometry(340, 340), lam(groundCol))
     g.receiveShadow = true; this.scene.add(g)
+    if (this.theme === 'sahil') {
+      // güneyde kumsal + deniz
+      const sand = new THREE.Mesh(new THREE.PlaneGeometry(340, 14), lam(0xe8d5a0))
+      sand.position.set(0, -27, 0.012); this.scene.add(sand)
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(340, 140), lam(0x4fa8cf))
+      sea.position.set(0, -104, 0.01); this.scene.add(sea)
+    }
     // AVLU: yalnız giriş parseli (1,0) beton — kalan her yer çimen
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 9.0), lam(0xb6b0a1))
     pad.position.set(0, 6.9, 0.06); pad.receiveShadow = true; this.scene.add(pad)
@@ -328,7 +340,7 @@ export class World {
       t.rotation.z = rot
       this.scene.add(t)
     }
-    const VX = [-28, 28] // dikey sokakların x'i
+    const VX = [-30, 30] // dikey sokaklar — 6'nın KATI olmalı (karo ızgarasına denk gelsin)
     // ana cadde (yatay, y=17.5) — tesis girişinde (x=0) YAYA GEÇİDİ
     for (let x = -168; x <= 168; x += T) {
       if (VX.includes(x) && k.roads.tee) { put(k.roads.tee, x, 17.5, Math.PI) ; continue }
@@ -344,7 +356,7 @@ export class World {
     }
     for (const vx of VX) lamp(k.roads.lightDouble, vx, 14.3, 0)
     for (const lx of [-52, -10, 10, 52, 76, -76]) lamp(k.roads.light, lx, 14.5, 0)
-    for (const vx of VX) for (const ly of [-6, -30]) lamp(k.roads.light, vx - 3.2, ly, Math.PI / 2)
+    for (const vx of VX) for (const ly of [-6, -30]) lamp(k.roads.light, vx - 3.4, ly, Math.PI / 2)
     // dikey sokaklar: caddeden güneye
     for (const vx of VX) {
       for (let y = 17.5 - T; y >= -160; y -= T) {
@@ -571,7 +583,7 @@ export class World {
         [-24.5, -12, 2.2], [-4, -19.6, 2.5], [6, -19.6, 2.2], [24, 2, 2.6],
         [-24.5, 4, 2.3], [23, 13, 2.8], [-2, -19.8, 2.4],
       ]
-      for (const [x, y, h] of spots) {
+      for (const [x, y, h] of (this.theme === 'sanayi' ? spots.filter((_, i) => i % 2 === 0) : spots)) {
         const t = fitModel(k.trees[Math.floor(Math.random() * k.trees.length)], h)
         t.position.set(x, y, 0); t.rotation.z = Math.random() * Math.PI
         this.scene.add(t)
@@ -622,8 +634,8 @@ export class World {
     // ARABALAR — otoparkta
     if (k.cars.length) {
       const slots: [number, number, number][] = [
-        [10.7, 9.05, Math.PI], [14.6, 9.05, Math.PI], [16.55, 9.05, Math.PI],  // üst sıra: burnu koridora
-        [11.65, 4.95, 0], [15.55, 4.95, 0],                                     // alt sıra: burnu koridora
+        [10.68, 9.15, Math.PI], [14.58, 9.15, Math.PI], [16.53, 9.15, Math.PI], // üst sıra: köşeye yaslı
+        [12.63, 4.85, 0], [16.53, 4.85, 0],                                      // alt sıra: köşeye yaslı
       ]
       slots.forEach(([x, y, rot], i) => {
         const car = fitModel(k.cars[i % k.cars.length], 1.0)
@@ -644,7 +656,7 @@ export class World {
       // dikey sokak trafiği
       for (let i = 0; i < 4; i++) {
         const dir: 1 | -1 = i % 2 ? 1 : -1
-        const vx = i < 2 ? -28 : 28
+        const vx = i < 2 ? -30 : 30
         const car = fitModel(k.cars[(i + 3) % k.cars.length], 1.0)
         car.position.set(vx + (dir > 0 ? 0.9 : -0.9), -80 + i * 35, 0)
         car.rotation.z = dir > 0 ? Math.PI : 0

@@ -138,6 +138,28 @@ export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: stri
   garden:  { label: 'Yeşil Alan', cost: 9_000, gain: 'İtibar +0,2', desc: 'Oturma alanı ve peyzaj — tesis daha bakımlı görünür.' },
 }
 
+// ---- LOKASYONLAR (şubeler): kasa/gün ortak; takvim, kuyruk, arsa, saha ŞUBEYE AİT ----
+export type LocId = 'mahalle' | 'sanayi' | 'sahil'
+export interface LocDef {
+  id: LocId; label: string; cost: number
+  /** fiyat çarpanı (bölgenin alım gücü) */ priceMult: number
+  /** talep çarpanı (bölgenin yoğunluğu) */ demandMult: number
+  desc: string
+}
+export const LOCATIONS: LocDef[] = [
+  { id: 'mahalle', label: 'MAHALLE', cost: 0, priceMult: 1, demandMult: 1,
+    desc: 'Başladığın yer. Dengeli talep, dengeli fiyat.' },
+  { id: 'sanayi', label: 'SANAYİ', cost: 150_000, priceMult: 0.9, demandMult: 1.3,
+    desc: 'İşçi ve şirket takımları — talep yüksek, fiyat bir tık düşük.' },
+  { id: 'sahil', label: 'SAHİL', cost: 400_000, priceMult: 1.35, demandMult: 0.85,
+    desc: 'Zengin muhit — fiyatlar %35 yüksek, müşteri daha seçici.' },
+]
+/** şubenin taşınabilir durumu */
+interface LocSnap {
+  bookings: Booking[]; queue: Reservation[]; pitches: number
+  ownedParcels: string[]; builds: PlacedBuild[]
+}
+
 export interface SaveData { [k: string]: unknown }
 
 export class Game {
@@ -179,7 +201,9 @@ export class Game {
   /** HAFTALIK KİRA — 7 günde bir öde; ödeyemezsen itibar yanar (baskı davulu) */
   rentDueDay = 7
   rentMissed = 0
-  rentAmount(): number { return 12_000 + (this.pitches - 1) * 4_000 }
+  rentAmount(): number {
+    return 12_000 + (this.totalPitches() - 1) * 4_000 + (this.unlockedLocs.length - 1) * 8_000
+  }
   daysToRent(): number { return Math.max(0, this.rentDueDay - this.day + 1) }
 
   // ---- türetilmiş ----
@@ -240,11 +264,11 @@ export class Game {
     // o saatte talep var mı?
     const demand = hourDemand(hour, day) * (0.65 + this.rep * 0.12)
       * (this.hasLights && hour >= 19 ? 1.25 : 1) * (this.hasRoadSign ? 1.2 : 1)
-      * (this.adDays > 0 ? 1.5 : 1)
+      * (this.adDays > 0 ? 1.5 : 1) * this.locDef().demandMult
     if (Math.random() > demand) return null
     if (!this.freeAt(day, hour)) return null
     const weeks = Math.random() < 0.28 ? (Math.random() < 0.5 ? 4 : 8) : 0
-    const raw = this.basePrice() * seg.priceMult * (weeks > 0 ? 0.82 : 1)
+    const raw = this.basePrice() * seg.priceMult * (weeks > 0 ? 0.82 : 1) * this.locDef().priceMult
     // ESNEK İSTEK (%60): "hafta içi akşam olsun" → hangi slota koyacağına SEN karar verirsin
     const flexible = Math.random() < 0.6
     const flexDays: number[] = []
@@ -368,6 +392,52 @@ export class Game {
   lostNotices: string[] = []
   /** toplam yerleştirme sayısı — öğretici vurgular buna göre sakinleşir */
   placedCount = 0
+  // ---- ŞUBELER ----
+  activeLoc: LocId = 'mahalle'
+  unlockedLocs: LocId[] = ['mahalle']
+  private locStore: Record<string, LocSnap> = {}
+  locDef(): LocDef { return LOCATIONS.find(l => l.id === this.activeLoc)! }
+  /** aktif şubenin canlı alanlarını depoya yaz */
+  syncLoc() {
+    this.locStore[this.activeLoc] = {
+      bookings: this.bookings, queue: this.queue, pitches: this.pitches,
+      ownedParcels: this.ownedParcels, builds: this.builds,
+    }
+  }
+  private loadLocFields(id: LocId) {
+    const sn = this.locStore[id]
+    if (!sn) return
+    this.bookings = sn.bookings; this.queue = sn.queue; this.pitches = sn.pitches
+    this.ownedParcels = sn.ownedParcels; this.builds = sn.builds
+  }
+  switchLoc(id: LocId): { ok: boolean; msg: string } {
+    if (!this.unlockedLocs.includes(id)) return { ok: false, msg: 'Bu şube henüz senin değil.' }
+    if (id === this.activeLoc) return { ok: true, msg: '' }
+    this.syncLoc()
+    this.activeLoc = id
+    this.loadLocFields(id)
+    return { ok: true, msg: `${this.locDef().label} şubesine geçildi.` }
+  }
+  buyLoc(id: LocId): { ok: boolean; msg: string } {
+    const def = LOCATIONS.find(l => l.id === id)
+    if (!def) return { ok: false, msg: 'Bilinmeyen şube.' }
+    if (this.unlockedLocs.includes(id)) return { ok: false, msg: 'Bu şube zaten senin.' }
+    if (this.money < def.cost) return { ok: false, msg: `₺${(def.cost - this.money).toLocaleString('tr-TR')} eksik.` }
+    this.money -= def.cost
+    this.unlockedLocs.push(id)
+    this.locStore[id] = {
+      bookings: [], queue: [], pitches: 1,
+      ownedParcels: [...STARTER_PARCELS], builds: [],
+    }
+    this.events.push(`${def.label} şubesi açıldı! (₺${def.cost.toLocaleString('tr-TR')})`)
+    return { ok: true, msg: `${def.label} şubesi senin — kurulu 1 saha + arsalarla geliyor.` }
+  }
+  totalPitches(): number {
+    let t = 0
+    for (const id of this.unlockedLocs)
+      t += id === this.activeLoc ? this.pitches : (this.locStore[id]?.pitches ?? 1)
+    return t
+  }
   queueCap(): number { return this.hasPhone2 ? 6 : 4 }
 
   /** her saniye */
@@ -451,6 +521,35 @@ export class Game {
     this.lastDayProfit = income - upkeep
     this.incomeToday = income
     this.expenseToday = upkeep
+    // DİĞER ŞUBELER: müdür işletir — maçlar oynanır, abonelikler işler, kort kirası gelir
+    const dayIdx = (this.day - 1) % 7
+    let subeIncome = 0
+    for (const id of this.unlockedLocs) {
+      if (id === this.activeLoc) continue
+      const sn = this.locStore[id]
+      if (!sn) continue
+      subeIncome += sn.builds.reduce((sum, b) =>
+        sum + (b.kind === 'basket' ? 800 : b.kind === 'voley' ? 550 : 0), 0)
+      const played = sn.bookings.filter(b => b.day === dayIdx)
+      for (const b of played) {
+        subeIncome += b.price + this.extraPerMatch()
+        if (b.sub) {
+          b.weeksLeft--
+          if (b.weeksLeft <= 0) {
+            if (this.rep >= 3.2) b.weeksLeft = 4
+            else sn.bookings = sn.bookings.filter(x => x !== b)
+          }
+        } else sn.bookings = sn.bookings.filter(x => x !== b)
+      }
+      this.gMatches += played.length
+    }
+    if (subeIncome > 0) {
+      this.money += subeIncome
+      this.incomeToday += subeIncome
+      this.lastDayProfit += subeIncome
+      this.gEarned += subeIncome
+      this.events.push(`Şubelerden gelir: ₺${subeIncome.toLocaleString('tr-TR')}`)
+    }
     if (this.adDays > 0) {
       this.adDays--
       if (this.adDays === 0) this.notices.push('Sosyal medya reklamı bitti — istersen yenisini ver.')
@@ -713,6 +812,8 @@ export class Game {
       rentDueDay: this.rentDueDay, rentMissed: this.rentMissed, loyalty: this.loyalty,
       hasPhone2: this.hasPhone2, hasCirak: this.hasCirak, adDays: this.adDays,
       placedCount: this.placedCount,
+      activeLoc: this.activeLoc, unlockedLocs: this.unlockedLocs,
+      locStore: (this.syncLoc(), this.locStore),
       ownedParcels: this.ownedParcels, builds: this.builds,
     }
   }
@@ -729,6 +830,18 @@ export class Game {
     this.rentDueDay = n('rentDueDay', 7); this.rentMissed = n('rentMissed', 0)
     this.hasPhone2 = d.hasPhone2 === true; this.hasCirak = d.hasCirak === true; this.adDays = n('adDays', 0)
     this.placedCount = n('placedCount', 0)
+    if (Array.isArray(d.unlockedLocs) && d.unlockedLocs.length) this.unlockedLocs = d.unlockedLocs as LocId[]
+    if (typeof d.activeLoc === 'string' && this.unlockedLocs.includes(d.activeLoc as LocId)) this.activeLoc = d.activeLoc as LocId
+    if (d.locStore && typeof d.locStore === 'object') {
+      this.locStore = d.locStore as Record<string, LocSnap>
+      const sn = this.locStore[this.activeLoc]
+      if (sn) {
+        // aktif şubenin alanları depodan gelir (eski kayıtta depo yoksa üst düzey alanlar zaten yüklendi)
+        this.bookings = sn.bookings; this.queue = sn.queue; this.pitches = sn.pitches
+        this.ownedParcels = [...new Set([...STARTER_PARCELS, ...sn.ownedParcels])]
+        this.builds = sn.builds
+      }
+    }
     if (d.loyalty && typeof d.loyalty === 'object') this.loyalty = d.loyalty as Record<string, number>
     if (Array.isArray(d.ownedParcels))
       this.ownedParcels = [...new Set([...STARTER_PARCELS, ...(d.ownedParcels as string[])])]

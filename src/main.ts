@@ -3,13 +3,13 @@
  * SIFIR SÜRTÜNME: kart seç → takvimde yanıp sönen yere tıkla. Başka kural yok.
  */
 import * as THREE from 'three'
-import { World } from './world'
+import { World, type LocTheme } from './world'
 import { audio } from './audio'
-import { Game, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, BUILDS, parcelCost, type BuyId, type BuildKind } from './state'
+import { Game, LOCATIONS, type LocId, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, BUILDS, parcelCost, type BuyId, type BuildKind } from './state'
 
 const SAVE_KEY = 'halisaha-save-v1'
 const canvas = document.getElementById('c') as HTMLCanvasElement
-const world = new World(canvas)
+let world = new World(canvas, 'mahalle')
 const game = new Game()
 
 // kayıt yükle
@@ -431,7 +431,55 @@ function renderHud() {
   repChip.classList.toggle('warn', game.rep < 2.5)
 }
 
-function renderAll() { renderHud(); renderQueue(); renderCal(); renderGoals(); renderTips() }
+// ---- ŞUBE ÇUBUĞU ----
+let pendingLocBuy: LocId | null = null
+function renderLocs() {
+  const bar = $('locbar')
+  bar.innerHTML = LOCATIONS.map(l => {
+    const owned = game.unlockedLocs.includes(l.id)
+    const on = game.activeLoc === l.id
+    return `<button class="loc ${on ? 'on' : ''} ${owned ? '' : 'locked'}" data-loc="${l.id}"
+      title="${l.desc}">${l.label}${owned ? '' : ` · ₺${tl(l.cost)}`}</button>`
+  }).join('')
+  bar.querySelectorAll<HTMLElement>('button[data-loc]').forEach(b => {
+    b.addEventListener('click', () => {
+      const id = b.dataset.loc as LocId
+      if (game.unlockedLocs.includes(id)) {
+        if (id === game.activeLoc) return
+        const r = game.switchLoc(id)
+        if (r.ok) { audio.click(); toast(r.msg, 'g'); applyLocSwitch() }
+        return
+      }
+      // kilitli: iki tıkla onay (yanlışlıkla ₺150k gitmesin)
+      if (pendingLocBuy !== id) {
+        pendingLocBuy = id
+        toast(`${LOCATIONS.find(l => l.id === id)!.label}: ₺${tl(LOCATIONS.find(l => l.id === id)!.cost)} — onaylamak için TEKRAR tıkla.`)
+        setTimeout(() => { if (pendingLocBuy === id) pendingLocBuy = null }, 4000)
+        return
+      }
+      pendingLocBuy = null
+      const r = game.buyLoc(id)
+      if (r.ok) { audio.build(); toast(r.msg, 'g'); game.switchLoc(id); applyLocSwitch() }
+      else { audio.bad(); toast(r.msg, 'b') }
+    })
+  })
+}
+
+/** şube değişti: UI önbelleklerini sıfırla + sahneyi şube temasıyla yeniden kur */
+function applyLocSwitch() {
+  selected = null; viewDay = -1
+  qCache = ''; tabsCache = ''; calCache = ''; pickCache = ''
+  const old = document.getElementById('c') as HTMLCanvasElement
+  world.renderer.dispose()
+  const c2 = old.cloneNode(false) as HTMLCanvasElement
+  old.replaceWith(c2)
+  world = new World(c2, game.activeLoc as LocTheme)
+  world.syncParcels(game.ownedParcels, game.builds)
+  save()
+  renderAll()
+}
+
+function renderAll() { renderHud(); renderQueue(); renderCal(); renderGoals(); renderTips(); renderLocs() }
 
 function save() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())) } catch { /* kota */ }
