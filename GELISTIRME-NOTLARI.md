@@ -2,6 +2,42 @@
 
 > Canlı tasarım defteri. Her maddenin yanında durum: ✅ bitti · 🔨 sırada · 💡 tasarım
 
+## ÖZELLİK ENVANTERİ (tam liste)
+
+### Rezervasyon & Pazarlık
+- Telefon çalar → kart soldan kayar (yumuşak zil, kaçan müşteride üzgün ses)
+- Esnek (%60: "hafta içi 19-22") / katı istekler; 2 SAATLİK maçlar (%18, fiyat x1.9,
+  ardışık iki slotu kaplar, tek tıkla)
+- Pazarlık: +%25 güvenli / +%50 riskli (gerçek rakamlı butonlar), gizli tavan
+  okunur sinyallerden; ortayı bulma / "çok oldu abi" çekip gitme
+- El sıkışınca süre donar; 45sn sonra nazik hatırlatma; GERİ ÇEVİR supabı
+  (uygun slot kalmadıysa şerit açıkça söyler)
+- Çırak: sabrı biten isteği kendisi yerleştirir; 2. hat: kuyruk 6
+
+### Takvim
+- Gün sekmeli tek şerit; BUGÜN rozeti; HUD "Pzt · 8" (aynı dil); başlıkta günün
+  özeti ("Bugün Pazartesi · 2 maç · sıradaki 14:00 Emekliler"); geçmiş saat soluk
+- Kapasite = saha sayısı; yarı dolu çapraz yeşil; dolu saate net red + shake
+- Adaptif vurgu: ilk 12 yerleştirmede nabız, sonra sakin
+- Yerleştirme modu: sarı halka + zıplayan şerit; "Cuma 21:00 seçildi ✓" onayı
+
+### Ekonomi & Mağaza
+- Kantin → Soğuk Su Dolabı, TOST MAKİNESİ (+₺45), BAKLAVA TEZGÂHI (+₺55)
+- Krampon (+₺45), KALECİ KİRALAMA (+₺70, ₺150/g yevmiye), LED, Duş, Panolar,
+  Yol Tabelası, Segment anlaşmaları (okul/çay ocağı/kurumsal fatura)
+- Sosyal medya reklamı (tekrarlanabilir, 2 gün +%50)
+- Haftalık kira (şube+saha ile artar), kesintisiz saat primi, günlük hedefler+ödül
+
+### Arsa & Şubeler
+- 3x3 parsel/şube; tapu şeridi; kur/YIK(%40); halı saha/mini/basket/voley/otopark/yeşil
+- Mahalle / Sanayi(₺150k) / Sahil(₺400k); pasif şubeler müdürle gelir yazar
+
+### Sahne
+- Kenney: karakterler(halkalı forma), yollar(T-kavşak, yaya geçidi, lambalar),
+  çift sıralı otopark, yeşil çatılı kulüp binası(tıklanabilir=YAZIHANE), ayaklı tabela
+- Bot maç (akıcı), maça yürüyen oyuncular, iki yönlü+dikey trafik, gün/gece(yumuşak),
+  sentez müzik+SFX (telifsiz)
+
 ## Mevcut Çekirdek (✅)
 - Zero-friction döngü: telefon → kart → (pazarlık) → yanan slota tıkla → para
 - Esnek/katı istekler, gizli tavanlı pazarlık (okunur ipuçları), müdavim sadakati

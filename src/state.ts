@@ -65,6 +65,8 @@ export interface Reservation {
   maxPay: number
   /** pazarlık yapıldı mı (bir kez) */
   haggled: boolean
+  /** maç uzunluğu: 1 ya da 2 saat (2 saat = ardışık iki slot kaplar) */
+  hours: number
   /** anlaşma sonrası geçen süre (nazik hatırlatma için) */
   dealWait?: number
   weeks: number
@@ -94,7 +96,7 @@ const TEAM_NAMES = [
 export type BuyId =
   | 'canteen' | 'fridge' | 'cleats' | 'lights' | 'shower'
   | 'schooldeal' | 'tearoom' | 'corporate' | 'staff' | 'docs' | 'billboard' | 'roadsign'
-  | 'phone2' | 'cirak' | 'ads'
+  | 'phone2' | 'cirak' | 'ads' | 'keeper' | 'tost' | 'baklava'
 
 export interface ShopItem {
   id: BuyId
@@ -182,6 +184,9 @@ export class Game {
   hasCanteen = false
   hasFridge = false
   hasCleats = false
+  hasKeeper = false
+  hasTost = false
+  hasBaklava = false
   hasLights = false
   hasShower = false
   hasSchoolDeal = false
@@ -215,6 +220,9 @@ export class Game {
     if (this.hasCanteen) v += 120
     if (this.hasFridge) v += 60
     if (this.hasCleats) v += 45
+    if (this.hasKeeper) v += 70
+    if (this.hasTost) v += 45
+    if (this.hasBaklava) v += 55
     if (this.hasBillboard) v += 90   // pano kirası maç başına yansır
     return v
   }
@@ -268,7 +276,10 @@ export class Game {
     if (Math.random() > demand) return null
     if (!this.freeAt(day, hour)) return null
     const weeks = Math.random() < 0.28 ? (Math.random() < 0.5 ? 4 : 8) : 0
+    // 2 SAATLİK MAÇ (%18, aboneliksiz): '21-23 bizim olsun' — ardışık iki slot
+    const twoH = weeks === 0 && Math.random() < 0.18
     const raw = this.basePrice() * seg.priceMult * (weeks > 0 ? 0.82 : 1) * this.locDef().priceMult
+      * (twoH ? 1.9 : 1)
     // ESNEK İSTEK (%60): "hafta içi akşam olsun" → hangi slota koyacağına SEN karar verirsin
     const flexible = Math.random() < 0.6
     const flexDays: number[] = []
@@ -297,6 +308,7 @@ export class Game {
       price: Math.round(raw / 10) * 10,
       maxPay: Math.round(raw * lever / 10) * 10,
       haggled: false,
+      hours: twoH && baseHour + 1 < CLOSE_HOUR ? 2 : 1,
       weeks,
       patience: 34, maxPatience: 34,
     }
@@ -320,14 +332,24 @@ export class Game {
         ? { ok: false, msg: `${r.team} bu saati kabul etmiyor — yanıp sönen slotlardan birini seç.` }
         : { ok: false, msg: `${r.team} sadece ${DAY_NAMES[r.day]} ${r.hour}:00 istiyor.` }
     }
+    if (r.hours === 2 && !this.freeAt(day, hour + 1)) {
+      return { ok: false, msg: `${r.team} 2 saat istiyor — ${hour + 1}:00 da boş olmalı.` }
+    }
     this.queue.splice(i, 1)
-    this.bookings.push({
-      day, hour, team: r.team, segment: r.segment, price: r.price,
-      sub: r.weeks > 0, weeksLeft: r.weeks,
-    })
+    if (r.hours === 2) {
+      const half = Math.round(r.price / 2 / 10) * 10
+      this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0 })
+      this.bookings.push({ day, hour: hour + 1, team: r.team, segment: r.segment, price: r.price - half, sub: false, weeksLeft: 0 })
+    } else {
+      this.bookings.push({
+        day, hour, team: r.team, segment: r.segment, price: r.price,
+        sub: r.weeks > 0, weeksLeft: r.weeks,
+      })
+    }
     if (r.weeks > 0) { if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] } this.gSubs++ }
     this.placedCount++
-    return { ok: true, msg: r.weeks > 0 ? `${r.team} ${r.weeks} hafta abone oldu!` : `${r.team} rezervasyonu alındı.` }
+    return { ok: true, msg: r.hours === 2 ? `${r.team} 2 saatlik maç aldı (${hour}:00-${hour + 2}:00)!`
+      : r.weeks > 0 ? `${r.team} ${r.weeks} hafta abone oldu!` : `${r.team} rezervasyonu alındı.` }
   }
 
   /** ÖNERİLEN SLOT: bitişik saat primi kuran slot öncelikli, yoksa ilk boş geçerli slot */
@@ -336,7 +358,7 @@ export class Game {
     const hours = r.flexible ? r.flexHours : [r.hour]
     let first: { day: number; hour: number; adj: boolean } | null = null
     for (const d of days) for (const h of hours) {
-      if (!this.freeAt(d, h)) continue
+      if (!this.canPlaceAt(r, d, h)) continue
       const adj = !!(this.bookingAt(d, h - 1) || this.bookingAt(d, h + 1))
       if (adj) return { day: d, hour: h, adj: true }   // bitişik = kantin primi → en iyi
       if (!first) first = { day: d, hour: h, adj: false }
@@ -344,10 +366,29 @@ export class Game {
     return first
   }
 
-  /** bu kart bu slota konabilir mi (esnek istek desteği) */
+  /** bu kart bu slota konabilir mi (esnek istek desteği; 2 saatlikte h+1 de kapsamda olmalı) */
   slotOk(r: Reservation, day: number, hour: number): boolean {
+    if (r.hours === 2 && hour + 1 >= CLOSE_HOUR) return false
     if (!r.flexible) return r.day === day && r.hour === hour
-    return r.flexDays.includes(day) && r.flexHours.includes(hour)
+    if (!r.flexDays.includes(day) || !r.flexHours.includes(hour)) return false
+    return r.hours < 2 || r.flexHours.includes(hour + 1)
+  }
+
+  /** YERLEŞTİRİLEBİLİR Mİ: kural + kapasite (UI vurgusu ve bestSlot bunu kullanır) */
+  canPlaceAt(r: Reservation, day: number, hour: number): boolean {
+    if (!this.slotOk(r, day, hour)) return false
+    if (!this.freeAt(day, hour)) return false
+    return r.hours < 2 || this.freeAt(day, hour + 1)
+  }
+
+  /** İsteği kibarca GERİ ÇEVİR — takılı kart kalmasın (dolu takvim supabı) */
+  decline(resId: number): { ok: boolean; msg: string } {
+    const i = this.queue.findIndex(x => x.id === resId)
+    if (i < 0) return { ok: false, msg: 'İstek artık yok.' }
+    const r = this.queue.splice(i, 1)[0]
+    this.loyalty[r.team] = (this.loyalty[r.team] ?? 0) - 0.3
+    this.events.push(`${r.team} kibarca geri çevrildi.`)
+    return { ok: true, msg: `${r.team} geri çevrildi — küsmedi ama not etti.` }
   }
 
   /** PAZARLIK — bir kez. level 1 = ölçülü, 2 = sert. */
@@ -593,6 +634,14 @@ export class Game {
       { id: 'fridge', label: 'Soğuk Su Dolabı', gain: 'Her maçtan +₺60', cost: 3_500, upkeep: 0,
         desc: 'Yazın olmazsa olmaz. Kantin varken daha çok satar.', owned: this.hasFridge,
         locked: this.hasCanteen ? null : 'Önce kantin gerekli' },
+      { id: 'tost', label: 'Tost Makinesi', gain: 'Her maçtan +₺45', cost: 3_000, upkeep: 0,
+        desc: 'Maç sonu kaşarlı tost — kantinin ruhu.', owned: this.hasTost,
+        locked: this.hasCanteen ? null : 'Önce kantin gerekli' },
+      { id: 'baklava', label: 'Baklava Tezgâhı', gain: 'Her maçtan +₺55', cost: 4_500, upkeep: 0,
+        desc: 'Galibiyet baklavayla kutlanır — tepsiyle gider.', owned: this.hasBaklava,
+        locked: this.hasCanteen ? null : 'Önce kantin gerekli' },
+      { id: 'keeper', label: 'Kaleci Kiralama', gain: 'Her maçtan +₺70', cost: 5_000, upkeep: 150,
+        desc: '"Kalecimiz yok abi" derdine son — tesisin kadrolu kalecisi maça girer.', owned: this.hasKeeper, locked: null },
       { id: 'cleats', label: 'Krampon Kiralama', gain: 'Her maçtan +₺45', cost: 4_200, upkeep: 0,
         desc: '“Abi kramponu unuttum” geliri. Zamanla eskir, yenilemek gerekir.', owned: this.hasCleats, locked: null },
       { id: 'lights', label: 'LED Projektör', gain: 'Akşam talebi +%25', cost: 14_000, upkeep: 180,
@@ -635,6 +684,9 @@ export class Game {
       case 'canteen': this.hasCanteen = true; break
       case 'fridge': this.hasFridge = true; break
       case 'cleats': this.hasCleats = true; break
+      case 'keeper': this.hasKeeper = true; break
+      case 'tost': this.hasTost = true; break
+      case 'baklava': this.hasBaklava = true; break
       case 'lights': this.hasLights = true; break
       case 'shower': this.hasShower = true; this.rep = Math.min(5, this.rep + 0.5); break
       case 'schooldeal': this.hasSchoolDeal = true; break
@@ -805,7 +857,7 @@ export class Game {
     return {
       money: this.money, rep: this.rep, day: this.day, bookings: this.bookings,
       pitches: this.pitches, hasCanteen: this.hasCanteen, hasFridge: this.hasFridge,
-      hasCleats: this.hasCleats, hasLights: this.hasLights, hasShower: this.hasShower,
+      hasCleats: this.hasCleats, hasKeeper: this.hasKeeper, hasTost: this.hasTost, hasBaklava: this.hasBaklava, hasLights: this.hasLights, hasShower: this.hasShower,
       hasSchoolDeal: this.hasSchoolDeal, hasTeaRoom: this.hasTeaRoom, hasCorporate: this.hasCorporate,
       staff: this.staff, docService: this.docService, docs: this.docs,
       hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,

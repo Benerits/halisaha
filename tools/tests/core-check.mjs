@@ -268,5 +268,40 @@ console.log('\n— DOLU SAAT / KAPASİTE —')
     }
   }
 }
+
+console.log('\n— GERİ ÇEVİRME (takılı kart supabı) —')
+{
+  const g = new Game()
+  let r = null
+  for (let i = 0; i < 900 && !r; i++) r = g.spawnReservation()
+  if (r) {
+    check('istek geri çevrilebilir', g.decline(r.id).ok)
+    check('kuyruktan düşer', !g.queue.find(x => x.id === r.id))
+    check('sadakat notu düşer', (g.loyalty[r.team] ?? 0) < 0)
+    check('ikinci kez çevrilemez', !g.decline(r.id).ok)
+  }
+}
+
+console.log('\n— KALECİ + 2 SAATLİK MAÇ —')
+{
+  const g = new Game(); g.money = 20000
+  check('kaleci kiralanır', g.buy('keeper').ok)
+  check('kaleci maç başı gelire +70 ekler', g.extraPerMatch() >= 70)
+
+  const t = new Game()
+  let r2 = null
+  for (let i = 0; i < 4000 && !r2; i++) { const x = t.spawnReservation(); if (x && x.hours === 2) r2 = x; if (t.queue.length >= 4) t.queue.length = 0 }
+  if (r2) {
+    const slot = t.bestSlot(r2)
+    check('2 saatlik kart için uygun başlangıç bulunur', !!slot)
+    if (slot) {
+      const res = t.place(r2.id, slot.day, slot.hour)
+      check('2 saatlik maç yerleşir', res.ok)
+      check('İKİ ardışık slotu kaplar', t.usedAt(slot.day, slot.hour) === 1 && t.usedAt(slot.day, slot.hour + 1) === 1)
+      const toplam = t.bookingsAt(slot.day, slot.hour)[0].price + t.bookingsAt(slot.day, slot.hour + 1)[0].price
+      check('fiyat iki slota bölünür, toplam korunur', toplam === r2.price)
+    }
+  } else check('2 saatlik kart üretiliyor', false)
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

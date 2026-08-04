@@ -40,12 +40,12 @@ let flashUntil = 0
 const DAY_FULL = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
 
 /** yerleştirme onayı: "Pazartesi 18:00 seçildi ✓" yanıp söner, sonra kaybolur */
-function confirmFlash(d: number, h: number) {
+function confirmFlash(d: number, h: number, span = 1) {
   const pickbar = $('pickbar')
   flashUntil = performance.now() + 1700
   pickCache = '__flash__'
   pickbar.className = 'show confirm'
-  pickbar.innerHTML = `${DAY_FULL[d]} ${h}:00 seçildi ✓`
+  pickbar.innerHTML = span === 2 ? `${DAY_FULL[d]} ${h}:00-${h + 2}:00 seçildi ✓` : `${DAY_FULL[d]} ${h}:00 seçildi ✓`
   setTimeout(() => { flashUntil = 0; pickbar.className = ''; renderCal() }, 1700)
 }
 
@@ -72,7 +72,10 @@ function renderCal() {
   // YÖNERGE ŞERİDİ — nereye koyacağını söylemez, sadece kimin için seçtiğini söyler
   const pickbar = $('pickbar')
   if (performance.now() > flashUntil) {
-    const ph = sel ? `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''} — yanan saate tıkla<span class="arr">⬇</span>` : ''
+    const noSlot = sel && !game.bestSlot(sel)
+    const ph = !sel ? ''
+      : noSlot ? `${sel.team} için UYGUN BOŞ SAAT YOK — kartı geri çevir ya da yeni saha aç`
+      : `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''} — yanan saate tıkla<span class="arr">⬇</span>`
     if (ph !== pickCache) {
       pickCache = ph
       pickbar.className = sel ? 'show' : ''
@@ -88,7 +91,7 @@ function renderCal() {
   const tabs = $('daytabs')
   const tabsHtml = DAY_NAMES.map((nm, d) => {
     const occ = game.bookings.filter(b => b.day === d).length / HOURS.length
-    const hasValid = sel ? HOURS.some(h => game.freeAt(d, h) && game.slotOk(sel, d, h)) : false
+    const hasValid = sel ? HOURS.some(h => game.canPlaceAt(sel, d, h)) : false
     return `<div class="dtab ${d === viewDay ? 'on' : ''} ${d === nowDay ? 'today' : ''}" data-d="${d}">
       ${hasValid ? `<span class="dot ${game.placedCount < 12 ? '' : 'calm'}"></span>` : ''}
       <b>${nm}</b>${d === nowDay ? '<span class="bugun">BUGÜN</span>' : ''}
@@ -109,7 +112,7 @@ function renderCal() {
     const bs = game.bookingsAt(viewDay, hour)
     const b = bs[0]
     const free = game.freeAt(viewDay, hour)
-    const hint = sel && free && game.slotOk(sel, viewDay, hour)
+    const hint = sel && game.canPlaceAt(sel, viewDay, hour)
     const cls = ['dslot']
     if (b) cls.push(free ? 'half' : b.sub ? 'sub' : 'full')
     if (hint) cls.push(game.placedCount < 12 ? 'hint' : 'hint calm')
@@ -130,9 +133,10 @@ function renderCal() {
       el.addEventListener('click', () => {
         if (selected === null) { toast('Önce soldan bir istek seç.'); return }
         const day = viewDay, hour = Number(el.dataset.h)
+        const span = game.queue.find(x => x.id === selected)?.hours ?? 1
         const r = game.place(selected, day, hour)
         if (r.ok) audio.place(); else audio.bad()
-        if (r.ok) { selected = null; save(); confirmFlash(day, hour) }
+        if (r.ok) { selected = null; save(); confirmFlash(day, hour, span) }
         else {
           toast(r.msg, 'b')
           el.classList.add('deny')
@@ -183,7 +187,7 @@ function renderQueue() {
       : pat < 0.4 ? 'acelesi var, üstüne gitme' : ''
     return `<div class="rcard ${selected === r.id ? 'sel' : ''} ${seenCards.has(r.id) ? '' : 'new'}" data-id="${r.id}">
       <div class="team">${r.team}</div>${r.weeks ? `<span class="tagsub">${r.weeks} HAFTA</span>` : ''}
-      <div class="when">${when}${r.flexible ? '<span class="flex">ESNEK</span>' : ''}</div>
+      <div class="when">${when}${r.flexible ? '<span class="flex">ESNEK</span>' : ''}${r.hours === 2 ? '<span class="flex" style="background:var(--clay)">2 SAAT</span>' : ''}</div>
       <div class="meta">${seg.label}</div>
       <div class="price"><span class="plab">teklifi</span> ₺${tl(r.price)}${r.weeks ? ' <span class="pw">/hafta</span>' : ''}</div>
       ${r.haggled ? '<div class="hdone">pazarlık yapıldı</div>' : `<div class="hgl">
@@ -193,6 +197,7 @@ function renderQueue() {
           <b>₺${tl(Math.round(r.price * 1.5 / 10) * 10)}</b><i>iste · riskli</i></button>
       </div>`}
       ${tip ? `<div class="hint2 ${lever ? 'up' : 'dn'}">${tip}</div>` : ''}
+      <button class="rej" data-rej="${r.id}">geri çevir ✕</button>
       <div class="bar"><i></i></div>
     </div>`
   }).join('')
@@ -211,6 +216,15 @@ function renderQueue() {
         if (res.ok || (!res.walked && game.queue.some(x => x.id === id))) {
           selectCard(id)
         }
+      })
+    })
+    list.querySelectorAll<HTMLElement>('button[data-rej]').forEach(b => {
+      b.addEventListener('click', ev => {
+        ev.stopPropagation()
+        const id = Number(b.dataset.rej)
+        const res = game.decline(id)
+        if (res.ok) { audio.lost(); toast(res.msg) ; if (selected === id) selected = null; save() }
+        renderAll()
       })
     })
     list.querySelectorAll<HTMLElement>('.rcard').forEach(el => {
