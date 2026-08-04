@@ -33,32 +33,27 @@
   .chip.warn { border-bottom-color:#f0cdb8; }
   .chip.warn b { color:var(--clay); }
 
-  /* ===== ALT MERKEZ: REZERVASYON MASASI (kart + takvim BİTİŞİK) ===== */
-  #desk { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:12;
+  /* ===== SOL: GELEN İSTEKLER (akan şerit) ===== */
+  #queue { position:fixed; left:14px; top:296px; bottom:14px; width:226px; z-index:12;
     background:var(--paper); border-radius:var(--r-lg); box-shadow:var(--shadow);
-    border-bottom:3px solid #dde9d5; display:flex; overflow:hidden; max-width:96vw; }
+    display:flex; flex-direction:column; overflow:hidden; }
   .desk-head { background:var(--green-deep); color:#dff0e3; font-size:10.5px; font-weight:800;
-    text-transform:uppercase; letter-spacing:.9px; padding:7px 12px; text-align:center; position:relative; }
+    text-transform:uppercase; letter-spacing:.9px; padding:7px 12px; text-align:center; position:relative;
+    flex-shrink:0; }
   .desk-head.ringing { animation:ringpulse .5s ease-out 2; }
   @keyframes ringpulse { 0%{background:var(--green-deep)} 35%{background:var(--sun);color:#3d2a06} 100%{background:var(--green-deep)} }
-
-  /* sol sütun: gelen istekler */
-  #qcol { width:206px; background:var(--paper-2); display:flex; flex-direction:column; }
-  #qlist { padding:8px; display:flex; flex-direction:column; gap:7px; overflow-y:auto; max-height:340px;
-    scrollbar-width:thin; scrollbar-color:#bcd4bb transparent; }
+  #qlist { padding:8px; display:flex; flex-direction:column; gap:7px; overflow-y:auto; flex:1;
+    background:var(--paper-2); scrollbar-width:thin; scrollbar-color:#bcd4bb transparent; }
   #qlist::-webkit-scrollbar { width:6px; }
   #qlist::-webkit-scrollbar-track { background:transparent; }
   #qlist::-webkit-scrollbar-thumb { background:#bcd4bb; border-radius:99px; }
   #qlist::-webkit-scrollbar-thumb:hover { background:var(--green); }
-  /* alt kenarda yumuşak geçiş — kesik kart hissi olmasın */
-  #qcol { position:relative; }
-  #qcol::after { content:''; position:absolute; left:0; right:6px; bottom:0; height:18px; pointer-events:none;
-    background:linear-gradient(to bottom, rgba(233,242,226,0), var(--paper-2)); }
   .rcard { background:#fff; border-radius:11px; padding:10px 11px; cursor:pointer;
-    border:1.5px solid #e2ece0; transition:transform .1s, border-color .1s, box-shadow .1s; }
+    border:1.5px solid #e2ece0; transition:border-color .1s; position:relative; flex-shrink:0; }
   .rcard:hover { border-color:var(--green); }
   .rcard.sel { border-color:var(--green); background:#eefaf0; box-shadow:0 0 0 2px var(--green) inset; }
-  .rcard { position:relative; }
+  .rcard.new { animation:slidein .38s cubic-bezier(.2,.9,.3,1.1); }
+  @keyframes slidein { from { transform:translateX(-115%); opacity:0 } to { transform:none; opacity:1 } }
   .rcard .team { font-weight:800; font-size:13.5px; white-space:nowrap; overflow:hidden;
     text-overflow:ellipsis; padding-right:52px; }
   .rcard .when { font-size:14px; font-weight:800; color:var(--green-dark); }
@@ -89,22 +84,39 @@
   .bar i { display:block; height:100%; background:var(--sun); }
   .empty { padding:16px 10px; font-size:11.5px; color:var(--muted); font-weight:650; text-align:center; line-height:1.4; }
 
-  /* sağ sütun: takvim */
-  #calcol { display:flex; flex-direction:column; }
+  /* ===== ALT MERKEZ: GÜN SEKMELİ ÇİZELGE ===== */
+  #desk { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:12;
+    background:var(--paper); border-radius:var(--r-lg); box-shadow:var(--shadow);
+    display:flex; flex-direction:column; overflow:hidden; max-width:96vw; }
+  #daytabs { display:flex; gap:4px; padding:8px 10px 0; }
+  .dtab { flex:1; min-width:64px; background:var(--paper-2); border:1.5px solid transparent; border-radius:9px;
+    padding:5px 6px 6px; cursor:pointer; text-align:center; position:relative; transition:border-color .1s; }
+  .dtab:hover { border-color:#bcd4bb; }
+  .dtab.on { background:#fff; border-color:var(--green); box-shadow:0 0 0 1.5px var(--green) inset; }
+  .dtab b { font-size:12px; font-weight:800; color:var(--ink); display:block; }
+  .dtab.today b::after { content:'•'; color:var(--sun); margin-left:3px; }
+  .dtab .obar { height:4px; background:var(--line); border-radius:3px; margin-top:4px; overflow:hidden; }
+  .dtab .obar i { display:block; height:100%; background:var(--green); }
+  .dtab .dot { position:absolute; top:5px; right:6px; width:8px; height:8px; border-radius:99px;
+    background:var(--lime); animation:pulse2 .85s infinite; }
+  @keyframes pulse2 { 50% { transform:scale(1.45); } }
   #calwrap { padding:8px 10px 10px; }
-  #cal table { border-collapse:separate; border-spacing:3px; }
-  #cal th { font-size:10.5px; color:var(--muted); font-weight:800; padding:0 2px; }
-  #cal th.dayh { text-align:right; padding-right:5px; width:26px; }
-  .slot { width:31px; height:24px; border-radius:6px; background:var(--paper-2); border:1.5px solid transparent;
-    font-size:9.5px; font-weight:800; color:var(--muted); display:flex; align-items:center; justify-content:center;
-    cursor:pointer; overflow:hidden; transition:transform .08s; }
-  .slot:hover { transform:scale(1.12); border-color:var(--green); }
-  .slot.full { background:var(--green); color:#fff; }
-  .slot.sub { background:var(--sun); color:#4a3208; }
-  .slot.hint { background:#c9efd4; border-color:var(--green); animation:pulse .85s infinite; }
-  .slot.now { box-shadow:0 0 0 2px var(--sky); }
-  .slot.prime { background:#dcebd4; }
-  @keyframes pulse { 50% { background:var(--lime); transform:scale(1.1); } }
+  #cal { display:flex; gap:4px; }
+  .dslot { width:52px; height:50px; border-radius:10px; background:var(--paper-2); border:1.5px solid transparent;
+    cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:1px; transition:transform .08s, border-color .08s; overflow:hidden; }
+  .dslot .h { font-size:10px; font-weight:800; color:var(--muted); line-height:1; }
+  .dslot .t { font-size:10.5px; font-weight:800; color:var(--ink); line-height:1.1; max-width:48px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dslot:hover { transform:translateY(-2px); border-color:var(--green); }
+  .dslot.prime { background:#dcebd4; }
+  .dslot.full { background:var(--green); }
+  .dslot.full .h, .dslot.full .t { color:#fff; }
+  .dslot.sub { background:var(--sun); }
+  .dslot.sub .h, .dslot.sub .t { color:#4a3208; }
+  .dslot.hint { background:#c9efd4; border-color:var(--green); animation:pulse .85s infinite; }
+  .dslot.now { box-shadow:0 0 0 2px var(--sky); }
+  @keyframes pulse { 50% { background:var(--lime); } }
 
   /* ===== SAĞ RAY: HEDEFLER ===== */
   #goals { background:var(--paper); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:8px; }
@@ -210,15 +222,15 @@
 
 <div id="rail"><div id="goals"></div><div id="tips"></div></div>
 
+<div id="queue">
+  <div class="desk-head">Gelen İstekler</div>
+  <div id="qlist"></div>
+</div>
+
 <div id="desk">
-  <div id="qcol">
-    <div class="desk-head">Gelen İstekler</div>
-    <div id="qlist"></div>
-  </div>
-  <div id="calcol">
-    <div class="desk-head">Haftalık Çizelge — boş saate tıkla</div>
-    <div id="calwrap"><div id="cal"></div></div>
-  </div>
+  <div class="desk-head">Çizelge — boş saate tıkla</div>
+  <div id="daytabs"></div>
+  <div id="calwrap"><div id="cal"></div></div>
 </div>
 
 <div id="zoombar"><button id="zin">+</button><button id="zout">−</button></div>
