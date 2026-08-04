@@ -92,10 +92,12 @@ function renderQueue() {
       <div class="team">${r.team}</div>${r.weeks ? `<span class="tagsub">${r.weeks} HAFTA</span>` : ''}
       <div class="when">${when}${r.flexible ? '<span class="flex">ESNEK</span>' : ''}</div>
       <div class="meta">${seg.label}</div>
-      <div class="price">₺${tl(r.price)}${r.weeks ? ' <span style="font-size:10.5px;color:#6d8073;font-weight:700">/hafta</span>' : ''}</div>
-      ${r.haggled ? '' : `<div class="hgl">
-        <button data-hg="1" data-id="${r.id}" title="Ölçülü zam iste">+%25</button>
-        <button data-hg="2" data-id="${r.id}" title="Sert pazarlık — riskli">+%50</button>
+      <div class="price"><span class="plab">teklifi</span> ₺${tl(r.price)}${r.weeks ? ' <span class="pw">/hafta</span>' : ''}</div>
+      ${r.haggled ? '<div class="hdone">pazarlık yapıldı</div>' : `<div class="hgl">
+        <button data-hg="1" data-id="${r.id}" title="Ölçülü zam — genelde kabul eder">
+          <b>₺${tl(Math.round(r.price * 1.25 / 10) * 10)}</b><i>iste · güvenli</i></button>
+        <button data-hg="2" data-id="${r.id}" title="Sert pazarlık — kalkıp gidebilir">
+          <b>₺${tl(Math.round(r.price * 1.5 / 10) * 10)}</b><i>iste · riskli</i></button>
       </div>`}
       <div class="hint2 ${lever ? 'up' : pat < 0.4 ? 'dn' : ''}">${tip}</div>
       <div class="bar"><i style="width:${pat * 100}%"></i></div>
