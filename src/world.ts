@@ -4,7 +4,7 @@
  * Çevre Kenney kitleriyle giydirilir; kit inmezse prosedürel yedek devrede kalır.
  */
 import * as THREE from 'three'
-import { loadKit, fitModel, fitCharacter, type Kit } from './models'
+import { loadKit, fitModel, fitCharacter, fitTile, type Kit } from './models'
 import { PARCEL_COLS, PARCEL_ROWS, PARCEL_W, PARCEL_D, parcelKey, type BuildKind } from './state'
 
 export const PITCH_W = 13
@@ -39,7 +39,7 @@ export class World {
   private matchGroup = new THREE.Group()
   private parkedCars: THREE.Group[] = []
   /** yoldan akan araçlar */
-  private traffic: { g: THREE.Group; sp: number; dir: 1 | -1 }[] = []
+  private traffic: { g: THREE.Group; sp: number; dir: 1 | -1; axis: 'x' | 'y' }[] = []
   /** maça yürüyen oyuncular (otoparktan sahaya) */
   private walkers: { g: THREE.Group; t: number; from: THREE.Vector3; to: THREE.Vector3 }[] = []
   private billboards: THREE.Group[] = []
@@ -86,7 +86,7 @@ export class World {
     this.spawnPlayers()
     this.buildParcelGrid()
 
-    loadKit().then(k => { this.kit = k; this.dressScene() })
+    loadKit().then(k => { this.kit = k; this.buildRoadNetwork(); this.dressScene() })
     addEventListener('resize', () => this.onResize())
   }
 
@@ -100,7 +100,7 @@ export class World {
   }
 
   private buildGround() {
-    const g = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), lam(0x7fa05e))
+    const g = new THREE.Mesh(new THREE.PlaneGeometry(340, 340), lam(0x7fa05e))
     g.receiveShadow = true; this.scene.add(g)
     // AVLU: yalnız giriş parseli (1,0) beton — kalan her yer çimen
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 9.0), lam(0xb6b0a1))
@@ -238,15 +238,44 @@ export class World {
     }
   }
 
+  private protoRoad = new THREE.Group()
   private buildStreet() {
-    const road = new THREE.Mesh(new THREE.PlaneGeometry(90, 6), lam(0x4c535a))
-    road.position.set(0, 17.5, 0.01); this.scene.add(road)
-    for (let i = -8; i <= 8; i++) {
+    // prosedürel yedek — Kenney yol kiti inince kaldırılıp karolarla değişir
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(340, 6), lam(0x4c535a))
+    road.position.set(0, 17.5, 0.01); this.protoRoad.add(road)
+    for (let i = -33; i <= 33; i++) {
       const d = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.18), lam(0xeae5d7))
-      d.position.set(i * 5, 17.5, 0.02); this.scene.add(d)
+      d.position.set(i * 5, 17.5, 0.02); this.protoRoad.add(d)
     }
-    const kerb = new THREE.Mesh(new THREE.PlaneGeometry(90, 1.2), lam(0xa9a294))
-    kerb.position.set(0, 14.4, 0.015); this.scene.add(kerb)
+    const kerb = new THREE.Mesh(new THREE.PlaneGeometry(340, 1.2), lam(0xa9a294))
+    kerb.position.set(0, 14.4, 0.015); this.protoRoad.add(kerb)
+    this.scene.add(this.protoRoad)
+  }
+
+  /** KENNEY YOL AĞI: ana cadde + iki dikey sokak (T kavşaklı) — yolun sonu görünmez */
+  private buildRoadNetwork() {
+    const k = this.kit!
+    if (!k.roads.straight) return
+    this.scene.remove(this.protoRoad)
+    const T = 6 // karo boyu
+    const put = (proto: THREE.Group, x: number, y: number, rot: number) => {
+      const t = fitTile(proto, T)
+      t.position.set(x, y, 0.005)
+      t.rotation.z = rot
+      this.scene.add(t)
+    }
+    const VX = [-28, 28] // dikey sokakların x'i
+    // ana cadde (yatay, y=17.5)
+    for (let x = -168; x <= 168; x += T) {
+      if (VX.includes(x) && k.roads.tee) { put(k.roads.tee, x, 17.5, Math.PI) ; continue }
+      put(k.roads.straight, x, 17.5, 0)
+    }
+    // dikey sokaklar: caddeden güneye
+    for (const vx of VX) {
+      for (let y = 17.5 - T; y >= -160; y -= T) {
+        put(k.roads.straight, vx, y, Math.PI / 2)
+      }
+    }
   }
 
   /** parsel (c,r) → dünya merkezi. TESİS BU IZGARAYA OTURUR: saha=(1,1), kulüp=(0,0), avlu=(1,0), otopark=(2,0) */
@@ -458,11 +487,22 @@ export class World {
         this.scene.add(t)
       }
     }
+    // UZAK YOL DOKUSU: uzakta seyrek ağaçlar — yol boşlukta yüzmesin
+    if (k.trees.length) {
+      for (let i = 0; i < 16; i++) {
+        const x = -160 + i * 21 + (i % 3) * 4
+        if (Math.abs(x) < 42) continue // merkez zaten dolu
+        const t = fitModel(k.trees[i % k.trees.length], 2.2 + (i % 3) * 0.5)
+        t.position.set(x, 12.6 + (i % 2) * 9, 0); this.scene.add(t)
+        const t2 = fitModel(k.trees[(i + 1) % k.trees.length], 2.0 + (i % 2) * 0.6)
+        t2.position.set(x + 8, 24 + (i % 3) * 3, 0); this.scene.add(t2)
+      }
+    }
     // BİNALAR — mahalle dokusu (yolun ötesi + yanlar)
     if (k.buildings.length) {
       const spots: [number, number, number][] = [
         [-34, 30, 6], [-22, 31, 8], [-8, 30.5, 5.5], [6, 31, 7], [20, 30, 6], [33, 31, 8.5],
-        [34, 8, 6.5], [35, -8, 5.5], [-34, -8, 6], [-35, 8, 7], [-33, -22, 5.5], [32, -22, 6.5],
+        [37.5, 8, 6.5], [38.5, -8, 5.5], [-37.5, -8, 6], [-38.5, 8, 7], [-37, -22, 5.5], [36.5, -22, 6.5],
       ]
       spots.forEach(([x, y, h], i) => {
         const b = fitModel(k.buildings[i % k.buildings.length], h)
@@ -506,13 +546,23 @@ export class World {
     }
     // AKAN TRAFİK — yol canlı olsun
     if (k.cars.length) {
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 10; i++) {
         const dir: 1 | -1 = i % 2 ? 1 : -1
         const car = fitModel(k.cars[i % k.cars.length], 1.0)
-        car.position.set(-45 + i * 15, dir > 0 ? 16.4 : 18.6, 0)
+        car.position.set(-105 + i * 22, dir > 0 ? 16.4 : 18.6, 0)
         car.rotation.z = dir > 0 ? Math.PI / 2 : -Math.PI / 2
         this.scene.add(car)
-        this.traffic.push({ g: car, sp: 3.5 + Math.random() * 2.5, dir })
+        this.traffic.push({ g: car, sp: 3.5 + Math.random() * 2.5, dir, axis: 'x' })
+      }
+      // dikey sokak trafiği
+      for (let i = 0; i < 4; i++) {
+        const dir: 1 | -1 = i % 2 ? 1 : -1
+        const vx = i < 2 ? -28 : 28
+        const car = fitModel(k.cars[(i + 3) % k.cars.length], 1.0)
+        car.position.set(vx + (dir > 0 ? 1.1 : -1.1), -80 + i * 35, 0)
+        car.rotation.z = dir > 0 ? Math.PI : 0
+        this.scene.add(car)
+        this.traffic.push({ g: car, sp: 3 + Math.random() * 2, dir, axis: 'y' })
       }
     }
     // SAKSILAR — giriş süsü
@@ -565,9 +615,15 @@ export class World {
   /** yol trafiği + maça yürüyen oyuncular — sahne hep canlı */
   updateAmbient(dt: number) {
     for (const t of this.traffic) {
-      t.g.position.x += t.sp * t.dir * dt
-      if (t.dir > 0 && t.g.position.x > 48) t.g.position.x = -48
-      if (t.dir < 0 && t.g.position.x < -48) t.g.position.x = 48
+      if (t.axis === 'x') {
+        t.g.position.x += t.sp * t.dir * dt
+        if (t.dir > 0 && t.g.position.x > 115) t.g.position.x = -115
+        if (t.dir < 0 && t.g.position.x < -115) t.g.position.x = 115
+      } else {
+        t.g.position.y += t.sp * t.dir * dt
+        if (t.dir > 0 && t.g.position.y > 12) t.g.position.y = -115
+        if (t.dir < 0 && t.g.position.y < -115) t.g.position.y = 12
+      }
     }
     for (let i = this.walkers.length - 1; i >= 0; i--) {
       const w = this.walkers[i]
@@ -660,7 +716,7 @@ export class World {
   }
 
   zoomBy(f: number) {
-    this.zoom = Math.max(12, Math.min(70, this.zoom * f))
+    this.zoom = Math.max(12, Math.min(44, this.zoom * f))
     this.onResize()
   }
 

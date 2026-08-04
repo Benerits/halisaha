@@ -23,22 +23,22 @@
   button { font-family:var(--font); cursor:pointer; border:0; color:inherit; }
 
   /* ===== ÜST ŞERİT ===== */
-  #hud { position:fixed; top:14px; left:14px; display:flex; flex-direction:column; gap:6px; z-index:10; width:150px; }
+  #hud { position:fixed; top:10px; left:10px; display:flex; flex-direction:column; gap:4px; z-index:10; width:126px; }
   .chip { flex-direction:row !important; justify-content:space-between; align-items:center !important; }
-  .chip { background:var(--paper); border-radius:var(--r-md); padding:7px 15px; box-shadow:var(--shadow);
+  .chip { background:var(--paper); border-radius:var(--r-md); padding:4px 10px; box-shadow:var(--shadow);
     border-bottom:3px solid #dbe8d3; font-weight:700; font-size:13px;
     display:flex; line-height:1.1; }
-  .chip small { color:var(--muted); font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:.6px; }
-  .chip b { font-size:16px; color:var(--green-deep); }
+  .chip small { color:var(--muted); font-weight:700; font-size:8.5px; text-transform:uppercase; letter-spacing:.5px; }
+  .chip b { font-size:12.5px; color:var(--green-deep); }
   .chip.warn { border-bottom-color:#f0cdb8; }
   .chip.warn b { color:var(--clay); }
 
   /* ===== SOL: GELEN İSTEKLER (akan şerit) ===== */
-  #queue { position:fixed; left:14px; top:296px; bottom:14px; width:226px; z-index:12;
+  #queue { position:fixed; left:10px; top:224px; bottom:10px; width:196px; z-index:12;
     background:var(--paper); border-radius:var(--r-lg); box-shadow:var(--shadow);
     display:flex; flex-direction:column; overflow:hidden; }
-  .desk-head { background:var(--green-deep); color:#dff0e3; font-size:10.5px; font-weight:800;
-    text-transform:uppercase; letter-spacing:.9px; padding:7px 12px; text-align:center; position:relative;
+  .desk-head { background:var(--green-deep); color:#dff0e3; font-size:9.5px; font-weight:800;
+    text-transform:uppercase; letter-spacing:.8px; padding:5px 10px; text-align:center; position:relative;
     flex-shrink:0; }
   .desk-head.ringing { animation:ringpulse .5s ease-out 2; }
   @keyframes ringpulse { 0%{background:var(--green-deep)} 35%{background:var(--sun);color:#3d2a06} 100%{background:var(--green-deep)} }
@@ -48,17 +48,17 @@
   #qlist::-webkit-scrollbar-track { background:transparent; }
   #qlist::-webkit-scrollbar-thumb { background:#bcd4bb; border-radius:99px; }
   #qlist::-webkit-scrollbar-thumb:hover { background:var(--green); }
-  .rcard { background:#fff; border-radius:11px; padding:10px 11px; cursor:pointer;
+  .rcard { background:#fff; border-radius:10px; padding:8px 9px; cursor:pointer;
     border:1.5px solid #e2ece0; transition:border-color .1s; position:relative; flex-shrink:0; }
   .rcard:hover { border-color:var(--green); }
   .rcard.sel { border-color:var(--green); background:#eefaf0; box-shadow:0 0 0 2px var(--green) inset; }
   .rcard.new { animation:slidein .38s cubic-bezier(.2,.9,.3,1.1); }
   @keyframes slidein { from { transform:translateX(-115%); opacity:0 } to { transform:none; opacity:1 } }
-  .rcard .team { font-weight:800; font-size:13.5px; white-space:nowrap; overflow:hidden;
+  .rcard .team { font-weight:800; font-size:12px; white-space:nowrap; overflow:hidden;
     text-overflow:ellipsis; padding-right:52px; }
-  .rcard .when { font-size:14px; font-weight:800; color:var(--green-dark); }
+  .rcard .when { font-size:12.5px; font-weight:800; color:var(--green-dark); }
   .rcard .meta { font-size:11px; color:var(--muted); font-weight:650; }
-  .rcard .price { font-weight:800; font-size:15px; color:var(--ink); }
+  .rcard .price { font-weight:800; font-size:13px; color:var(--ink); }
   .tagsub { position:absolute; top:8px; right:8px; background:var(--sun); color:#4a3208;
     font-size:9px; font-weight:800; padding:2px 7px; border-radius:99px; white-space:nowrap;
     letter-spacing:.2px; line-height:1.3; }
@@ -67,9 +67,9 @@
   .rcard .plab { font-size:9.5px; color:var(--muted); font-weight:750; text-transform:uppercase; letter-spacing:.4px; }
   .rcard .pw { font-size:10.5px; color:var(--muted); font-weight:700; }
   .hgl { display:flex; gap:5px; margin-top:7px; }
-  .hgl button { flex:1; background:#fff; border-radius:8px; border:1.5px solid #d7e5d2;
-    padding:5px 4px 4px; display:flex; flex-direction:column; align-items:center; line-height:1.15; }
-  .hgl button b { font-size:12.5px; font-weight:800; color:var(--green-deep); }
+  .hgl button { flex:1; background:#fff; border-radius:7px; border:1.5px solid #d7e5d2;
+    padding:3px 3px 3px; display:flex; flex-direction:column; align-items:center; line-height:1.15; }
+  .hgl button b { font-size:11px; font-weight:800; color:var(--green-deep); }
   .hgl button i { font-size:8.5px; font-style:normal; font-weight:750; color:var(--muted); letter-spacing:.2px; }
   .hgl button:hover { background:#fffaf0; border-color:var(--sun); }
   .hgl button:hover b { color:#8a5a00; }
@@ -85,28 +85,28 @@
   .empty { padding:16px 10px; font-size:11.5px; color:var(--muted); font-weight:650; text-align:center; line-height:1.4; }
 
   /* ===== ALT MERKEZ: GÜN SEKMELİ ÇİZELGE ===== */
-  #desk { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:12;
+  #desk { position:fixed; left:50%; bottom:10px; transform:translateX(-50%); z-index:12;
     background:var(--paper); border-radius:var(--r-lg); box-shadow:var(--shadow);
     display:flex; flex-direction:column; overflow:hidden; max-width:96vw; }
-  #daytabs { display:flex; gap:4px; padding:8px 10px 0; }
-  .dtab { flex:1; min-width:64px; background:var(--paper-2); border:1.5px solid transparent; border-radius:9px;
+  #daytabs { display:flex; gap:3px; padding:6px 8px 0; }
+  .dtab { flex:1; min-width:48px; background:var(--paper-2); border:1.5px solid transparent; border-radius:9px;
     padding:5px 6px 6px; cursor:pointer; text-align:center; position:relative; transition:border-color .1s; }
   .dtab:hover { border-color:#bcd4bb; }
   .dtab.on { background:#fff; border-color:var(--green); box-shadow:0 0 0 1.5px var(--green) inset; }
-  .dtab b { font-size:12px; font-weight:800; color:var(--ink); display:block; }
+  .dtab b { font-size:10.5px; font-weight:800; color:var(--ink); display:block; }
   .dtab.today b::after { content:'•'; color:var(--sun); margin-left:3px; }
   .dtab .obar { height:4px; background:var(--line); border-radius:3px; margin-top:4px; overflow:hidden; }
   .dtab .obar i { display:block; height:100%; background:var(--green); }
   .dtab .dot { position:absolute; top:5px; right:6px; width:8px; height:8px; border-radius:99px;
     background:var(--lime); animation:pulse2 .85s infinite; }
   @keyframes pulse2 { 50% { transform:scale(1.45); } }
-  #calwrap { padding:8px 10px 10px; }
+  #calwrap { padding:6px 8px 8px; }
   #cal { display:flex; gap:4px; }
-  .dslot { width:52px; height:50px; border-radius:10px; background:var(--paper-2); border:1.5px solid transparent;
+  .dslot { width:42px; height:40px; border-radius:8px; background:var(--paper-2); border:1.5px solid transparent;
     cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center;
     gap:1px; transition:transform .08s, border-color .08s; overflow:hidden; }
-  .dslot .h { font-size:10px; font-weight:800; color:var(--muted); line-height:1; }
-  .dslot .t { font-size:10.5px; font-weight:800; color:var(--ink); line-height:1.1; max-width:48px;
+  .dslot .h { font-size:8.5px; font-weight:800; color:var(--muted); line-height:1; }
+  .dslot .t { font-size:9px; font-weight:800; color:var(--ink); line-height:1.1; max-width:38px;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dslot:hover { transform:translateY(-2px); border-color:var(--green); }
   .dslot.prime { background:#dcebd4; }
@@ -137,7 +137,7 @@
   .mstone .mv { font-size:10.5px; color:var(--muted); font-weight:700; }
 
   /* ===== SAĞ: ÖNERİ (tabela kartı) ===== */
-  #rail { position:fixed; right:14px; top:14px; width:248px; z-index:10; }
+  #rail { position:fixed; right:10px; top:10px; width:212px; z-index:10; }
   #tips { display:flex; flex-direction:column; gap:8px; }
   .tip { background:var(--paper); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; }
   .tip .th { background:var(--green); color:#fff; font-size:11px; font-weight:800; padding:5px 11px;

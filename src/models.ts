@@ -60,6 +60,27 @@ export interface Kit {
   buildings: THREE.Group[]
   fence: THREE.Group | null
   planter: THREE.Group | null
+  roads: { straight: THREE.Group | null; tee: THREE.Group | null; bend: THREE.Group | null; end: THREE.Group | null }
+}
+
+/** Yol karosu: yüksekliğe değil TABAN GENİŞLİĞİNE göre ölçekle (düz parçalar için fitModel yanlış) */
+export function fitTile(proto: THREE.Group, targetW: number): THREE.Group {
+  const g = proto.clone(true)
+  const wrap = new THREE.Group()
+  g.rotation.x = Math.PI / 2
+  wrap.add(g)
+  wrap.updateMatrixWorld(true)
+  const b = new THREE.Box3().setFromObject(wrap)
+  const w = Math.max(0.001, b.max.x - b.min.x)
+  const s = targetW / w
+  wrap.scale.setScalar(s)
+  wrap.updateMatrixWorld(true)
+  const b2 = new THREE.Box3().setFromObject(wrap)
+  g.position.z -= b2.min.z / s
+  g.position.x -= (b2.min.x + b2.max.x) / 2 / s
+  g.position.y -= (b2.min.y + b2.max.y) / 2 / s
+  wrap.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) m.receiveShadow = true })
+  return wrap
 }
 
 /** Tembel yükleme — sahne bunlarsız da ayakta (prosedürel yedek devreye girer). */
@@ -72,7 +93,7 @@ export async function loadKit(): Promise<Kit> {
     buildings: ['building-a', 'building-c', 'building-e', 'building-g'],
     homes: ['building-type-a', 'building-type-e', 'building-type-l'],
   }
-  const [chars, trees, cars, buildings, homes, fence, planter] = await Promise.all([
+  const [chars, trees, cars, buildings, homes, fence, planter, rStraight, rTee, rBend, rEnd] = await Promise.all([
     Promise.all(names.chars.map(n => load(`${B}/chars/${n}.glb`))),
     Promise.all(names.trees.map(n => load(`${B}/props/${n}.glb`))),
     Promise.all(names.cars.map(n => load(`${B}/cars/${n}.glb`))),
@@ -80,7 +101,12 @@ export async function loadKit(): Promise<Kit> {
     Promise.all(names.homes.map(n => load(`${B}/homes/${n}.glb`))),
     load(`${B}/props/fence-low.glb`),
     load(`${B}/props/planter.glb`),
+    load(`${B}/roads/road-straight.glb`),
+    load(`${B}/roads/road-intersection.glb`),
+    load(`${B}/roads/road-bend-sidewalk.glb`),
+    load(`${B}/roads/road-end-round.glb`),
   ])
   const ok = <T,>(a: (T | null)[]) => a.filter((x): x is T => !!x)
-  return { chars: ok(chars), trees: ok(trees), cars: ok(cars), buildings: [...ok(buildings), ...ok(homes)], fence, planter }
+  return { chars: ok(chars), trees: ok(trees), cars: ok(cars), buildings: [...ok(buildings), ...ok(homes)], fence, planter,
+    roads: { straight: rStraight, tee: rTee, bend: rBend, end: rEnd } }
 }
