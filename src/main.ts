@@ -80,7 +80,7 @@ function renderQueue() {
   list.innerHTML = game.queue.map(r => {
     const seg = SEGMENTS[r.segment]
     return `<div class="rcard ${selected === r.id ? 'sel' : ''}" data-id="${r.id}">
-      <div class="team"><span>${r.team}</span>${r.weeks ? `<span class="tagsub">${r.weeks} HF ABONE</span>` : ''}</div>
+      <div class="team">${r.team}</div>${r.weeks ? `<span class="tagsub">${r.weeks} HAFTA</span>` : ''}
       <div class="when">${DAY_NAMES[r.day]} ${r.hour}:00</div>
       <div class="meta">${seg.label}</div>
       <div class="price">₺${tl(r.price)}${r.weeks ? ' <span style="font-size:10.5px;color:#6d8073;font-weight:700">/hafta</span>' : ''}</div>
@@ -227,7 +227,25 @@ function openParcel(c: number, r: number) {
     }))
 }
 
+// SAHNE GEZİNME: sürükle → kaydır, bırak → (hareket yoksa) arsa tıklaması
+let dragging = false, dragMoved = 0, lastX = 0, lastY = 0
 addEventListener('pointerdown', e => {
+  if ((e.target as HTMLElement).closest('#desk,#office,#rail,#officebtn,#sfxbtn,#zoombar,#parcel,#hud')) return
+  dragging = true; dragMoved = 0; lastX = e.clientX; lastY = e.clientY
+})
+addEventListener('pointermove', e => {
+  if (!dragging) return
+  const dx = e.clientX - lastX, dy = e.clientY - lastY
+  lastX = e.clientX; lastY = e.clientY
+  dragMoved += Math.abs(dx) + Math.abs(dy)
+  world.pan(dx, dy)
+  document.body.style.cursor = 'grabbing'
+})
+addEventListener('pointerup', e => {
+  document.body.style.cursor = ''
+  if (!dragging) return
+  dragging = false
+  if (dragMoved > 6) return                    // sürükleme yaptıysa tıklama sayma
   if ((e.target as HTMLElement).closest('#desk,#office,#rail,#officebtn,#sfxbtn,#zoombar,#parcel,#hud')) return
   const hit = world.pickParcel(e.clientX, e.clientY)
   if (hit) { audio.click(); openParcel(hit.c, hit.r) }

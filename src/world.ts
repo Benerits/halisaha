@@ -34,6 +34,8 @@ export class World {
   private lightMats: THREE.MeshBasicMaterial[] = []
   private beams: THREE.Mesh[] = []
   private zoom = 27
+  private target = new THREE.Vector3(-1, 2.5, 0)
+  private readonly camOffset = new THREE.Vector3(22, -44, 22)
   private matchGroup = new THREE.Group()
   private parkedCars: THREE.Group[] = []
   /** yoldan akan araçlar */
@@ -52,9 +54,9 @@ export class World {
     this.scene.fog = new THREE.Fog(0xa8dcef, 78, 165)
     const a = innerWidth / innerHeight
     this.camera = new THREE.OrthographicCamera(-this.zoom * a / 2, this.zoom * a / 2, this.zoom / 2, -this.zoom / 2, -120, 220)
-    this.camera.position.set(22, -44, 22)
     this.camera.up.set(0, 0, 1)
-    this.camera.lookAt(-1, 2.5, 0)
+    this.camera.position.copy(this.target).add(this.camOffset)
+    this.camera.lookAt(this.target.x, this.target.y, 0)
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
@@ -94,6 +96,7 @@ export class World {
     this.camera.left = -this.zoom * a / 2; this.camera.right = this.zoom * a / 2
     this.camera.top = this.zoom / 2; this.camera.bottom = -this.zoom / 2
     this.camera.updateProjectionMatrix()
+    this.applyCam()
     this.renderer.setSize(innerWidth, innerHeight)
   }
 
@@ -242,8 +245,9 @@ export class World {
         this.scene.add(p)
       }
     }
-    seg(36, 0, 13, 0); seg(36, 0, -14, 0)
-    seg(27, -18, -0.5, Math.PI / 2); seg(27, 18, -0.5, Math.PI / 2)
+    // Arsa ızgarası (y < -9) çitin DIŞINDA — oralar henüz tesise dahil değil
+    seg(36, 0, 13, 0); seg(36, 0, -9.5, 0)
+    seg(22.5, -18, 1.75, Math.PI / 2); seg(22.5, 18, 1.75, Math.PI / 2)
   }
 
   private buildParking() {
@@ -616,8 +620,29 @@ export class World {
   }
 
   zoomBy(f: number) {
-    this.zoom = Math.max(12, Math.min(60, this.zoom * f))
+    this.zoom = Math.max(12, Math.min(70, this.zoom * f))
     this.onResize()
+  }
+
+  /** ekran sürüklemesini dünya kaydırmasına çevirir */
+  pan(dxPx: number, dyPx: number) {
+    const a = innerWidth / innerHeight
+    const wPerPx = (this.zoom * a) / innerWidth
+    const hPerPx = this.zoom / innerHeight
+    // kameranın ekran sağ/yukarı eksenleri (dünya düzleminde)
+    const fwd = new THREE.Vector3().subVectors(this.target, this.camera.position).setZ(0).normalize()
+    const right = new THREE.Vector3(-fwd.y, fwd.x, 0)
+    const up = new THREE.Vector3(fwd.x, fwd.y, 0)
+    this.target.addScaledVector(right, dxPx * wPerPx)
+    this.target.addScaledVector(up, -dyPx * hPerPx)
+    this.target.x = Math.max(-45, Math.min(45, this.target.x))
+    this.target.y = Math.max(-40, Math.min(40, this.target.y))
+    this.applyCam()
+  }
+
+  private applyCam() {
+    this.camera.position.copy(this.target).add(this.camOffset)
+    this.camera.lookAt(this.target.x, this.target.y, 0)
   }
 
   render() { this.renderer.render(this.scene, this.camera) }
