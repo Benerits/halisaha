@@ -354,6 +354,8 @@ export class Game {
   adDays = 0
   /** oyun-içi otomatik olaylar için bildirim kuyruğu (UI toast'a çevirir) */
   notices: string[] = []
+  /** kaçan müşteri bildirimleri (üzgün ses + toast) */
+  lostNotices: string[] = []
   queueCap(): number { return this.hasPhone2 ? 6 : 4 }
 
   /** her saniye */
@@ -392,6 +394,7 @@ export class Game {
       if (q.patience <= 0) {
         const lost = this.queue.splice(i, 1)[0]
         this.events.push(`${lost.team} bekledi, başka sahaya gitti.`)
+        this.lostNotices.push(`${lost.team} beklemekten sıkıldı, başka sahaya gitti.`)
         this.rep = Math.max(0, this.rep - 0.008)
       }
     }

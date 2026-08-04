@@ -296,12 +296,19 @@ function renderOffice() {
       <div class="srow"><span class="nm">Ses efektleri</span>
         <button class="buy" id="sfxrow">${audio.on ? 'AÇIK ✓' : 'KAPALI'}</button>
         <span class="ds">Telefon, para, yerleştirme sesleri.</span></div>
+      <div class="srow"><span class="nm">Müzik</span>
+        <button class="buy" id="musrow">${audio.musicOn ? 'AÇIK ✓' : 'KAPALI'}</button>
+        <span class="ds">Sentezlenmiş sakin fon — telifsiz, tamamen oyun içinde üretilir.</span></div>
       <div class="srow"><span class="nm">Kamera</span>
         <button class="buy" id="camreset">Görünümü sıfırla</button>
         <span class="ds">Kaybolduysan: kamerayı tesise, zoom'u başlangıca döndürür.</span></div>`
     $('sfxrow').addEventListener('click', () => {
       const on = audio.toggle()
       ;($('sfxrow') as HTMLElement).textContent = on ? 'AÇIK ✓' : 'KAPALI'
+    })
+    $('musrow').addEventListener('click', () => {
+      const on = audio.toggleMusic()
+      ;($('musrow') as HTMLElement).textContent = on ? 'AÇIK ✓' : 'KAPALI'
     })
     $('camreset').addEventListener('click', () => { world.resetCam(); audio.click() })
   } else {
@@ -381,7 +388,7 @@ addEventListener('pointerup', e => {
 $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
 $('zout').addEventListener('click', () => { world.zoomBy(1.22); audio.click() })
 addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#queue,#office,#tips,#goals')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
-addEventListener('pointerdown', () => audio.ensure(), { once: true })
+addEventListener('pointerdown', () => { audio.ensure(); audio.startMusic() }, { once: true })
 function openOffice() { audio.click(); $('office').classList.add('show'); renderOffice() }
 $('yazpill').addEventListener('click', openOffice)
 $('closeoffice').addEventListener('click', () => $('office').classList.remove('show'))
@@ -428,6 +435,7 @@ function frame() {
   const prevDay = game.day
   game.tick(dt)
   while (game.notices.length) { toast(game.notices.shift()!, 'g'); audio.place() }
+  while (game.lostNotices.length) { toast(game.lostNotices.shift()!, 'b'); audio.lost() }
   // anlaşılan kart kaçmaz (süre donuk) — 45 sn sonra bir kez nazikçe hatırlat
   for (const r of game.queue) {
     if (r.haggled && !warned.has(r.id) && (r.dealWait ?? 0) > 45) {

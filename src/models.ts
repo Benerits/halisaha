@@ -60,7 +60,7 @@ export interface Kit {
   buildings: THREE.Group[]
   fence: THREE.Group | null
   planter: THREE.Group | null
-  roads: { straight: THREE.Group | null; tee: THREE.Group | null; bend: THREE.Group | null; end: THREE.Group | null }
+  roads: { straight: THREE.Group | null; tee: THREE.Group | null; bend: THREE.Group | null; end: THREE.Group | null; crossing: THREE.Group | null; light: THREE.Group | null; lightDouble: THREE.Group | null }
 }
 
 /** Yol karosu: yüksekliğe değil TABAN GENİŞLİĞİNE göre ölçekle (düz parçalar için fitModel yanlış) */
@@ -93,7 +93,7 @@ export async function loadKit(): Promise<Kit> {
     buildings: ['building-a', 'building-c', 'building-e', 'building-g'],
     homes: ['building-type-a', 'building-type-e', 'building-type-l'],
   }
-  const [chars, trees, cars, buildings, homes, fence, planter, rStraight, rTee, rBend, rEnd] = await Promise.all([
+  const [chars, trees, cars, buildings, homes, fence, planter, rStraight, rTee, rBend, rEnd, rCross, rLight, rLight2] = await Promise.all([
     Promise.all(names.chars.map(n => load(`${B}/chars/${n}.glb`))),
     Promise.all(names.trees.map(n => load(`${B}/props/${n}.glb`))),
     Promise.all(names.cars.map(n => load(`${B}/cars/${n}.glb`))),
@@ -105,8 +105,11 @@ export async function loadKit(): Promise<Kit> {
     load(`${B}/roads/road-intersection.glb`),
     load(`${B}/roads/road-bend-sidewalk.glb`),
     load(`${B}/roads/road-end-round.glb`),
+    load(`${B}/roads/road-crossing.glb`),
+    load(`${B}/roads/light-curved.glb`),
+    load(`${B}/roads/light-curved-double.glb`),
   ])
   const ok = <T,>(a: (T | null)[]) => a.filter((x): x is T => !!x)
   return { chars: ok(chars), trees: ok(trees), cars: ok(cars), buildings: [...ok(buildings), ...ok(homes)], fence, planter,
-    roads: { straight: rStraight, tee: rTee, bend: rBend, end: rEnd } }
+    roads: { straight: rStraight, tee: rTee, bend: rBend, end: rEnd, crossing: rCross, light: rLight, lightDouble: rLight2 } }
 }

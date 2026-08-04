@@ -59,6 +59,14 @@ class Audio {
     this.tone(1319, 0.15, 'sine', 0.11, 0.07)
   }
 
+  /** müşteri kaçtı — üzgün inen 'dink-dong' */
+  lost() {
+    this.ensure()
+    this.tone(784, 0.14, 'sine', 0.085)          // G5
+    this.tone(587, 0.20, 'sine', 0.075, 0.14)    // D5
+    this.tone(392, 0.30, 'sine', 0.055, 0.30)    // G4 — kapanış
+  }
+
   /** olmadı */
   bad() {
     this.ensure()
@@ -83,6 +91,41 @@ class Audio {
 
   /** hafif tık */
   click() { this.ensure(); this.tone(700, 0.05, 'triangle', 0.07) }
+
+  // ---- ARKA PLAN MÜZİĞİ: tamamen sentez, telif YOK ----
+  private musicT: number | null = null
+  private step = 0
+  musicOn = localStorage.getItem('hs-music') !== '0'
+
+  startMusic() {
+    if (this.musicT || !this.musicOn) return
+    this.ensure()
+    if (!this.ctx) return
+    this.musicT = window.setInterval(() => this.musicBar(), 2400)
+    this.musicBar()
+  }
+
+  /** 2.4 sn'lik ölçü: kısık pad akoru + pentatonik tınılar — sakin dükkân ambiyansı */
+  private musicBar() {
+    if (!this.ctx || !this.on || !this.musicOn || document.hidden) return
+    const roots = [196.0, 146.8, 164.8, 220.0]        // G-D-E-A döngüsü
+    const r = roots[this.step++ % 4]
+    for (const [m, v] of [[1, 0.030], [1.5, 0.020], [2, 0.015]] as [number, number][])
+      this.tone(r * m, 2.3, 'sine', v)
+    const pent = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3]
+    const n = 2 + Math.floor(Math.random() * 2)
+    for (let i = 0; i < n; i++)
+      this.tone(r * 2 * pent[Math.floor(Math.random() * pent.length)], 0.55, 'triangle', 0.020,
+        0.35 + i * 0.65 + Math.random() * 0.25)
+  }
+
+  toggleMusic(): boolean {
+    this.musicOn = !this.musicOn
+    localStorage.setItem('hs-music', this.musicOn ? '1' : '0')
+    if (!this.musicOn) { if (this.musicT) { clearInterval(this.musicT); this.musicT = null } }
+    else this.startMusic()
+    return this.musicOn
+  }
 
   toggle(): boolean {
     this.on = !this.on

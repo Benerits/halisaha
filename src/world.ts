@@ -86,7 +86,7 @@ export class World {
     this.spawnPlayers()
     this.buildParcelGrid()
 
-    loadKit().then(k => { this.kit = k; this.buildRoadNetwork(); this.dressScene() })
+    loadKit().then(k => { this.kit = k; this.buildRoadNetwork(); this.upgradeClubhouse(); this.dressScene() })
     addEventListener('resize', () => this.onResize())
   }
 
@@ -229,6 +229,42 @@ export class World {
     this.clubhouse = g
   }
 
+  /** prosedürel kulüp binası → Kenney ticari bina + ayaklı tabela */
+  private upgradeClubhouse() {
+    const k = this.kit
+    if (!k?.buildings.length || !this.clubhouse) return
+    this.scene.remove(this.clubhouse)
+    const g = new THREE.Group()
+    // yeşil çatılı müstakil ev (homes kiti) — kulüp binası gibi okunur, marka yeşiliyle uyumlu
+    const proto = k.buildings[Math.min(4, k.buildings.length - 1)]
+    const b = fitModel(proto, 3.6)
+    b.rotation.z = Math.PI   // kapısı avluya baksın
+    g.add(b)
+    // AYAKLI TABELA: iki direk + pano (binadan bağımsız, yola bakar)
+    const cvs = document.createElement('canvas'); cvs.width = 640; cvs.height = 200
+    const ctx = cvs.getContext('2d')!
+    ctx.fillStyle = '#1d7c45'; ctx.beginPath(); ctx.roundRect(0, 0, 640, 200, 26); ctx.fill()
+    ctx.strokeStyle = '#f2b53c'; ctx.lineWidth = 10; ctx.beginPath(); ctx.roundRect(8, 8, 624, 184, 20); ctx.stroke()
+    ctx.fillStyle = '#f7fbf4'; ctx.font = '800 78px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('HALI SAHA', 320, 78)
+    ctx.font = '700 40px sans-serif'; ctx.fillStyle = '#ffd97a'
+    ctx.fillText('SALI 21:00 SENİNDİR', 320, 148)
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.45),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cvs), transparent: true }))
+    board.rotation.x = Math.PI / 2
+    const sg = new THREE.Group()
+    for (const px of [-2.0, 2.0]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.4, 8), lam(0x6b7680))
+      post.rotation.x = Math.PI / 2; post.position.set(px, 0, 1.7); post.castShadow = true; sg.add(post)
+    }
+    board.position.set(0, -0.06, 3.1); sg.add(board)
+    sg.position.set(5.8, 11.6, 0)  // kaldırım kenarında, caddeye bakar
+    this.scene.add(sg)
+    g.position.set(-14.5, 7.2, 0)
+    this.scene.add(g)
+    this.clubhouse = g
+  }
+
   /** yazıhane (kulüp binası) tıklaması */
   private clubhouse: THREE.Group | null = null
   pickYazihane(clientX: number, clientY: number): boolean {
@@ -282,11 +318,22 @@ export class World {
       this.scene.add(t)
     }
     const VX = [-28, 28] // dikey sokakların x'i
-    // ana cadde (yatay, y=17.5)
+    // ana cadde (yatay, y=17.5) — tesis girişinde (x=0) YAYA GEÇİDİ
     for (let x = -168; x <= 168; x += T) {
       if (VX.includes(x) && k.roads.tee) { put(k.roads.tee, x, 17.5, Math.PI) ; continue }
+      if (x === 0 && k.roads.crossing) { put(k.roads.crossing, x, 17.5, 0); continue }
       put(k.roads.straight, x, 17.5, 0)
     }
+    // SOKAK LAMBALARI: kavşaklarda çift kollu, cadde boyunca tekli
+    const lamp = (proto: THREE.Group | null, x: number, y: number, rot: number) => {
+      if (!proto) return
+      const m = fitModel(proto, 3.4)
+      m.position.set(x, y, 0); m.rotation.z = rot
+      this.scene.add(m)
+    }
+    for (const vx of VX) lamp(k.roads.lightDouble, vx, 14.3, 0)
+    for (const lx of [-52, -10, 10, 52, 76, -76]) lamp(k.roads.light, lx, 14.5, 0)
+    for (const vx of VX) for (const ly of [-6, -30]) lamp(k.roads.light, vx - 3.2, ly, Math.PI / 2)
     // dikey sokaklar: caddeden güneye
     for (const vx of VX) {
       for (let y = 17.5 - T; y >= -160; y -= T) {
@@ -565,19 +612,13 @@ export class World {
         car.position.set(x, y, 0); car.rotation.z = Math.PI / 2
         this.scene.add(car); this.parkedCars.push(car)
       })
-      // sokakta park etmiş birkaç araç
-      for (let i = 0; i < 3; i++) {
-        const car = fitModel(k.cars[(i + 2) % k.cars.length], 1.0)
-        car.position.set(-12 + i * 11, 14.9, 0)
-        this.scene.add(car)
-      }
     }
     // AKAN TRAFİK — yol canlı olsun
     if (k.cars.length) {
       for (let i = 0; i < 10; i++) {
         const dir: 1 | -1 = i % 2 ? 1 : -1
         const car = fitModel(k.cars[i % k.cars.length], 1.0)
-        car.position.set(-105 + i * 22, dir > 0 ? 16.4 : 18.6, 0)
+        car.position.set(-105 + i * 22, dir > 0 ? 16.6 : 18.4, 0)
         car.rotation.z = dir > 0 ? Math.PI / 2 : -Math.PI / 2
         this.scene.add(car)
         this.traffic.push({ g: car, sp: 3.5 + Math.random() * 2.5, dir, axis: 'x' })
@@ -587,7 +628,7 @@ export class World {
         const dir: 1 | -1 = i % 2 ? 1 : -1
         const vx = i < 2 ? -28 : 28
         const car = fitModel(k.cars[(i + 3) % k.cars.length], 1.0)
-        car.position.set(vx + (dir > 0 ? 1.1 : -1.1), -80 + i * 35, 0)
+        car.position.set(vx + (dir > 0 ? 0.9 : -0.9), -80 + i * 35, 0)
         car.rotation.z = dir > 0 ? Math.PI : 0
         this.scene.add(car)
         this.traffic.push({ g: car, sp: 3 + Math.random() * 2, dir, axis: 'y' })
@@ -748,9 +789,11 @@ export class World {
   }
 
   setNight(n: number, lightsOn: boolean) {
-    this.hemi.intensity = 0.72 - n * 0.42
-    this.sun.intensity = 0.95 - n * 0.80
-    const col = new THREE.Color().setHSL(0.56, 0.52, 0.74 - n * 0.6)
+    // zifiri karanlık YOK: taban aydınlık yüksek — gece 'akşam mavisi' hissi verir,
+    // sahne ve UI her zaman okunur kalır
+    this.hemi.intensity = 0.72 - n * 0.22
+    this.sun.intensity = 0.95 - n * 0.45
+    const col = new THREE.Color().setHSL(0.58, 0.45, 0.74 - n * 0.34)
     this.scene.background = col
     if (this.scene.fog) (this.scene.fog as THREE.Fog).color = col
     const on = lightsOn && n > 0.22
