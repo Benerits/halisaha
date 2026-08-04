@@ -87,7 +87,7 @@ const TEAM_NAMES = [
 
 // ---- Mağaza / yatırım kalemleri ----
 export type BuyId =
-  | 'pitch2' | 'canteen' | 'fridge' | 'cleats' | 'lights' | 'shower'
+  | 'canteen' | 'fridge' | 'cleats' | 'lights' | 'shower'
   | 'schooldeal' | 'tearoom' | 'corporate' | 'staff' | 'docs' | 'billboard' | 'roadsign'
   | 'phone2' | 'cirak' | 'ads'
 
@@ -104,26 +104,32 @@ export interface ShopItem {
   locked: string | null
 }
 
-// ---- ARSA IZGARASI (4x4 = 16 parsel) ----
-export const PARCEL_COLS = 4
-export const PARCEL_ROWS = 4
-/** parsel dünya boyutu (izometrik birim) */
-export const PARCEL_W = 8.5
-export const PARCEL_D = 6.5
+// ---- ARSA IZGARASI (3x3) — TESİS BU IZGARANIN ÜSTÜNDE OTURUR ----
+// Başlangıç mülkü: üst sıra (kulüp binası + avlu + otopark) ve ortadaki saha parseli.
+// Kalan 5 parsel dümdüz çimen; satın alınıp geliştirilebilir.
+export const PARCEL_COLS = 3
+export const PARCEL_ROWS = 3
+/** parsel dünya boyutu (izometrik birim) — ana saha (13x8) bir parsele tam sığar */
+export const PARCEL_W = 14
+export const PARCEL_D = 9.6
 export const parcelKey = (c: number, r: number) => `${c},${r}`
-/** Fiyat merkeze yakınlıkla artar — ana saha (1,1) etrafı pahalı */
+/** oyuna sahip başlanan parseller: kulüp binası, avlu, otopark, ana saha */
+export const STARTER_PARCELS = ['0,0', '1,0', '2,0', '1,1']
+/** Fiyat ana sahaya (1,1) yakınlıkla artar */
 export function parcelCost(c: number, r: number): number {
-  const d = Math.abs(c - 1.5) + Math.abs(r - 1.5)
-  return Math.round((26_000 - d * 3_200) / 500) * 500
+  const d = Math.abs(c - 1) + Math.abs(r - 1)
+  return Math.max(14_000, 26_000 - d * 4_000)
 }
 
-export type BuildKind = 'pitch' | 'mini' | 'parking' | 'garden'
+export type BuildKind = 'pitch' | 'mini' | 'basket' | 'voley' | 'parking' | 'garden'
 export interface PlacedBuild { key: string; kind: BuildKind }
 
 export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: string; desc: string }> = {
-  pitch:   { label: 'Halı Saha', cost: 120_000, gain: 'Aynı saate +1 maç', desc: 'Kapasiteyi büyütür; prime-time çakışmaları biter.' },
-  mini:    { label: 'Mini Saha 5v5', cost: 55_000, gain: 'İkindi bandı dolar', desc: 'Ucuz saha; çocuk/genç grupları için hızlı devir.' },
-  parking: { label: 'Otopark', cost: 18_000, gain: 'İtibar +0,3', desc: 'Araç sığmayınca müşteri kaçar; park yeri memnuniyeti artırır.' },
+  pitch:   { label: 'Halı Saha', cost: 62_000, gain: 'Aynı saate +1 maç', desc: 'Tam boy ikinci saha — prime-time çakışmaları biter.' },
+  mini:    { label: 'Mini Saha 5v5', cost: 34_000, gain: 'Aynı saate +1 maç', desc: 'Küçük ve ucuz; çocuk/genç grupları için hızlı devir.' },
+  basket:  { label: 'Basketbol Sahası', cost: 26_000, gain: 'Günde +₺800 kira', desc: 'Saatlik kiralanır; futbol takviminden bağımsız pasif gelir.' },
+  voley:   { label: 'Voleybol Sahası', cost: 20_000, gain: 'Günde +₺550 · itibar +0,2', desc: 'Kum zemin; yazın çok tutar, tesise çeşitlilik katar.' },
+  parking: { label: 'Ek Otopark', cost: 18_000, gain: 'İtibar +0,3', desc: 'Araç sığmayınca müşteri kaçar; park yeri memnuniyeti artırır.' },
   garden:  { label: 'Yeşil Alan', cost: 9_000, gain: 'İtibar +0,2', desc: 'Oturma alanı ve peyzaj — tesis daha bakımlı görünür.' },
 }
 
@@ -159,7 +165,7 @@ export class Game {
   hasBillboard = false   // saha kenarı reklam panoları — kira geliri
   hasRoadSign = false    // yol tabelası — talep artışı
   /** satın alınmış parseller */
-  ownedParcels: string[] = []
+  ownedParcels: string[] = [...STARTER_PARCELS]
   /** parsellere kurulan yapılar */
   builds: PlacedBuild[] = []
 
@@ -375,6 +381,10 @@ export class Game {
     for (const h of HOURS) { if (hoursSet.has(h)) { run++; bestRun = Math.max(bestRun, run) } else run = 0 }
     const runBonus = bestRun >= 3 ? 1 + Math.min(0.3, (bestRun - 2) * 0.1) : 1
     let income = 0
+    // ek sahaların günlük kirası (futbol takviminden bağımsız)
+    const courtRent = this.builds.reduce((sum, b) =>
+      sum + (b.kind === 'basket' ? 800 : b.kind === 'voley' ? 550 : 0), 0)
+    income += courtRent
     for (const b of todays) {
       income += b.price + Math.round(this.extraPerMatch() * runBonus)
       // abonelik haftası tüket
@@ -422,7 +432,8 @@ export class Game {
     // memnuniyet: dolulukla hafif artar
     if (todays.length > 0) this.rep = Math.min(5, this.rep + 0.03)
     this.events.push(`Gün ${this.day - 1}: ${todays.length} maç · gelir ₺${income.toLocaleString('tr-TR')} · gider ₺${upkeep.toLocaleString('tr-TR')}`
-      + (bestRun >= 3 ? ` · ${bestRun} saat kesintisiz (+%${Math.round((runBonus - 1) * 100)} kantin)` : ''))
+      + (bestRun >= 3 ? ` · ${bestRun} saat kesintisiz (+%${Math.round((runBonus - 1) * 100)} kantin)` : '')
+      + (courtRent > 0 ? ` · ek saha kirası ₺${courtRent.toLocaleString('tr-TR')}` : ''))
     // denetim riski: belgeler zayıfsa
     if (this.docs < 0.35 && Math.random() < 0.4) {
       const fine = Math.round(this.basePrice() * 1.5)
@@ -447,8 +458,6 @@ export class Game {
         desc: 'Işık kalitesi akşam maçlarını çeker; elektrik gideri artar.', owned: this.hasLights, locked: null },
       { id: 'shower', label: 'Duş & Soyunma', gain: 'İtibar +0,5', cost: 18_000, upkeep: 70,
         desc: 'Kalite algısını yükseltir, abonelikler daha uzun sürer.', owned: this.hasShower, locked: null },
-      { id: 'pitch2', label: '2. Halı Saha', gain: 'Aynı saate 2 maç', cost: 62_000, upkeep: 200,
-        desc: 'Kapasiteyi ikiye katlar — prime time çakışmaları biter.', owned: this.pitches >= 2, locked: null },
       { id: 'schooldeal', label: 'Okul Anlaşması', gain: 'Gençlik segmenti açılır (14-18)', cost: 12_000, upkeep: 0,
         desc: 'Öğleden sonra ölü saatleri okul takımlarıyla doldurursun.', owned: this.hasSchoolDeal, locked: null },
       { id: 'tearoom', label: 'Çay Ocağı', gain: 'Veteran segmenti açılır (9-13)', cost: 7_500, upkeep: 0,
@@ -487,7 +496,6 @@ export class Game {
       case 'cleats': this.hasCleats = true; break
       case 'lights': this.hasLights = true; break
       case 'shower': this.hasShower = true; this.rep = Math.min(5, this.rep + 0.5); break
-      case 'pitch2': this.pitches = 2; break
       case 'schooldeal': this.hasSchoolDeal = true; break
       case 'tearoom': this.hasTeaRoom = true; break
       case 'corporate': this.hasCorporate = true; break
@@ -527,6 +535,8 @@ export class Game {
     this.builds.push({ key: parcelKey(c, r), kind })
     if (kind === 'pitch') this.pitches++
     if (kind === 'mini') this.pitches++
+    if (kind === 'basket') this.rep = Math.min(5, this.rep + 0.1)
+    if (kind === 'voley') this.rep = Math.min(5, this.rep + 0.2)
     if (kind === 'parking') this.rep = Math.min(5, this.rep + 0.3)
     if (kind === 'garden') this.rep = Math.min(5, this.rep + 0.2)
     this.events.push(`${b.label} kuruldu.`)
@@ -581,7 +591,7 @@ export class Game {
     if (!this.hasBillboard) return { label: 'Reklam panolarını as', have: this.money, need: 11_000 }
     if (!this.hasRoadSign) return { label: 'Yol tabelası dik', have: this.money, need: 16_000 }
     if (!this.hasShower) return { label: 'Duş & soyunma yenile', have: this.money, need: 18_000 }
-    if (this.pitches < 2) return { label: '2. halı sahayı aç', have: this.money, need: 62_000 }
+    if (this.pitches < 2) return { label: 'Arsa al + mini saha kur', have: this.money, need: parcelCost(0, 1) + BUILDS.mini.cost }
     return null
   }
 
@@ -617,10 +627,10 @@ export class Game {
       out.push({ title: 'Maç sonrası herkes dağılıyor', why: 'Kantin yok; her maçtan ₺120 ek gelir kaçırıyorsun.',
         action: 'canteen', cta: 'Kantin ₺9.000', urgent: false })
     }
-    // 5. doluluk yüksekse ikinci saha
+    // 5. doluluk yüksekse ikinci saha (arsa yoluyla)
     if (this.pitches < 2 && this.occupancy() > 0.35) {
-      out.push({ title: 'Saha yetmiyor', why: `Doluluk %${Math.round(this.occupancy() * 100)}. Aynı saati isteyen takımları geri çeviriyorsun.`,
-        action: 'pitch2', cta: '2. Halı Saha ₺120.000', urgent: false })
+      out.push({ title: 'Saha yetmiyor', why: `Doluluk %${Math.round(this.occupancy() * 100)}. Boş arsaya tıkla: arsa al + mini saha kur (₺${(parcelCost(0, 1) + BUILDS.mini.cost).toLocaleString('tr-TR')}).`,
+        urgent: false })
     }
     // 6. abonelik dengesi
     if (this.subRatio() > 0.65) {
@@ -660,7 +670,8 @@ export class Game {
     this.rentDueDay = n('rentDueDay', 7); this.rentMissed = n('rentMissed', 0)
     this.hasPhone2 = d.hasPhone2 === true; this.hasCirak = d.hasCirak === true; this.adDays = n('adDays', 0)
     if (d.loyalty && typeof d.loyalty === 'object') this.loyalty = d.loyalty as Record<string, number>
-    if (Array.isArray(d.ownedParcels)) this.ownedParcels = d.ownedParcels as string[]
+    if (Array.isArray(d.ownedParcels))
+      this.ownedParcels = [...new Set([...STARTER_PARCELS, ...(d.ownedParcels as string[])])]
     if (Array.isArray(d.builds)) this.builds = d.builds as PlacedBuild[]
   }
 }

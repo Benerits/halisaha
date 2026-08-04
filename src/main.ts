@@ -202,7 +202,6 @@ function doBuy(id: BuyId) {
   if (r.ok) audio.build(); else audio.bad()
   toast(r.msg, r.ok ? 'g' : 'b')
   if (r.ok) {
-    if (id === 'pitch2') world.buildPitch(0, 5.2)
     save(); renderAll(); renderOffice()
   }
 }

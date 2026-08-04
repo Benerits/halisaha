@@ -48,7 +48,7 @@ check('kantin alınabilir', s.buy('canteen').ok)
 check('kantin sonrası dolap açılır', !s.shop().find(r => r.id === 'fridge').locked)
 check('aynı şey iki kez alınamaz', !s.buy('canteen').ok)
 const poor = new Game(); poor.money = 100
-check('parası yetmeyen alamaz', !poor.buy('pitch2').ok)
+check('parası yetmeyen alamaz', !poor.buy('shower').ok)
 check('okul anlaşması gençlik segmentini açar', (() => {
   const x = new Game(); x.buy('schooldeal'); return x.segmentOpen('genclik')
 })())

@@ -102,12 +102,12 @@ export class World {
   private buildGround() {
     const g = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), lam(0x7fa05e))
     g.receiveShadow = true; this.scene.add(g)
-    // tesis zemini — asfalt/beton
-    const pad = new THREE.Mesh(new THREE.PlaneGeometry(36, 27), lam(0xb6b0a1))
-    pad.position.set(0, -0.5, 0.01); pad.receiveShadow = true; this.scene.add(pad)
-    // yürüyüş yolu (bina → saha)
-    const walk = new THREE.Mesh(new THREE.PlaneGeometry(3, 8), lam(0xc9c3b4))
-    walk.position.set(-7.5, 3.2, 0.02); this.scene.add(walk)
+    // AVLU: yalnız giriş parseli (1,0) beton — kalan her yer çimen
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 9.0), lam(0xb6b0a1))
+    pad.position.set(0, 6.9, 0.035); pad.receiveShadow = true; this.scene.add(pad)
+    // yürüyüş yolu (avlu → saha)
+    const walk = new THREE.Mesh(new THREE.PlaneGeometry(3, 3.4), lam(0xc9c3b4))
+    walk.position.set(0, 1.2, 0.036); this.scene.add(walk)
   }
 
   /** Halı saha dokusu: çizgiler+şeritler TEK canvas'a çizilir → z-fighting imkânsız */
@@ -224,17 +224,17 @@ export class World {
     g.add(sign)
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 1.0), lam(0x8d97a1))
     post.position.set(0, -2.28, 3.0); g.add(post)
-    g.position.set(-8.5, 8.2, 0)
+    g.position.set(-14.5, 7.2, 0)
     this.scene.add(g)
   }
 
 
   private buildParking() {
-    const pad = new THREE.Mesh(new THREE.PlaneGeometry(9, 6.5), lam(0x585f66))
-    pad.position.set(10.5, 8.5, 0.02); pad.receiveShadow = true; this.scene.add(pad)
-    for (let i = 0; i < 4; i++) {
-      const l = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 5.6), lam(0xe9e4d6))
-      l.position.set(7.2 + i * 2.2, 8.5, 0.03); this.scene.add(l)
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(11, 7.5), lam(0x585f66))
+    pad.position.set(14.5, 7.2, 0.04); pad.receiveShadow = true; this.scene.add(pad)
+    for (let i = 0; i < 5; i++) {
+      const l = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 6.4), lam(0xe9e4d6))
+      l.position.set(10.4 + i * 2.1, 7.2, 0.05); this.scene.add(l)
     }
   }
 
@@ -249,36 +249,63 @@ export class World {
     kerb.position.set(0, 14.4, 0.015); this.scene.add(kerb)
   }
 
-  /** ARSA IZGARASI — tesisin güney/batı boşluğunda 4x4 */
+  /** parsel (c,r) → dünya merkezi. TESİS BU IZGARAYA OTURUR: saha=(1,1), kulüp=(0,0), avlu=(1,0), otopark=(2,0) */
+  parcelCenter(c: number, r: number): [number, number] {
+    return [(c - 1) * (PARCEL_W + 0.5), 6.9 - r * (PARCEL_D + 0.5)]
+  }
+
+  /** ARSA IZGARASI — tüm tesis alanı; sahipsiz parsel DÜMDÜZ ÇİMEN */
   private buildParcelGrid() {
-    const ox = -15.5, oy = -22.5  // ızgaranın sol-alt köşesi
     for (let c = 0; c < PARCEL_COLS; c++) {
       for (let r = 0; r < PARCEL_ROWS; r++) {
-        const x = ox + c * (PARCEL_W + 0.4) + PARCEL_W / 2
-        const y = oy + r * (PARCEL_D + 0.4) + PARCEL_D / 2
+        const [x, y] = this.parcelCenter(c, r)
         const m = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W, PARCEL_D),
-          new THREE.MeshLambertMaterial({ color: 0x8a7f63, transparent: true, opacity: 0.9 }))
-        m.position.set(x, y, 0.03)
+          new THREE.MeshLambertMaterial({ color: 0x7fa05e }))
+        m.position.set(x, y, 0.02)
         m.receiveShadow = true
         m.userData = { c, r }
         this.scene.add(m)
         this.parcelTiles.set(parcelKey(c, r), m)
-        // kenar çizgisi
+        // ince parsel sınırı — arazinin bölünmüş olduğu okunur ama bağırmaz
         const edge = new THREE.LineSegments(
           new THREE.EdgesGeometry(new THREE.PlaneGeometry(PARCEL_W, PARCEL_D)),
-          new THREE.LineBasicMaterial({ color: 0xf2e7c8, transparent: true, opacity: 0.55 }))
-        edge.position.set(x, y, 0.05)
+          new THREE.LineBasicMaterial({ color: 0xf6f2e2, transparent: true, opacity: 0.32 }))
+        edge.position.set(x, y, 0.03)
         this.scene.add(edge)
       }
     }
   }
 
-  /** arsa durumlarını güncelle: sahipli/boş renkleri + kurulu yapılar */
+  /** sahipli parsel köşe kazıkları — 'burası senin' okunur */
+  private stakes = new Map<string, THREE.Group>()
+  private markOwned(key: string, x: number, y: number) {
+    if (this.stakes.has(key)) return
+    const g = new THREE.Group()
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as [number, number][]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.62, 6), lam(0xf3efe2))
+      post.rotation.x = Math.PI / 2
+      post.position.set(sx * (PARCEL_W / 2 - 0.35), sy * (PARCEL_D / 2 - 0.35), 0.31)
+      post.castShadow = true; g.add(post)
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.1, 6), lam(0x27a05a))
+      cap.rotation.x = Math.PI / 2
+      cap.position.set(sx * (PARCEL_W / 2 - 0.35), sy * (PARCEL_D / 2 - 0.35), 0.65)
+      g.add(cap)
+    }
+    g.position.set(x, y, 0)
+    this.scene.add(g)
+    this.stakes.set(key, g)
+  }
+
+  /** arsa durumlarını güncelle: sahipli = biçilmiş çim + köşe kazıkları; boş = dümdüz çimen */
   syncParcels(owned: string[], builds: { key: string; kind: BuildKind }[]) {
     for (const [key, tile] of this.parcelTiles) {
       const mat = tile.material as THREE.MeshLambertMaterial
-      mat.color.setHex(owned.includes(key) ? 0xb9b3a1 : 0x8a7f63)
-      mat.opacity = owned.includes(key) ? 1 : 0.75
+      if (owned.includes(key)) {
+        mat.color.setHex(0x8cab68)  // biçilmiş, bakımlı çim
+        this.markOwned(key, tile.position.x, tile.position.y)
+      } else {
+        mat.color.setHex(0x7fa05e)  // zeminle aynı — dümdüz çimen
+      }
     }
     for (const b of builds) {
       if (this.parcelBuilds.has(b.key)) continue
@@ -303,6 +330,40 @@ export class World {
         const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, d * 0.34, 6), lam(0xfaf9f6))
         bar.position.set(sgn * (w / 2 - 0.2), 0, 0.6); g.add(bar)
       }
+    } else if (kind === 'basket') {
+      // turuncu saha + iki pota
+      const court = new THREE.Mesh(new THREE.PlaneGeometry(10, 6.4), lam(0xc97a3d))
+      court.position.z = 0.06; court.receiveShadow = true; g.add(court)
+      const line = (w: number, d: number, x: number, y: number) => {
+        const l = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lam(0xf4efe2)); l.position.set(x, y, 0.075); g.add(l)
+      }
+      line(10, 0.12, 0, 3.14); line(10, 0.12, 0, -3.14); line(0.12, 6.4, -4.94, 0); line(0.12, 6.4, 4.94, 0)
+      line(0.12, 6.4, 0, 0)
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 0.92, 20), lam(0xf4efe2))
+      ring.position.z = 0.075; g.add(ring)
+      for (const sgn of [-1, 1]) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.6, 8), lam(0x8d97a1))
+        pole.rotation.x = Math.PI / 2; pole.position.set(sgn * 5.4, 0, 1.3); pole.castShadow = true; g.add(pole)
+        const board = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.4, 0.9), lam(0xf7f4ec))
+        board.position.set(sgn * 5.05, 0, 2.35); board.castShadow = true; g.add(board)
+        const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.035, 8, 14), lam(0xd6633a))
+        hoop.position.set(sgn * 4.7, 0, 2.05); g.add(hoop)
+      }
+    } else if (kind === 'voley') {
+      // kum zemin + file
+      const sand = new THREE.Mesh(new THREE.PlaneGeometry(9, 5.6), lam(0xdcc492))
+      sand.position.z = 0.06; sand.receiveShadow = true; g.add(sand)
+      const line = (w: number, d: number, x: number, y: number) => {
+        const l = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lam(0xf7f2e4)); l.position.set(x, y, 0.075); g.add(l)
+      }
+      line(9, 0.1, 0, 2.74); line(9, 0.1, 0, -2.74); line(0.1, 5.6, -4.45, 0); line(0.1, 5.6, 4.45, 0)
+      for (const sgn of [-1, 1]) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.9, 8), lam(0x8d97a1))
+        pole.rotation.x = Math.PI / 2; pole.position.set(0, sgn * 2.9, 0.95); pole.castShadow = true; g.add(pole)
+      }
+      const net = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 5.8),
+        new THREE.MeshLambertMaterial({ color: 0xeff3f4, transparent: true, opacity: 0.55, side: THREE.DoubleSide }))
+      net.rotation.x = Math.PI / 2; net.position.set(0, 0, 1.45); g.add(net)
     } else if (kind === 'parking') {
       const pad = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W - 1, PARCEL_D - 1), lam(0x585f66))
       pad.position.z = 0.06; g.add(pad)
@@ -387,9 +448,9 @@ export class World {
     // AĞAÇLAR — tesis çeperi
     if (k.trees.length) {
       const spots: [number, number, number][] = [
-        [-16, 11, 2.6], [-11, 12.5, 2.2], [16, 11.5, 2.6], [12, -13, 2.4],
-        [-16, -12, 2.2], [-4, -13.2, 2.5], [6, -13.2, 2.2], [16.5, 2, 2.6],
-        [-17, 4, 2.3], [20, 14, 2.8], [-21, 13, 2.6],
+        [-23.5, 13, 2.6], [-11, 13, 2.2], [8, 13, 2.6], [12, -19.5, 2.4],
+        [-24.5, -12, 2.2], [-4, -19.6, 2.5], [6, -19.6, 2.2], [24, 2, 2.6],
+        [-24.5, 4, 2.3], [23, 13, 2.8], [-2, -19.8, 2.4],
       ]
       for (const [x, y, h] of spots) {
         const t = fitModel(k.trees[Math.floor(Math.random() * k.trees.length)], h)
@@ -430,7 +491,7 @@ export class World {
     }
     // ARABALAR — otoparkta
     if (k.cars.length) {
-      const slots: [number, number][] = [[8.3, 8.5], [10.5, 8.5], [12.7, 8.5]]
+      const slots: [number, number][] = [[11.5, 7.2], [13.6, 7.2], [15.7, 7.2]]
       slots.forEach(([x, y], i) => {
         const car = fitModel(k.cars[i % k.cars.length], 1.0)
         car.position.set(x, y, 0); car.rotation.z = Math.PI / 2
@@ -456,7 +517,7 @@ export class World {
     }
     // SAKSILAR — giriş süsü
     if (k.planter) {
-      for (const [x, y] of [[-10.6, 5.4], [-6.4, 5.4], [-10.6, 11], [-6.4, 11]] as [number, number][]) {
+      for (const [x, y] of [[-4.2, 3.2], [4.2, 3.2], [-5.2, 10.6], [5.2, 10.6]] as [number, number][]) {
         const p = fitModel(k.planter, 0.8); p.position.set(x, y, 0); this.scene.add(p)
       }
     }
@@ -525,7 +586,7 @@ export class World {
     if (!k?.chars.length) return
     for (let i = 0; i < n; i++) {
       const fig = fitCharacter(k.chars[Math.floor(Math.random() * k.chars.length)], 0.78)
-      const from = new THREE.Vector3(9.5 + Math.random() * 3, 7.5 + Math.random() * 1.6, 0)
+      const from = new THREE.Vector3(11.5 + Math.random() * 4, 6.6 + Math.random() * 1.4, 0)
       const to = new THREE.Vector3(PITCH_W / 2 + 1.4, PITCH_Y + (Math.random() - 0.5) * 3, 0)
       fig.position.copy(from)
       this.scene.add(fig)
