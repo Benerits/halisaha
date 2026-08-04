@@ -45,6 +45,18 @@ function renderCal() {
   if (head) head.textContent = sel
     ? `${sel.team} için saat seç — yanan kutuya tıkla`
     : 'Çizelge — soldan istek seç'
+  // YERLEŞTİRME MODU: çizelge parlar, üstünde zıplayan yönerge aşağıyı gösterir
+  const desk = document.getElementById('desk')!
+  const pickbar = document.getElementById('pickbar')!
+  desk.classList.toggle('picking', !!sel)
+  if (sel) {
+    pickbar.innerHTML = `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''} — yanan saate tıkla<span class="arr">⬇</span>`
+    pickbar.classList.add('show')
+    const dr = desk.getBoundingClientRect()
+    pickbar.style.bottom = `${innerHeight - dr.top + 10}px`
+  } else {
+    pickbar.classList.remove('show')
+  }
 
   // GÜN SEKMELERİ: doluluk çubuğu haftalık bakışı korur; yeşil nokta = seçili kartın günü
   const tabs = $('daytabs')

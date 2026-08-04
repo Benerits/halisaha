@@ -90,6 +90,16 @@
   #desk { position:fixed; left:50%; bottom:10px; transform:translateX(-50%); z-index:12;
     background:var(--paper); border-radius:var(--r-lg); box-shadow:var(--shadow);
     display:flex; flex-direction:column; overflow:hidden; max-width:96vw; }
+  /* YERLEŞTİRME MODU: kart seçiliyken çizelge sahnenin yıldızı olur */
+  #desk.picking { box-shadow:0 0 0 3px var(--sun), 0 10px 30px rgba(160,110,10,.35); }
+  #desk.picking .desk-head { background:var(--sun); color:#3d2a06; }
+  #pickbar { position:fixed; left:50%; transform:translateX(-50%); z-index:13; display:none;
+    background:var(--sun); color:#3d2a06; font-weight:800; font-size:12.5px; padding:8px 16px;
+    border-radius:99px; box-shadow:0 6px 18px rgba(160,110,10,.4); white-space:nowrap;
+    letter-spacing:.2px; pointer-events:none; }
+  #pickbar.show { display:block; animation:bounce 1s ease-in-out infinite; }
+  #pickbar .arr { font-size:14px; margin-left:6px; }
+  @keyframes bounce { 0%,100% { transform:translateX(-50%) translateY(0) } 50% { transform:translateX(-50%) translateY(7px) } }
   #daytabs { display:flex; gap:3px; padding:6px 8px 0; }
   .dtab { flex:1; min-width:48px; background:var(--paper-2); border:1.5px solid transparent; border-radius:9px;
     padding:5px 6px 6px; cursor:pointer; text-align:center; position:relative; transition:border-color .1s; }
@@ -99,8 +109,8 @@
   .dtab.today b::after { content:'•'; color:var(--sun); margin-left:3px; }
   .dtab .obar { height:4px; background:var(--line); border-radius:3px; margin-top:4px; overflow:hidden; }
   .dtab .obar i { display:block; height:100%; background:var(--green); }
-  .dtab .dot { position:absolute; top:5px; right:6px; width:8px; height:8px; border-radius:99px;
-    background:var(--lime); animation:pulse2 .85s infinite; }
+  .dtab .dot { position:absolute; top:5px; right:6px; width:9px; height:9px; border-radius:99px;
+    background:var(--sun); box-shadow:0 0 6px rgba(242,181,60,.9); animation:pulse2 .7s infinite; }
   @keyframes pulse2 { 50% { transform:scale(1.45); } }
   #calwrap { padding:6px 8px 8px; }
   #cal { display:flex; gap:4px; }
@@ -116,9 +126,9 @@
   .dslot.full .h, .dslot.full .t { color:#fff; }
   .dslot.sub { background:var(--sun); }
   .dslot.sub .h, .dslot.sub .t { color:#4a3208; }
-  .dslot.hint { background:#c9efd4; border-color:var(--green); animation:pulse .85s infinite; }
+  .dslot.hint { background:#c9efd4; border:2px solid var(--sun); animation:pulse .7s infinite; }
   .dslot.now { box-shadow:0 0 0 2px var(--sky); }
-  @keyframes pulse { 50% { background:var(--lime); } }
+  @keyframes pulse { 50% { background:var(--lime); transform:scale(1.12); box-shadow:0 0 14px rgba(242,181,60,.75); } }
 
   /* ===== SAĞ RAY: HEDEFLER ===== */
   #goals { background:var(--paper); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:8px; }
@@ -223,6 +233,8 @@
 </div>
 
 <div id="rail"><div id="goals"></div><div id="tips"></div></div>
+
+<div id="pickbar"></div>
 
 <div id="queue">
   <div class="desk-head">Gelen İstekler</div>
