@@ -8,7 +8,10 @@
  */
 
 // ---- Zaman ----
-export const DAY_SECONDS = 160 // BenelOil ile aynı ritim: 1 oyun günü = 160 sn
+// 1 oyun saati = 30 gerçek sn → dakika göstergesi okunur hızda akar (sn'de ~2 dk).
+// (1 saat = 1 dk denendi: gün 15 dk oluyor, ekonomi temposu ölüyor — 30 sn tatlı nokta.)
+export const HOUR_SECONDS = 30
+export const DAY_SECONDS = HOUR_SECONDS * 15
 export const OPEN_HOUR = 9
 export const CLOSE_HOUR = 24
 export const HOURS: number[] = Array.from({ length: CLOSE_HOUR - OPEN_HOUR }, (_, i) => OPEN_HOUR + i)
@@ -62,6 +65,8 @@ export interface Reservation {
   maxPay: number
   /** pazarlık yapıldı mı (bir kez) */
   haggled: boolean
+  /** anlaşma sonrası geçen süre (nazik hatırlatma için) */
+  dealWait?: number
   weeks: number
   patience: number
   maxPatience: number
@@ -355,8 +360,8 @@ export class Game {
   tick(dt: number) {
     this.t += dt
     // belge aşınması (docService varsa otomatik yenilenir)
-    if (this.docService) this.docs = Math.min(1, this.docs + 0.004 * dt)
-    else this.docs = Math.max(0, this.docs - 0.0025 * dt)
+    if (this.docService) this.docs = Math.min(1, this.docs + 0.0014 * dt)
+    else this.docs = Math.max(0, this.docs - 0.0009 * dt)
 
     if (this.t >= DAY_SECONDS) {
       this.t -= DAY_SECONDS
@@ -376,10 +381,15 @@ export class Game {
         }
       }
     }
-    // kart sabrı
+    // kart sabrı — EL SIKIŞILAN (pazarlığı biten) kart KAÇMAZ, süresi donar
     for (let i = this.queue.length - 1; i >= 0; i--) {
-      this.queue[i].patience -= dt
-      if (this.queue[i].patience <= 0) {
+      const q = this.queue[i]
+      if (q.haggled) {
+        q.dealWait = (q.dealWait ?? 0) + dt
+        continue
+      }
+      q.patience -= dt
+      if (q.patience <= 0) {
         const lost = this.queue.splice(i, 1)[0]
         this.events.push(`${lost.team} bekledi, başka sahaya gitti.`)
         this.rep = Math.max(0, this.rep - 0.02)

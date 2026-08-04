@@ -35,6 +35,19 @@ function toast(msg: string, kind: '' | 'g' | 'b' = '') {
 
 // ---------- takvim (gün sekmeli tek şerit — 105 minik hücre yerine 15 büyük slot) ----------
 let viewDay = -1
+let tabsCache = '', calCache = '', pickCache = ''
+let flashUntil = 0
+const DAY_FULL = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
+
+/** yerleştirme onayı: "Pazartesi 18:00 seçildi ✓" yanıp söner, sonra kaybolur */
+function confirmFlash(d: number, h: number) {
+  const pickbar = $('pickbar')
+  flashUntil = performance.now() + 1700
+  pickCache = '__flash__'
+  pickbar.className = 'show confirm'
+  pickbar.innerHTML = `${DAY_FULL[d]} ${h}:00 seçildi ✓`
+  setTimeout(() => { flashUntil = 0; pickbar.className = ''; renderCal() }, 1700)
+}
 
 function renderCal() {
   const head = document.querySelector('#desk .desk-head') as HTMLElement | null
@@ -45,32 +58,27 @@ function renderCal() {
   if (head) head.textContent = sel
     ? `${sel.team} için saat seç — yanan kutuya tıkla`
     : 'Çizelge — soldan istek seç'
-  // YERLEŞTİRME MODU: çizelge parlar, üstünde zıplayan yönerge aşağıyı gösterir
   const desk = document.getElementById('desk')!
-  const pickbar = document.getElementById('pickbar')!
   desk.classList.toggle('picking', !!sel)
-  const best = sel ? game.bestSlot(sel) : null
-  if (sel) {
-    pickbar.innerHTML = `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''}`
-      + (best ? ` <button id="quickplace">✓ ${DAY_NAMES[best.day]} ${best.hour}:00'e koy${best.adj ? ' · bitişik' : ''}</button>`
-              : ' — yanan saate tıkla<span class="arr">⬇</span>')
-    pickbar.classList.add('show')
-    const dr = desk.getBoundingClientRect()
-    pickbar.style.bottom = `${innerHeight - dr.top + 10}px`
-    const qp = document.getElementById('quickplace')
-    if (qp && best) qp.addEventListener('click', () => {
-      const r = game.place(sel.id, best.day, best.hour)
-      if (r.ok) { audio.place(); selected = null; save() } else audio.bad()
-      toast(r.msg, r.ok ? 'g' : 'b')
-      renderAll()
-    })
-  } else {
-    pickbar.classList.remove('show')
+
+  // YÖNERGE ŞERİDİ — nereye koyacağını söylemez, sadece kimin için seçtiğini söyler
+  const pickbar = $('pickbar')
+  if (performance.now() > flashUntil) {
+    const ph = sel ? `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''} — yanan saate tıkla<span class="arr">⬇</span>` : ''
+    if (ph !== pickCache) {
+      pickCache = ph
+      pickbar.className = sel ? 'show' : ''
+      pickbar.innerHTML = ph
+      if (sel) {
+        const dr = desk.getBoundingClientRect()
+        pickbar.style.bottom = `${innerHeight - dr.top + 10}px`
+      }
+    }
   }
 
-  // GÜN SEKMELERİ: doluluk çubuğu haftalık bakışı korur; yeşil nokta = seçili kartın günü
+  // GÜN SEKMELERİ (önbellekli — değişmediyse DOM'a dokunma, tıklama yutulmasın)
   const tabs = $('daytabs')
-  tabs.innerHTML = DAY_NAMES.map((nm, d) => {
+  const tabsHtml = DAY_NAMES.map((nm, d) => {
     const occ = game.bookings.filter(b => b.day === d).length / HOURS.length
     const hasValid = sel ? HOURS.some(h => !game.bookingAt(d, h) && game.slotOk(sel, d, h)) : false
     return `<div class="dtab ${d === viewDay ? 'on' : ''} ${d === nowDay ? 'today' : ''}" data-d="${d}">
@@ -78,18 +86,20 @@ function renderCal() {
       <b>${nm}</b><div class="obar"><i style="width:${Math.round(occ * 100)}%"></i></div>
     </div>`
   }).join('')
-  tabs.querySelectorAll<HTMLElement>('.dtab').forEach(el => {
-    el.addEventListener('click', () => { viewDay = Number(el.dataset.d); audio.click(); renderCal() })
-  })
+  if (tabsHtml !== tabsCache) {
+    tabsCache = tabsHtml
+    tabs.innerHTML = tabsHtml
+    tabs.querySelectorAll<HTMLElement>('.dtab').forEach(el => {
+      el.addEventListener('click', () => { viewDay = Number(el.dataset.d); audio.click(); renderCal() })
+    })
+  }
 
-  // SEÇİLİ GÜNÜN ŞERİDİ
+  // SEÇİLİ GÜNÜN ŞERİDİ (önbellekli)
   const cal = $('cal')
-  cal.innerHTML = HOURS.map(hour => {
+  const calHtml = HOURS.map(hour => {
     const b = game.bookingAt(viewDay, hour)
     const hint = sel && !b && game.slotOk(sel, viewDay, hour)
-    const isBest = best && best.day === viewDay && best.hour === hour
     const cls = ['dslot']
-    if (isBest) cls.push('best')
     if (b) cls.push(b.sub ? 'sub' : 'full')
     if (hint) cls.push('hint')
     if (viewDay === nowDay && hour === nowHour) cls.push('now')
@@ -99,16 +109,20 @@ function renderCal() {
       <span class="h">${hour}:00</span><span class="t">${b ? b.team.slice(0, 6) : ''}</span>
     </div>`
   }).join('')
-  cal.querySelectorAll<HTMLElement>('.dslot').forEach(el => {
-    el.addEventListener('click', () => {
-      if (selected === null) { toast('Önce soldan bir istek seç.'); return }
-      const r = game.place(selected, viewDay, Number(el.dataset.h))
-      if (r.ok) audio.place(); else audio.bad()
-      toast(r.msg, r.ok ? 'g' : 'b')
-      if (r.ok) { selected = null; save() }
-      renderAll()
+  if (calHtml !== calCache) {
+    calCache = calHtml
+    cal.innerHTML = calHtml
+    cal.querySelectorAll<HTMLElement>('.dslot').forEach(el => {
+      el.addEventListener('click', () => {
+        if (selected === null) { toast('Önce soldan bir istek seç.'); return }
+        const day = viewDay, hour = Number(el.dataset.h)
+        const r = game.place(selected, day, hour)
+        if (r.ok) audio.place(); else audio.bad()
+        if (r.ok) { selected = null; save(); confirmFlash(day, hour) } else toast(r.msg, 'b')
+        renderAll()
+      })
     })
-  })
+  }
 }
 
 // ---------- rezervasyon kuyruğu ----------
@@ -128,19 +142,22 @@ function selectCard(id: number) {
 }
 const seenCards = new Set<number>()
 const warned = new Set<number>()
+let qCache = ''
 function renderQueue() {
   const list = $('qlist')
   if (game.queue.length === 0) {
-    list.innerHTML = `<div class="empty">Şu an istek yok.<br>Birazdan telefon çalar…</div>`
+    const h = `<div class="empty">Şu an istek yok.<br>Birazdan telefon çalar…</div>`
+    if (h !== qCache) { qCache = h; list.innerHTML = h }
     return
   }
-  list.innerHTML = game.queue.map(r => {
+  // yapı anahtarı: sabır çubuğu HARİÇ her şey — çubuk ayrıca güncellenir,
+  // böylece 0.4sn'lik döngü DOM'u yeniden kurup TIKLAMALARI YUTMAZ
+  const html = game.queue.map(r => {
     const seg = SEGMENTS[r.segment]
     const when = r.flexible
       ? `${r.flexDays.length > 5 ? 'Her gün' : r.flexDays[0] >= 5 ? 'Hafta sonu' : 'Hafta içi'} ${r.flexHours[0]}-${r.flexHours[r.flexHours.length - 1] + 1}`
       : `${DAY_NAMES[r.day]} ${r.hour}:00`
     const pat = r.patience / r.maxPatience
-    // OKUNABİLİR İPUCU: pazarlık gücü kimde?
     const lever = pat > 0.55 && (r.hour >= 20 || r.segment === 'kurumsal')
     const tip = r.haggled ? 'pazarlık bitti'
       : lever ? 'sıkı müşteri — pazarlık şansı yüksek'
@@ -157,29 +174,40 @@ function renderQueue() {
           <b>₺${tl(Math.round(r.price * 1.5 / 10) * 10)}</b><i>iste · riskli</i></button>
       </div>`}
       ${tip ? `<div class="hint2 ${lever ? 'up' : 'dn'}">${tip}</div>` : ''}
-      <div class="bar"><i style="width:${pat * 100}%"></i></div>
+      <div class="bar"><i></i></div>
     </div>`
   }).join('')
-  for (const r of game.queue) seenCards.add(r.id)
-  list.querySelectorAll<HTMLElement>('button[data-hg]').forEach(b => {
-    b.addEventListener('click', ev => {
-      ev.stopPropagation()
-      const id = Number(b.dataset.id)
-      const res = game.haggle(id, Number(b.dataset.hg) as 1 | 2)
-      if (res.ok) audio.cash(); else audio.bad()
-      toast(res.msg, res.ok ? 'g' : 'b')
-      renderAll()
-      if (res.ok || (!res.walked && game.queue.some(x => x.id === id))) {
-        selectCard(id)
-        toast('Anlaşma tamam — şimdi çizelgede yanan saate tıkla.', 'g')
-      }
+  if (html !== qCache) {
+    qCache = html
+    list.innerHTML = html
+    for (const r of game.queue) seenCards.add(r.id)
+    list.querySelectorAll<HTMLElement>('button[data-hg]').forEach(b => {
+      b.addEventListener('click', ev => {
+        ev.stopPropagation()
+        const id = Number(b.dataset.id)
+        const res = game.haggle(id, Number(b.dataset.hg) as 1 | 2)
+        if (res.ok) audio.cash(); else audio.bad()
+        toast(res.msg, res.ok ? 'g' : 'b')
+        renderAll()
+        if (res.ok || (!res.walked && game.queue.some(x => x.id === id))) {
+          selectCard(id)
+        }
+      })
     })
-  })
+    list.querySelectorAll<HTMLElement>('.rcard').forEach(el => {
+      el.addEventListener('click', () => {
+        selectCard(Number(el.dataset.id))
+      })
+    })
+  }
+  // sabır çubukları: DOM kurmadan, her karede güncelle
   list.querySelectorAll<HTMLElement>('.rcard').forEach(el => {
-    el.addEventListener('click', () => {
-      selectCard(Number(el.dataset.id))
-      toast('Çizelgede yanan saate tıkla.')
-    })
+    const r = game.queue.find(x => x.id === Number(el.dataset.id))
+    const bar = el.querySelector('.bar i') as HTMLElement | null
+    if (r && bar) {
+      bar.style.width = r.haggled ? '100%' : `${(r.patience / r.maxPatience) * 100}%`
+      el.classList.toggle('deal', r.haggled)
+    }
   })
 }
 
@@ -357,7 +385,9 @@ function renderHud() {
   const hour = OPEN_HOUR + Math.floor((game.t / DAY_SECONDS) * HOURS.length)
   $('h-money').textContent = '₺' + tl(game.money)
   $('h-day').textContent = String(game.day)
-  $('h-clock').textContent = String(hour).padStart(2, '0') + ':00'
+  const totalMin = Math.floor((game.t / DAY_SECONDS) * 15 * 60)
+  const ch = 9 + Math.floor(totalMin / 60), cm = totalMin % 60
+  $('h-clock').textContent = String(Math.min(23, ch)).padStart(2, '0') + ':' + String(cm).padStart(2, '0')
   $('h-rep').textContent = game.rep.toFixed(1)
   $('h-occ').textContent = '%' + Math.round(game.occupancy() * 100)
   const rd = game.daysToRent()
@@ -388,12 +418,11 @@ function frame() {
   const prevDay = game.day
   game.tick(dt)
   while (game.notices.length) { toast(game.notices.shift()!, 'g'); audio.place() }
-  // el sıkıştın ama takvime koymadın — kart gitmeden alarm
+  // anlaşılan kart kaçmaz (süre donuk) — 45 sn sonra bir kez nazikçe hatırlat
   for (const r of game.queue) {
-    if (r.haggled && !warned.has(r.id) && r.patience < r.maxPatience * 0.5) {
+    if (r.haggled && !warned.has(r.id) && (r.dealWait ?? 0) > 45) {
       warned.add(r.id)
-      toast(`${r.team} ile el sıkıştın ama TAKVİME KOYMADIN — birazdan gidecek!`, 'b')
-      audio.bad()
+      toast(`${r.team} takvimde yerini bekliyor — hazır olunca koy.`)
       const hd = document.querySelector('#queue .desk-head') as HTMLElement | null
       if (hd) { hd.classList.remove('ringing'); void hd.offsetWidth; hd.classList.add('ringing') }
     }
@@ -406,7 +435,7 @@ function frame() {
 
   // rezervasyon üretimi
   spawnT -= dt
-  if (spawnT <= 0) { spawnT = 3 + Math.random() * 3
+  if (spawnT <= 0) { spawnT = 8 + Math.random() * 9
     for (let k = 0; k < 6; k++) if (game.spawnReservation()) {
       renderQueue(); audio.ring()
       const hd = document.querySelector('#queue .desk-head') as HTMLElement | null

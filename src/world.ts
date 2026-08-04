@@ -19,7 +19,7 @@ function box(w: number, d: number, h: number, c: number, x: number, y: number, z
   parent.add(m); return m
 }
 
-interface Ply { g: THREE.Group; team: 0 | 1; hx: number; hy: number; sp: number }
+interface Ply { g: THREE.Group; team: 0 | 1; hx: number; hy: number; sp: number; cd: number; ang: number }
 
 export class World {
   scene = new THREE.Scene()
@@ -239,6 +239,7 @@ export class World {
   }
 
   private protoRoad = new THREE.Group()
+  private nudgeT = 0
   private buildStreet() {
     // prosedürel yedek — Kenney yol kiti inince kaldırılıp karolarla değişir
     const road = new THREE.Mesh(new THREE.PlaneGeometry(340, 6), lam(0x4c535a))
@@ -444,7 +445,7 @@ export class World {
       const hy = PITCH_Y + ((i % 6) - 2.5) * 1.05
       wrap.position.set(hx, hy, 0)
       this.matchGroup.add(wrap)
-      this.players.push({ g: wrap, team, hx, hy, sp: 2.9 + Math.random() * 1.2 })
+      this.players.push({ g: wrap, team, hx, hy, sp: 2.9 + Math.random() * 1.2, cd: 0, ang: 0 })
     }
     this.ball = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 12), lam(0xffffff))
     this.ball.position.set(0, PITCH_Y, 0.15); this.ball.castShadow = true
@@ -584,24 +585,40 @@ export class World {
     const lx = PITCH_W / 2 - 0.4, ly = PITCH_D / 2 - 0.4
     if (Math.abs(b.x) > lx) { this.bvx *= -0.72; b.x = Math.sign(b.x) * lx }
     if (Math.abs(b.y - PITCH_Y) > ly) { this.bvy *= -0.72; b.y = PITCH_Y + Math.sign(b.y - PITCH_Y) * ly }
-    if (Math.hypot(this.bvx, this.bvy) < 0.25) { // top durdu → hafif dürt
-      this.bvx += (Math.random() - 0.5) * 2; this.bvy += (Math.random() - 0.5) * 2
+    // top durduysa ARALIKLI dürt (her karede değil — titreme kaynağıydı)
+    this.nudgeT -= dt
+    if (Math.hypot(this.bvx, this.bvy) < 0.25 && this.nudgeT <= 0) {
+      this.nudgeT = 0.9
+      this.bvx += (Math.random() - 0.5) * 2.4; this.bvy += (Math.random() - 0.5) * 2.4
     }
     const near = [...this.players].sort((p, q) =>
       (p.g.position.x - b.x) ** 2 + (p.g.position.y - b.y) ** 2 -
       ((q.g.position.x - b.x) ** 2 + (q.g.position.y - b.y) ** 2))
     const now = performance.now()
     near.forEach((p, idx) => {
+      p.cd = Math.max(0, p.cd - dt)
       const chase = idx < 3
       const tx = chase ? b.x : p.hx + Math.sin(now / 1500 + p.hy * 2) * 1.1
       const ty = chase ? b.y : p.hy + Math.cos(now / 1700 + p.hx * 2) * 0.9
       const dx = tx - p.g.position.x, dy = ty - p.g.position.y
-      const d = Math.hypot(dx, dy) || 1
-      const spd = chase ? p.sp : p.sp * 0.42
-      p.g.position.x += (dx / d) * spd * dt
-      p.g.position.y += (dy / d) * spd * dt
-      p.g.rotation.z = Math.atan2(dy, dx) - Math.PI / 2 // koştuğu yöne bak
-      if (chase && d < 0.45) {
+      const d = Math.hypot(dx, dy)
+      // ÖLÜ BÖLGE: hedefin dibindeyken kıpırdama — titremenin ana kaynağı buydu
+      if (d > 0.18) {
+        const spd = chase ? p.sp : p.sp * 0.42
+        const step = Math.min(spd * dt, d)   // AŞMA YOK: hedefi geçip geri salınmaz
+        p.g.position.x += (dx / d) * step
+        p.g.position.y += (dy / d) * step
+        // dönüş YUMUŞAK: hedef açıya kısa yoldan kayarak dön (anlık zıplama yok)
+        const want = Math.atan2(dy, dx) - Math.PI / 2
+        let diff = want - p.ang
+        while (diff > Math.PI) diff -= Math.PI * 2
+        while (diff < -Math.PI) diff += Math.PI * 2
+        p.ang += diff * Math.min(1, 10 * dt)
+        p.g.rotation.z = p.ang
+      }
+      // tekme: bekleme süresiyle — iki oyuncu topu aralarında zıplatamaz
+      if (chase && d < 0.5 && p.cd === 0) {
+        p.cd = 0.7
         const gx = p.team === 0 ? PITCH_W / 2 : -PITCH_W / 2
         const ax = gx - b.x, ay = (PITCH_Y + (Math.random() - 0.5) * 2.4) - b.y
         const an = Math.hypot(ax, ay) || 1

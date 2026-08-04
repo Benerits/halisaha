@@ -203,5 +203,29 @@ console.log('\n— ÇIRAK / TELEFON HATTI / REKLAM —')
   }
 }
 
+
+console.log('\n— ANLAŞMA DONDURMASI + SAAT —')
+{
+  const g = new Game()
+  let r = null
+  for (let i = 0; i < 900 && !r; i++) r = g.spawnReservation()
+  if (r) {
+    r.maxPay = r.price * 3
+    g.haggle(r.id, 1)
+    const before = r.patience
+    g.tick(10)
+    check('el sıkışılan kartın süresi DONAR (kaçmaz)', r.patience === before && g.queue.includes(r))
+    check('bekleme sayacı işler (nazik hatırlatma için)', (r.dealWait ?? 0) >= 10)
+  }
+  const t = new Game()
+  let r2 = null
+  for (let i = 0; i < 900 && !r2; i++) r2 = t.spawnReservation()
+  if (r2 && !r2.haggled) {
+    const before = r2.patience
+    t.tick(5)
+    check('pazarlıksız kartın süresi normal akar', r2.patience < before)
+  }
+  check('1 oyun günü = 450 sn (saat=30sn, dakika akışı)', DAY_SECONDS === 450)
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)
