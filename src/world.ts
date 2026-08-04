@@ -343,7 +343,7 @@ export class World {
     const VX = [-30, 30] // dikey sokaklar — 6'nın KATI olmalı (karo ızgarasına denk gelsin)
     // ana cadde (yatay, y=17.5) — tesis girişinde (x=0) YAYA GEÇİDİ
     for (let x = -168; x <= 168; x += T) {
-      if (VX.includes(x) && k.roads.tee) { put(k.roads.tee, x, 17.5, Math.PI) ; continue }
+      if (VX.includes(x) && k.roads.tee) { put(k.roads.tee, x, 17.5, 0) ; continue }  // gövde GÜNEYE — bordür kuzeyde kalır
       if (x === 0 && k.roads.crossing) { put(k.roads.crossing, x, 17.5, 0); continue }
       put(k.roads.straight, x, 17.5, 0)
     }
