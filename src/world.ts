@@ -737,6 +737,13 @@ export class World {
     this.onResize()
   }
 
+  /** kamerayı başlangıç görünümüne döndür */
+  resetCam() {
+    this.zoom = 27
+    this.target.set(-1, 2.5, 0)
+    this.onResize()
+  }
+
   /** ekran sürüklemesini dünya kaydırmasına çevirir */
   pan(dxPx: number, dyPx: number) {
     const a = innerWidth / innerHeight

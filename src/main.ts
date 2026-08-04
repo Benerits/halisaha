@@ -291,6 +291,19 @@ function renderOffice() {
         <span class="ds">Düşerse denetimde ceza riski var.</span></div>
       <div class="srow"><span class="nm">Günlük sabit gider</span><span class="up">-₺${tl(game.dailyUpkeep())}</span>
         <span class="ds">Elektrik, su, temizlik, personel.</span></div>`
+  } else if (officeTab === 'ayarlar') {
+    body.innerHTML = `
+      <div class="srow"><span class="nm">Ses efektleri</span>
+        <button class="buy" id="sfxrow">${audio.on ? 'AÇIK ✓' : 'KAPALI'}</button>
+        <span class="ds">Telefon, para, yerleştirme sesleri.</span></div>
+      <div class="srow"><span class="nm">Kamera</span>
+        <button class="buy" id="camreset">Görünümü sıfırla</button>
+        <span class="ds">Kaybolduysan: kamerayı tesise, zoom'u başlangıca döndürür.</span></div>`
+    $('sfxrow').addEventListener('click', () => {
+      const on = audio.toggle()
+      ;($('sfxrow') as HTMLElement).textContent = on ? 'AÇIK ✓' : 'KAPALI'
+    })
+    $('camreset').addEventListener('click', () => { world.resetCam(); audio.click() })
   } else {
     body.innerHTML = game.events.slice(-14).reverse()
       .map(e => `<div class="srow"><span class="ds" style="flex:1">${e}</span></div>`).join('')
@@ -343,7 +356,7 @@ function openParcel(c: number, r: number) {
 // SAHNE GEZİNME: sürükle → kaydır, bırak → (hareket yoksa) arsa tıklaması
 let dragging = false, dragMoved = 0, lastX = 0, lastY = 0
 addEventListener('pointerdown', e => {
-  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#officebtn,#sfxbtn,#zoombar,#parcel,#hud')) return
+  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#officebtn,#zoombar,#parcel,#hud')) return
   dragging = true; dragMoved = 0; lastX = e.clientX; lastY = e.clientY
 })
 addEventListener('pointermove', e => {
@@ -359,7 +372,7 @@ addEventListener('pointerup', e => {
   if (!dragging) return
   dragging = false
   if (dragMoved > 6) return                    // sürükleme yaptıysa tıklama sayma
-  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#officebtn,#sfxbtn,#zoombar,#parcel,#hud')) return
+  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#officebtn,#zoombar,#parcel,#hud')) return
   const hit = world.pickParcel(e.clientX, e.clientY)
   if (hit) { audio.click(); openParcel(hit.c, hit.r) }
 })
@@ -367,11 +380,6 @@ addEventListener('pointerup', e => {
 $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
 $('zout').addEventListener('click', () => { world.zoomBy(1.22); audio.click() })
 addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#queue,#office,#tips,#goals')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
-$('sfxbtn').addEventListener('click', () => {
-  const on = audio.toggle()
-  $('sfxbtn').classList.toggle('off', !on)
-  $('sfxbtn').textContent = on ? 'SES' : 'SESSİZ'
-})
 addEventListener('pointerdown', () => audio.ensure(), { once: true })
 $('officebtn').addEventListener('click', () => { audio.click(); $('office').classList.add('show'); renderOffice() })
 $('closeoffice').addEventListener('click', () => $('office').classList.remove('show'))

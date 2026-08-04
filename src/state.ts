@@ -392,7 +392,7 @@ export class Game {
       if (q.patience <= 0) {
         const lost = this.queue.splice(i, 1)[0]
         this.events.push(`${lost.team} bekledi, başka sahaya gitti.`)
-        this.rep = Math.max(0, this.rep - 0.02)
+        this.rep = Math.max(0, this.rep - 0.008)
       }
     }
   }
@@ -454,8 +454,10 @@ export class Game {
       this.rentDueDay = this.day + 7
     }
     this.day++
-    // memnuniyet: dolulukla hafif artar
-    if (todays.length > 0) this.rep = Math.min(5, this.rep + 0.03)
+    // memnuniyet: oynanan her maç itibar kazandırır (günde en çok +0.12)
+    if (todays.length > 0)
+      this.rep = Math.min(5, this.rep + Math.min(0.12, todays.length * 0.02)
+        + (this.hasShower ? 0.01 : 0) + (this.hasCanteen ? 0.01 : 0))
     this.events.push(`Gün ${this.day - 1}: ${todays.length} maç · gelir ₺${income.toLocaleString('tr-TR')} · gider ₺${upkeep.toLocaleString('tr-TR')}`
       + (bestRun >= 3 ? ` · ${bestRun} saat kesintisiz (+%${Math.round((runBonus - 1) * 100)} kantin)` : '')
       + (courtRent > 0 ? ` · ek saha kirası ₺${courtRent.toLocaleString('tr-TR')}` : ''))
