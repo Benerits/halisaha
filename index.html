@@ -173,14 +173,17 @@
   .tip button:hover { filter:brightness(1.07); }
 
   /* ===== OFİS ===== */
-  #zoombar { position:fixed; right:10px; bottom:64px; z-index:13; display:flex; flex-direction:column; gap:5px; align-items:flex-end; }
+  #yazpill { position:fixed; z-index:9; transform:translate(-50%,-100%); cursor:pointer;
+    background:var(--head); color:var(--head-ink); font-weight:800; font-size:10px;
+    letter-spacing:.8px; padding:5px 12px; border-radius:99px; box-shadow:0 4px 12px rgba(20,35,25,.3);
+    user-select:none; white-space:nowrap; }
+  #yazpill::after { content:''; position:absolute; left:50%; bottom:-5px; transform:translateX(-50%);
+    border:5px solid transparent; border-top-color:var(--head); border-bottom:0; }
+  #yazpill:hover { background:#1f282e; }
+  #zoombar { position:fixed; right:10px; bottom:14px; z-index:13; display:flex; flex-direction:column; gap:5px; align-items:flex-end; }
   #zoombar button { width:44px; height:36px; background:var(--paper); color:var(--head); font-size:19px;
     font-weight:800; border-radius:10px; box-shadow:var(--shadow); border:1.5px solid #dde9d5; line-height:1; }
   #zoombar button:hover { background:#fff; border-color:var(--green); }
-  #officebtn { position:fixed; right:10px; bottom:14px; z-index:13; background:var(--green);
-    color:#fff; font-weight:800; font-size:15px; padding:14px 26px; border-radius:var(--r-lg);
-    border-bottom:3px solid var(--green-dark); box-shadow:var(--shadow); letter-spacing:.5px; }
-  #officebtn:hover { filter:brightness(1.07); }
   #office { position:fixed; inset:0; z-index:40; background:rgba(20,45,30,.52); backdrop-filter:blur(4px);
     display:none; align-items:center; justify-content:center; padding:20px; }
   #office.show { display:flex; }
@@ -251,8 +254,8 @@
   <div id="calwrap"><div id="cal"></div></div>
 </div>
 
+<div id="yazpill">YAZIHANE</div>
 <div id="zoombar"><button id="zin">+</button><button id="zout">−</button></div>
-<button id="officebtn">YAZIHANE</button>
 
 <div id="office">
   <div class="panel">

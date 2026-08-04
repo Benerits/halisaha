@@ -356,7 +356,7 @@ function openParcel(c: number, r: number) {
 // SAHNE GEZİNME: sürükle → kaydır, bırak → (hareket yoksa) arsa tıklaması
 let dragging = false, dragMoved = 0, lastX = 0, lastY = 0
 addEventListener('pointerdown', e => {
-  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#officebtn,#zoombar,#parcel,#hud')) return
+  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud')) return
   dragging = true; dragMoved = 0; lastX = e.clientX; lastY = e.clientY
 })
 addEventListener('pointermove', e => {
@@ -372,7 +372,8 @@ addEventListener('pointerup', e => {
   if (!dragging) return
   dragging = false
   if (dragMoved > 6) return                    // sürükleme yaptıysa tıklama sayma
-  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#officebtn,#zoombar,#parcel,#hud')) return
+  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud')) return
+  if (world.pickYazihane(e.clientX, e.clientY)) { openOffice(); return }
   const hit = world.pickParcel(e.clientX, e.clientY)
   if (hit) { audio.click(); openParcel(hit.c, hit.r) }
 })
@@ -381,7 +382,8 @@ $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
 $('zout').addEventListener('click', () => { world.zoomBy(1.22); audio.click() })
 addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#queue,#office,#tips,#goals')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
 addEventListener('pointerdown', () => audio.ensure(), { once: true })
-$('officebtn').addEventListener('click', () => { audio.click(); $('office').classList.add('show'); renderOffice() })
+function openOffice() { audio.click(); $('office').classList.add('show'); renderOffice() }
+$('yazpill').addEventListener('click', openOffice)
 $('closeoffice').addEventListener('click', () => $('office').classList.remove('show'))
 document.querySelectorAll<HTMLElement>('.tab').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'))
@@ -470,6 +472,9 @@ function frame() {
 
   uiT -= dt
   if (uiT <= 0) { uiT = 0.4; renderAll() }
+  const pp = world.project(-14.5, 7.2, 5.1)
+  const yp = $('yazpill')
+  yp.style.left = `${pp.x}px`; yp.style.top = `${pp.y}px`
   saveT -= dt
   if (saveT <= 0) { saveT = 10; save() }
 

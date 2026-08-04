@@ -226,8 +226,24 @@ export class World {
     post.position.set(0, -2.28, 3.0); g.add(post)
     g.position.set(-14.5, 7.2, 0)
     this.scene.add(g)
+    this.clubhouse = g
   }
 
+  /** yazıhane (kulüp binası) tıklaması */
+  private clubhouse: THREE.Group | null = null
+  pickYazihane(clientX: number, clientY: number): boolean {
+    if (!this.clubhouse) return false
+    const nx = (clientX / innerWidth) * 2 - 1
+    const ny = -(clientY / innerHeight) * 2 + 1
+    this.ray.setFromCamera(new THREE.Vector2(nx, ny), this.camera)
+    return this.ray.intersectObject(this.clubhouse, true).length > 0
+  }
+
+  /** dünya noktası → ekran pikseli (pill konumlandırma) */
+  project(x: number, y: number, z: number): { x: number; y: number } {
+    const v = new THREE.Vector3(x, y, z).project(this.camera)
+    return { x: (v.x + 1) / 2 * innerWidth, y: (-v.y + 1) / 2 * innerHeight }
+  }
 
   private buildParking() {
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(11, 7.5), lam(0x585f66))
