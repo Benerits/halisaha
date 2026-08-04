@@ -634,8 +634,8 @@ export class World {
     // ARABALAR — otoparkta
     if (k.cars.length) {
       const slots: [number, number, number][] = [
-        [10.68, 9.15, Math.PI], [14.58, 9.15, Math.PI], [16.53, 9.15, Math.PI], // üst sıra: köşeye yaslı
-        [12.63, 4.85, 0], [16.53, 4.85, 0],                                      // alt sıra: köşeye yaslı
+        [10.68, 9.75, Math.PI], [14.58, 9.75, Math.PI], [16.53, 9.75, Math.PI], // üst sıra: slotun dibinde
+        [12.63, 4.25, 0], [16.53, 4.25, 0],                                      // alt sıra: slotun dibinde
       ]
       slots.forEach(([x, y, rot], i) => {
         const car = fitModel(k.cars[i % k.cars.length], 1.0)
