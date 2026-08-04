@@ -82,7 +82,7 @@ const TEAM_NAMES = [
 // ---- Mağaza / yatırım kalemleri ----
 export type BuyId =
   | 'pitch2' | 'canteen' | 'fridge' | 'cleats' | 'lights' | 'shower'
-  | 'schooldeal' | 'tearoom' | 'corporate' | 'staff' | 'docs'
+  | 'schooldeal' | 'tearoom' | 'corporate' | 'staff' | 'docs' | 'billboard' | 'roadsign'
 
 export interface ShopItem {
   id: BuyId
@@ -126,6 +126,8 @@ export class Game {
   hasCorporate = false
   staff = 0
   docService = false
+  hasBillboard = false   // saha kenarı reklam panoları — kira geliri
+  hasRoadSign = false    // yol tabelası — talep artışı
 
   /** belge geçerliliği 0-1 (1 = tam) — sıfıra yaklaşınca denetimde ceza */
   docs = 1
@@ -139,6 +141,7 @@ export class Game {
     if (this.hasCanteen) v += 120
     if (this.hasFridge) v += 60
     if (this.hasCleats) v += 45
+    if (this.hasBillboard) v += 90   // pano kirası maç başına yansır
     return v
   }
   dailyUpkeep() {
@@ -179,7 +182,8 @@ export class Game {
     const [h0, h1] = seg.hours
     const hour = h0 + Math.floor(Math.random() * Math.max(1, h1 - h0))
     // o saatte talep var mı?
-    const demand = hourDemand(hour, day) * (0.65 + this.rep * 0.12) * (this.hasLights && hour >= 19 ? 1.25 : 1)
+    const demand = hourDemand(hour, day) * (0.65 + this.rep * 0.12)
+      * (this.hasLights && hour >= 19 ? 1.25 : 1) * (this.hasRoadSign ? 1.2 : 1)
     if (Math.random() > demand) return null
     if (this.bookingAt(day, hour) && this.pitches < 2) return null
     const weeks = Math.random() < 0.28 ? (Math.random() < 0.5 ? 4 : 8) : 0
@@ -303,6 +307,10 @@ export class Game {
         desc: 'Sabah emekli grupları gelir — en ölü saat dolar.', owned: this.hasTeaRoom, locked: null },
       { id: 'corporate', label: 'Kurumsal Fatura', gain: 'Şirket segmenti açılır (12-17)', cost: 15_000, upkeep: 0,
         desc: 'Şirket turnuvaları gündüz gelir, ücreti %30 yüksek.', owned: this.hasCorporate, locked: null },
+      { id: 'billboard', label: 'Reklam Panoları', gain: 'Her maçtan +₺90', cost: 11_000, upkeep: 0,
+        desc: 'Saha kenarına yerel esnaf reklamı asarsın; kira her maçta cebe girer.', owned: this.hasBillboard, locked: null },
+      { id: 'roadsign', label: 'Yol Tabelası', gain: 'Tüm talep +%20', cost: 16_000, upkeep: 60,
+        desc: 'Ana caddeden görünen büyük tabela — yoldan geçen daha çok kişi arar.', owned: this.hasRoadSign, locked: null },
       { id: 'staff', label: 'Tesis Görevlisi', gain: 'Saha bakımı otomatik', cost: 6_000, upkeep: 400,
         desc: 'Yovmiyesi var ama bakım işini üstlenir.', owned: this.staff >= 1, locked: null },
       { id: 'docs', label: 'Belge Takip Servisi', gain: 'Evraklar otomatik yenilenir', cost: 9_500, upkeep: 250,
@@ -330,6 +338,8 @@ export class Game {
       case 'corporate': this.hasCorporate = true; break
       case 'staff': this.staff = 1; break
       case 'docs': this.docService = true; break
+      case 'billboard': this.hasBillboard = true; break
+      case 'roadsign': this.hasRoadSign = true; break
     }
     this.events.push(`${it.label} alındı.`)
     return { ok: true, msg: `${it.label} hazır — ${it.gain}` }
@@ -380,6 +390,8 @@ export class Game {
     if (!this.hasCanteen) return { label: 'Kantin kur', have: this.money, need: 9_000 }
     if (!this.hasLights) return { label: 'LED projektör tak', have: this.money, need: 14_000 }
     if (!this.hasSchoolDeal) return { label: 'Okul anlaşması yap', have: this.money, need: 12_000 }
+    if (!this.hasBillboard) return { label: 'Reklam panolarını as', have: this.money, need: 11_000 }
+    if (!this.hasRoadSign) return { label: 'Yol tabelası dik', have: this.money, need: 16_000 }
     if (!this.hasShower) return { label: 'Duş & soyunma yenile', have: this.money, need: 18_000 }
     if (this.pitches < 2) return { label: '2. halı sahayı aç', have: this.money, need: 120_000 }
     return null
@@ -441,6 +453,7 @@ export class Game {
       hasCleats: this.hasCleats, hasLights: this.hasLights, hasShower: this.hasShower,
       hasSchoolDeal: this.hasSchoolDeal, hasTeaRoom: this.hasTeaRoom, hasCorporate: this.hasCorporate,
       staff: this.staff, docService: this.docService, docs: this.docs,
+      hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,
     }
   }
   load(d: SaveData) {
@@ -451,6 +464,7 @@ export class Game {
     this.hasCanteen = b('hasCanteen'); this.hasFridge = b('hasFridge'); this.hasCleats = b('hasCleats')
     this.hasLights = b('hasLights'); this.hasShower = b('hasShower'); this.hasSchoolDeal = b('hasSchoolDeal')
     this.hasTeaRoom = b('hasTeaRoom'); this.hasCorporate = b('hasCorporate'); this.docService = b('docService')
+    this.hasBillboard = b('hasBillboard'); this.hasRoadSign = b('hasRoadSign')
     if (Array.isArray(d.bookings)) this.bookings = d.bookings as Booking[]
   }
 }

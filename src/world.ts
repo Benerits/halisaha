@@ -35,6 +35,12 @@ export class World {
   private zoom = 27
   private matchGroup = new THREE.Group()
   private parkedCars: THREE.Group[] = []
+  /** yoldan akan araçlar */
+  private traffic: { g: THREE.Group; sp: number; dir: 1 | -1 }[] = []
+  /** maça yürüyen oyuncular (otoparktan sahaya) */
+  private walkers: { g: THREE.Group; t: number; from: THREE.Vector3; to: THREE.Vector3 }[] = []
+  private billboards: THREE.Group[] = []
+  private signBoard: THREE.Group | null = null
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene.background = new THREE.Color(0xa8dcef)
@@ -300,6 +306,24 @@ export class World {
         b.position.set(x, y, 0)
         b.rotation.z = (i % 4) * Math.PI / 2
         this.scene.add(b)
+        // ÇEVRE DÜZENLEMESİ: bahçe çimi + kaldırım + ağaç/çalı
+        const inward = y > 10 ? -1 : y < -10 ? 1 : 0
+        const gx = inward !== 0 ? x : x + (x > 0 ? -5.5 : 5.5)
+        const gy = inward !== 0 ? y + inward * 5.5 : y
+        const lawn = new THREE.Mesh(new THREE.PlaneGeometry(8.5, 5), lam(0x6f9a55))
+        lawn.position.set(gx, gy, 0.015); lawn.receiveShadow = true; this.scene.add(lawn)
+        const path = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 5), lam(0xc4bdae))
+        path.position.set(gx, gy, 0.02); this.scene.add(path)
+        if (k.trees.length) {
+          for (const ox of [-3.1, 3.1]) {
+            const t = fitModel(k.trees[(i + 1) % k.trees.length], 2.0 + (i % 2) * 0.5)
+            t.position.set(gx + ox, gy + (i % 2 ? 0.8 : -0.8), 0); this.scene.add(t)
+          }
+        }
+        if (k.planter) {
+          const pl = fitModel(k.planter, 0.65)
+          pl.position.set(gx + 1.4, gy - 1.9, 0); this.scene.add(pl)
+        }
       })
     }
     // ARABALAR — otoparkta
@@ -315,6 +339,17 @@ export class World {
         const car = fitModel(k.cars[(i + 2) % k.cars.length], 1.0)
         car.position.set(-12 + i * 11, 14.9, 0)
         this.scene.add(car)
+      }
+    }
+    // AKAN TRAFİK — yol canlı olsun
+    if (k.cars.length) {
+      for (let i = 0; i < 6; i++) {
+        const dir: 1 | -1 = i % 2 ? 1 : -1
+        const car = fitModel(k.cars[i % k.cars.length], 1.0)
+        car.position.set(-45 + i * 15, dir > 0 ? 16.4 : 18.6, 0)
+        car.rotation.z = dir > 0 ? Math.PI / 2 : -Math.PI / 2
+        this.scene.add(car)
+        this.traffic.push({ g: car, sp: 3.5 + Math.random() * 2.5, dir })
       }
     }
     // SAKSILAR — giriş süsü
@@ -362,6 +397,91 @@ export class World {
       }
     })
     this.ball.position.z = 0.15 + Math.abs(Math.sin(now / 200)) * 0.07
+  }
+
+  /** yol trafiği + maça yürüyen oyuncular — sahne hep canlı */
+  updateAmbient(dt: number) {
+    for (const t of this.traffic) {
+      t.g.position.x += t.sp * t.dir * dt
+      if (t.dir > 0 && t.g.position.x > 48) t.g.position.x = -48
+      if (t.dir < 0 && t.g.position.x < -48) t.g.position.x = 48
+    }
+    for (let i = this.walkers.length - 1; i >= 0; i--) {
+      const w = this.walkers[i]
+      w.t += dt * 0.32
+      if (w.t >= 1) { this.scene.remove(w.g); this.walkers.splice(i, 1); continue }
+      w.g.position.lerpVectors(w.from, w.to, w.t)
+      w.g.position.z = 0
+      const d = new THREE.Vector3().subVectors(w.to, w.from)
+      w.g.rotation.z = Math.atan2(d.y, d.x) - Math.PI / 2
+    }
+  }
+
+  /** maç başlarken: otoparktan sahaya oyuncular yürüsün */
+  sendArrivals(n = 4) {
+    const k = this.kit
+    if (!k?.chars.length) return
+    for (let i = 0; i < n; i++) {
+      const fig = fitCharacter(k.chars[Math.floor(Math.random() * k.chars.length)], 0.78)
+      const from = new THREE.Vector3(9.5 + Math.random() * 3, 7.5 + Math.random() * 1.6, 0)
+      const to = new THREE.Vector3(PITCH_W / 2 + 1.4, PITCH_Y + (Math.random() - 0.5) * 3, 0)
+      fig.position.copy(from)
+      this.scene.add(fig)
+      this.walkers.push({ g: fig, t: -i * 0.12, from, to })
+    }
+  }
+
+  /** REKLAM PANOSU — saha kenarına, satın alınınca görünür */
+  setBillboards(on: boolean) {
+    if (on && this.billboards.length === 0) {
+      const texts = ['BENEROİL', 'MAHALLE MARKET', 'ÖZ SANAYİ']
+      texts.forEach((txt, i) => {
+        const g = new THREE.Group()
+        const cvs = document.createElement('canvas'); cvs.width = 420; cvs.height = 120
+        const ctx = cvs.getContext('2d')!
+        const bg = ['#d64545', '#2f6fed', '#f2b53c'][i]
+        ctx.fillStyle = bg; ctx.fillRect(0, 0, 420, 120)
+        ctx.fillStyle = '#fff'; ctx.font = '800 46px sans-serif'
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText(txt, 210, 62)
+        const p = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.05),
+          new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cvs), side: THREE.DoubleSide }))
+        p.position.z = 1.05; p.rotation.x = Math.PI / 2
+        g.add(p)
+        for (const ox of [-1.6, 1.6]) {
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 6), lam(0x8d97a1))
+          leg.rotation.x = Math.PI / 2; leg.position.set(ox, 0, 0.55); g.add(leg)
+        }
+        g.position.set(-4.2 + i * 4.4, PITCH_Y - PITCH_D / 2 - 1.5, 0)
+        this.scene.add(g); this.billboards.push(g)
+      })
+    }
+    for (const b of this.billboards) b.visible = on
+  }
+
+  /** YOL TABELASI — tesise yönlendiren büyük tabela */
+  setRoadSign(on: boolean) {
+    if (on && !this.signBoard) {
+      const g = new THREE.Group()
+      const cvs = document.createElement('canvas'); cvs.width = 340; cvs.height = 440
+      const ctx = cvs.getContext('2d')!
+      ctx.fillStyle = '#14532d'; ctx.beginPath(); ctx.roundRect(0, 0, 340, 440, 26); ctx.fill()
+      ctx.fillStyle = '#f7fbf4'; ctx.font = '800 54px sans-serif'; ctx.textAlign = 'center'
+      ctx.fillText('HALI', 170, 110); ctx.fillText('SAHA', 170, 175)
+      ctx.fillStyle = '#8ec63f'; ctx.font = '800 34px sans-serif'
+      ctx.fillText('7/24 AÇIK', 170, 250)
+      ctx.fillStyle = '#f2b53c'; ctx.font = '800 30px sans-serif'
+      ctx.fillText('REZERVASYON', 170, 320); ctx.fillText('ALINIR', 170, 360)
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 3.9),
+        new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cvs), side: THREE.DoubleSide }))
+      face.position.z = 4.4; face.rotation.x = Math.PI / 2
+      g.add(face)
+      const mast = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 4.6), lam(0x6f7d88))
+      mast.position.z = 2.3; g.add(mast)
+      g.position.set(-14.5, 12.4, 0)
+      this.scene.add(g); this.signBoard = g
+    }
+    if (this.signBoard) this.signBoard.visible = on
   }
 
   setNight(n: number, lightsOn: boolean) {

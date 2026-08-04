@@ -222,6 +222,7 @@ function save() {
 // ---------- döngü ----------
 const clock = new THREE.Clock()
 let spawnT = 2
+let matchWasOn = false
 let uiT = 0
 let saveT = 0
 
@@ -256,7 +257,13 @@ function frame() {
   // o an maç var mı → botlar oynasın
   const hour = OPEN_HOUR + Math.floor(frac * HOURS.length)
   const nowDay = (game.day - 1) % 7
-  world.updateMatch(dt, !!game.bookingAt(nowDay, hour))
+  const nowMatch = !!game.bookingAt(nowDay, hour)
+  if (nowMatch && !matchWasOn) world.sendArrivals(4)   // maç başladı → oyuncular otoparktan yürüsün
+  matchWasOn = nowMatch
+  world.updateMatch(dt, nowMatch)
+  world.updateAmbient(dt)
+  world.setBillboards(game.hasBillboard)
+  world.setRoadSign(game.hasRoadSign)
 
   uiT -= dt
   if (uiT <= 0) { uiT = 0.4; renderAll() }
