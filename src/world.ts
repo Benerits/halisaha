@@ -610,10 +610,15 @@ export class World {
     const hPerPx = this.zoom / innerHeight
     // kameranın ekran sağ/yukarı eksenleri (dünya düzleminde)
     const fwd = new THREE.Vector3().subVectors(this.target, this.camera.position).setZ(0).normalize()
-    const right = new THREE.Vector3(-fwd.y, fwd.x, 0)
+    // DİKKAT: ekran-sağı (fwd.y, -fwd.x) — önceki (-fwd.y, fwd.x) bunun tersiydi,
+    // o yüzden yatay eksen dikeyle çelişiyordu ve pan hep 'ters' hissettiriyordu
+    const right = new THREE.Vector3(fwd.y, -fwd.x, 0)
     const up = new THREE.Vector3(fwd.x, fwd.y, 0)
     this.target.addScaledVector(right, -dxPx * wPerPx)
-    this.target.addScaledVector(up, dyPx * hPerPx)
+    // izometrik kısaltma telafisi: yerdeki ileri-geri hareket ekranda sin(eğim) kadar
+    // kısa görünür — bölmezsek dikey sürükleme 'ağır' kalır (ölçüldü: 90px → 37px)
+    const sinElev = this.camOffset.z / this.camOffset.length()
+    this.target.addScaledVector(up, (dyPx * hPerPx) / sinElev)
     this.target.x = Math.max(-45, Math.min(45, this.target.x))
     this.target.y = Math.max(-40, Math.min(40, this.target.y))
     this.applyCam()

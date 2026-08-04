@@ -37,10 +37,14 @@ function toast(msg: string, kind: '' | 'g' | 'b' = '') {
 let viewDay = -1
 
 function renderCal() {
+  const head = document.querySelector('#desk .desk-head') as HTMLElement | null
   const nowHour = OPEN_HOUR + Math.floor((game.t / DAY_SECONDS) * HOURS.length)
   const nowDay = (game.day - 1) % 7
   if (viewDay < 0) viewDay = nowDay
   const sel = selected !== null ? game.queue.find(r => r.id === selected) : null
+  if (head) head.textContent = sel
+    ? `${sel.team} için saat seç — yanan kutuya tıkla`
+    : 'Çizelge — soldan istek seç'
 
   // GÜN SEKMELERİ: doluluk çubuğu haftalık bakışı korur; yeşil nokta = seçili kartın günü
   const tabs = $('daytabs')
@@ -84,6 +88,20 @@ function renderCal() {
 }
 
 // ---------- rezervasyon kuyruğu ----------
+/** kartı seç + geçerli slotu olan ilk güne atla (yerleştirme akışının tek girişi) */
+function selectCard(id: number) {
+  selected = id
+  audio.click()
+  const r = game.queue.find(x => x.id === id)
+  if (r) {
+    const days = r.flexible ? r.flexDays : [r.day]
+    const hours = r.flexible ? r.flexHours : [r.hour]
+    outer: for (const d of days) for (const h of hours) {
+      if (!game.bookingAt(d, h)) { viewDay = d; break outer }
+    }
+  }
+  renderQueue(); renderCal()
+}
 const seenCards = new Set<number>()
 function renderQueue() {
   const list = $('qlist')
@@ -121,25 +139,20 @@ function renderQueue() {
   list.querySelectorAll<HTMLElement>('button[data-hg]').forEach(b => {
     b.addEventListener('click', ev => {
       ev.stopPropagation()
-      const res = game.haggle(Number(b.dataset.id), Number(b.dataset.hg) as 1 | 2)
+      const id = Number(b.dataset.id)
+      const res = game.haggle(id, Number(b.dataset.hg) as 1 | 2)
       if (res.ok) audio.cash(); else audio.bad()
       toast(res.msg, res.ok ? 'g' : 'b')
       renderAll()
+      if (res.ok || (!res.walked && game.queue.some(x => x.id === id))) {
+        selectCard(id)
+        toast('Anlaşma tamam — şimdi çizelgede yanan saate tıkla.', 'g')
+      }
     })
   })
   list.querySelectorAll<HTMLElement>('.rcard').forEach(el => {
     el.addEventListener('click', () => {
-      selected = Number(el.dataset.id)
-      audio.click()
-      const r = game.queue.find(x => x.id === selected)
-      if (r) {
-        const days = r.flexible ? r.flexDays : [r.day]
-        const hours = r.flexible ? r.flexHours : [r.hour]
-        outer: for (const d of days) for (const h of hours) {
-          if (!game.bookingAt(d, h)) { viewDay = d; break outer }
-        }
-      }
-      renderQueue(); renderCal()
+      selectCard(Number(el.dataset.id))
       toast('Çizelgede yanan saate tıkla.')
     })
   })
