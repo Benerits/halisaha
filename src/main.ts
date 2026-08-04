@@ -327,7 +327,8 @@ function openParcel(c: number, r: number) {
   if (b) {
     h += `<div class="srow"><span class="nm">${BUILDS[b.kind].label}</span>
       <span class="gn">${BUILDS[b.kind].gain}</span>
-      <span class="ds">${BUILDS[b.kind].desc}</span></div>`
+      <button class="buy" id="pdemol" style="background:var(--clay)">YIK · %40 iade</button>
+      <span class="ds">${BUILDS[b.kind].desc} Yıkarsan arsa boşalır, yerine başka şey kurabilirsin.</span></div>`
   } else if (!owned) {
     h += `<div class="srow"><span class="nm">Boş arsa</span>
       <button class="buy" id="pbuy">₺${tl(parcelCost(c, r))} — Satın Al</button>
@@ -344,6 +345,13 @@ function openParcel(c: number, r: number) {
   box.innerHTML = h + '</div>'
   box.classList.add('show')
   $('pclose').addEventListener('click', () => box.classList.remove('show'))
+  const pd = document.getElementById('pdemol')
+  if (pd) pd.addEventListener('click', () => {
+    const res = game.removeBuild(c, r)
+    if (res.ok) audio.build(); else audio.bad()
+    toast(res.msg, res.ok ? 'g' : 'b')
+    if (res.ok) { save(); world.syncParcels(game.ownedParcels, game.builds); openParcel(c, r); renderAll() }
+  })
   const pb = document.getElementById('pbuy')
   if (pb) pb.addEventListener('click', () => {
     const res = game.buyParcel(c, r)
@@ -387,7 +395,7 @@ addEventListener('pointerup', e => {
 
 $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
 $('zout').addEventListener('click', () => { world.zoomBy(1.22); audio.click() })
-addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#queue,#office,#tips,#goals')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
+addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#queue,#office,#tips,#goals,#parcel')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
 addEventListener('pointerdown', () => { audio.ensure(); audio.startMusic() }, { once: true })
 function openOffice() { audio.click(); $('office').classList.add('show'); renderOffice() }
 $('yazpill').addEventListener('click', openOffice)

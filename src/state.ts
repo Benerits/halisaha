@@ -573,6 +573,22 @@ export class Game {
     return { ok: true, msg: `${b.label} hazır — ${b.gain}` }
   }
 
+  /** yapıyı yık: maliyetin %40'ı iade — arsa yeniden düzenlenebilir */
+  removeBuild(c: number, r: number): { ok: boolean; msg: string } {
+    const i = this.builds.findIndex(b => b.key === parcelKey(c, r))
+    if (i < 0) return { ok: false, msg: 'Bu arsada yapı yok.' }
+    const b = this.builds[i]
+    const refund = Math.round(BUILDS[b.kind].cost * 0.4 / 100) * 100
+    if (b.kind === 'pitch' || b.kind === 'mini') {
+      if (this.pitches <= 1) return { ok: false, msg: 'Son sahanı yıkamazsın.' }
+      this.pitches--
+    }
+    this.builds.splice(i, 1)
+    this.money += refund
+    this.events.push(`${BUILDS[b.kind].label} yıkıldı — ₺${refund.toLocaleString('tr-TR')} iade.`)
+    return { ok: true, msg: `${BUILDS[b.kind].label} yıkıldı, ₺${refund.toLocaleString('tr-TR')} iade edildi.` }
+  }
+
   // ---- GÜNLÜK HEDEFLER (oyuncuyu tutan kısa döngü) ----
   goalDay = 0
   gMatches = 0        // bugün oynanan maç

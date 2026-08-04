@@ -243,14 +243,16 @@ export class World {
     // AYAKLI TABELA: iki direk + pano (binadan bağımsız, yola bakar)
     const cvs = document.createElement('canvas'); cvs.width = 640; cvs.height = 200
     const ctx = cvs.getContext('2d')!
-    ctx.fillStyle = '#1d7c45'; ctx.beginPath(); ctx.roundRect(0, 0, 640, 200, 26); ctx.fill()
-    ctx.strokeStyle = '#f2b53c'; ctx.lineWidth = 10; ctx.beginPath(); ctx.roundRect(8, 8, 624, 184, 20); ctx.stroke()
-    ctx.fillStyle = '#f7fbf4'; ctx.font = '800 78px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText('HALI SAHA', 320, 78)
-    ctx.font = '700 40px sans-serif'; ctx.fillStyle = '#ffd97a'
-    ctx.fillText('SALI 21:00 SENİNDİR', 320, 148)
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.45),
-      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cvs), transparent: true }))
+    ctx.fillStyle = '#0e3d22'; ctx.beginPath(); ctx.roundRect(0, 0, 640, 200, 26); ctx.fill()
+    ctx.strokeStyle = '#f2b53c'; ctx.lineWidth = 12; ctx.beginPath(); ctx.roundRect(10, 10, 620, 180, 20); ctx.stroke()
+    ctx.fillStyle = '#ffffff'; ctx.font = '800 80px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('HALI SAHA', 320, 76)
+    ctx.font = '800 42px sans-serif'; ctx.fillStyle = '#f2b53c'
+    ctx.fillText('SALI 21:00 SENİNDİR', 320, 150)
+    const btex = new THREE.CanvasTexture(cvs); btex.colorSpace = THREE.SRGBColorSpace
+    const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide })
+    bmat.toneMapped = false  // ACES tonemap panoyu soluk mint'e çeviriyordu
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.45), bmat)
     board.rotation.x = Math.PI / 2
     const sg = new THREE.Group()
     for (const px of [-2.0, 2.0]) {
@@ -411,6 +413,10 @@ export class World {
         mat.color.setHex(0x7fa05e)  // zeminle aynı — dümdüz çimen
       }
     }
+    // yıkılan yapıların görseli kalksın
+    for (const [key, g] of this.parcelBuilds) {
+      if (!builds.some(b => b.key === key)) { this.scene.remove(g); this.parcelBuilds.delete(key) }
+    }
     for (const b of builds) {
       if (this.parcelBuilds.has(b.key)) continue
       const tile = this.parcelTiles.get(b.key)
@@ -478,7 +484,7 @@ export class World {
       if (this.kit?.cars.length) {
         for (let i = 0; i < 2; i++) {
           const car = fitModel(this.kit.cars[i % this.kit.cars.length], 1.0)
-          car.position.set(-1.6 + i * 1.6, 0, 0); car.rotation.z = Math.PI / 2; g.add(car)
+          car.position.set(-1.6 + i * 1.6, 0, 0); car.rotation.z = i % 2 ? 0 : Math.PI; g.add(car)
         }
       }
     } else {
@@ -609,7 +615,7 @@ export class World {
       const slots: [number, number][] = [[11.5, 7.2], [13.6, 7.2], [15.7, 7.2]]
       slots.forEach(([x, y], i) => {
         const car = fitModel(k.cars[i % k.cars.length], 1.0)
-        car.position.set(x, y, 0); car.rotation.z = Math.PI / 2
+        car.position.set(x, y, 0); car.rotation.z = i % 2 ? 0 : Math.PI  // çizgiler arasına dik park
         this.scene.add(car); this.parkedCars.push(car)
       })
     }
