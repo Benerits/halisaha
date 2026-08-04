@@ -37,28 +37,29 @@ function renderCal() {
   const cal = $('cal')
   const nowHour = OPEN_HOUR + Math.floor((game.t / DAY_SECONDS) * HOURS.length)
   const nowDay = (game.day - 1) % 7
+  const sel = selected !== null ? game.queue.find(r => r.id === selected) : null
+  // YATAY ŞERİT: satır = gün, sütun = saat (sahneyi örtmez, zaman çizelgesi gibi okunur)
   let h = '<table><tr><th></th>'
-  for (const d of DAY_NAMES) h += `<th>${d}</th>`
+  for (const hour of HOURS) h += `<th>${hour}</th>`
   h += '</tr>'
-  for (const hour of HOURS) {
-    h += `<tr><th>${hour}</th>`
-    for (let d = 0; d < 7; d++) {
+  for (let d = 0; d < 7; d++) {
+    h += `<tr><th class="dayh">${DAY_NAMES[d]}</th>`
+    for (const hour of HOURS) {
       const b = game.bookingAt(d, hour)
-      const sel = selected !== null ? game.queue.find(r => r.id === selected) : null
       const hint = sel && sel.day === d && sel.hour === hour && !b
       const cls = ['slot']
       if (b) cls.push(b.sub ? 'sub' : 'full')
       if (hint) cls.push('hint')
       if (d === nowDay && hour === nowHour) cls.push('now')
-      const label = b ? b.team.slice(0, 4) : ''
-      h += `<td><div class="${cls.join(' ')}" data-d="${d}" data-h="${hour}" title="${b ? b.team + ' · ₺' + tl(b.price) : 'boş'}">${label}</div></td>`
+      if (!b && hour >= 20 && hour <= 22) cls.push('prime')
+      h += `<td><div class="${cls.join(' ')}" data-d="${d}" data-h="${hour}" title="${b ? b.team + ' · ₺' + tl(b.price) : DAY_NAMES[d] + ' ' + hour + ':00 — boş'}">${b ? b.team.slice(0, 3) : ''}</div></td>`
     }
     h += '</tr>'
   }
   cal.innerHTML = h + '</table>'
   cal.querySelectorAll<HTMLElement>('.slot').forEach(el => {
     el.addEventListener('click', () => {
-      if (selected === null) { toast('Önce sağdan bir rezervasyon isteği seç.'); return }
+      if (selected === null) { toast('Önce soldan bir istek seç.'); return }
       const r = game.place(selected, Number(el.dataset.d), Number(el.dataset.h))
       toast(r.msg, r.ok ? 'g' : 'b')
       if (r.ok) { selected = null; save() }
@@ -71,16 +72,16 @@ function renderCal() {
 function renderQueue() {
   const list = $('qlist')
   if (game.queue.length === 0) {
-    list.innerHTML = `<div class="rcard" style="opacity:.6"><div class="meta">Şu an istek yok — birazdan telefon çalar.</div></div>`
+    list.innerHTML = `<div class="empty">Şu an istek yok.<br>Birazdan telefon çalar…</div>`
     return
   }
   list.innerHTML = game.queue.map(r => {
     const seg = SEGMENTS[r.segment]
     return `<div class="rcard ${selected === r.id ? 'sel' : ''}" data-id="${r.id}">
-      <div class="team">${r.team}${r.weeks ? `<span class="sub">${r.weeks} HAFTA ABONE</span>` : ''}</div>
+      <div class="team"><span>${r.team}</span>${r.weeks ? `<span class="tagsub">${r.weeks} HF ABONE</span>` : ''}</div>
       <div class="when">${DAY_NAMES[r.day]} ${r.hour}:00</div>
       <div class="meta">${seg.label}</div>
-      <div class="price">₺${tl(r.price)}${r.weeks ? ' <span style="font-size:11px;color:#7a8290">/ hafta</span>' : ''}</div>
+      <div class="price">₺${tl(r.price)}${r.weeks ? ' <span style="font-size:10.5px;color:#6d8073;font-weight:700">/hafta</span>' : ''}</div>
       <div class="bar"><i style="width:${(r.patience / r.maxPatience) * 100}%"></i></div>
     </div>`
   }).join('')
@@ -98,9 +99,12 @@ function renderTips() {
   const box = $('tips')
   box.innerHTML = game.suggestions().map((s, i) => `
     <div class="tip ${s.urgent ? 'urgent' : ''}">
-      <div class="tt">${s.title}</div>
-      <div class="tw">${s.why}</div>
-      ${s.cta ? `<button data-buy="${s.action}" data-i="${i}">${s.cta}</button>` : ''}
+      <div class="th">${s.urgent ? 'ACİL' : 'ÖNERİ'}</div>
+      <div class="tb">
+        <div class="tt">${s.title}</div>
+        <div class="tw">${s.why}</div>
+        ${s.cta ? `<button data-buy="${s.action}" data-i="${i}">${s.cta}</button>` : ''}
+      </div>
     </div>`).join('')
   box.querySelectorAll<HTMLElement>('button[data-buy]').forEach(b => {
     b.addEventListener('click', () => doBuy(b.dataset.buy as BuyId))
@@ -170,6 +174,8 @@ function renderHud() {
   $('h-clock').textContent = String(hour).padStart(2, '0') + ':00'
   $('h-rep').textContent = game.rep.toFixed(1)
   $('h-occ').textContent = '%' + Math.round(game.occupancy() * 100)
+  const repChip = $('h-rep').parentElement as HTMLElement
+  repChip.classList.toggle('warn', game.rep < 2.5)
 }
 
 function renderAll() { renderHud(); renderQueue(); renderCal(); renderTips() }
@@ -216,6 +222,7 @@ function frame() {
   world.render()
 }
 
+(window as any).__g = game; (window as any).__w = world
 renderAll()
 frame()
 

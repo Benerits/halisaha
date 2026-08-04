@@ -7,107 +7,123 @@
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --paper: #faf6ec; --paper-2: #f1ebdb; --ink: #22303c; --muted: #7a8290;
-    --line: rgba(34,48,60,.14); --edge: rgba(34,48,60,.32);
-    --red: #d64545; --red-dark: #b23434; --green: #27a05a; --green-dark: #1d7c45;
-    --orange: #e8862e; --blue: #2f6fed;
-    --r-sm: 10px; --r-md: 13px; --r-lg: 17px;
-    --shadow: 0 6px 18px rgba(34,48,60,.22);
+    /* YEŞİL PALET — saha/çim dünyası, BenelOil tabela dili */
+    --paper: #f6faf2; --paper-2: #e9f2e2; --ink: #1e2f24; --muted: #6d8073;
+    --line: rgba(30,47,36,.13); --edge: rgba(30,47,36,.28);
+    --green: #2f9e57; --green-dark: #1f7a41; --green-deep: #14532d;
+    --lime: #8ec63f; --sun: #f2b53c; --clay: #e07a4a; --sky: #3aa6c9;
+    --r-sm: 10px; --r-md: 14px; --r-lg: 20px;
+    --shadow: 0 8px 22px rgba(20,60,35,.20);
     --font: "Baloo 2", -apple-system, "SF Pro Rounded", "Segoe UI", Roboto, sans-serif;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; font-family:var(--font); color:var(--ink); background:#9fd4e8; user-select:none; }
+  html, body { width:100%; height:100%; overflow:hidden; font-family:var(--font); color:var(--ink);
+    background:#a8dcef; user-select:none; -webkit-user-select:none; }
   canvas { display:block; position:fixed; inset:0; }
-  button { font-family:var(--font); cursor:pointer; border:0; }
+  button { font-family:var(--font); cursor:pointer; border:0; color:inherit; }
 
-  /* ---- üst şerit ---- */
-  #hud { position:fixed; top:12px; left:12px; display:flex; gap:8px; z-index:10; flex-wrap:wrap; }
-  .chip { background:var(--paper); border-radius:var(--r-md); padding:7px 13px; box-shadow:var(--shadow);
-    border-bottom:3px solid rgba(34,48,60,.16); font-weight:700; font-size:13px; display:flex; gap:7px; align-items:center; }
-  .chip small { color:var(--muted); font-weight:650; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
-  .chip b { font-size:15px; }
-  .good { color:var(--green-dark); } .bad { color:var(--red-dark); }
+  /* ===== ÜST ŞERİT ===== */
+  #hud { position:fixed; top:14px; left:50%; transform:translateX(-50%); display:flex; gap:7px; z-index:10; }
+  .chip { background:var(--paper); border-radius:var(--r-md); padding:7px 15px; box-shadow:var(--shadow);
+    border-bottom:3px solid var(--green-dark); font-weight:700; font-size:13px;
+    display:flex; flex-direction:column; align-items:center; line-height:1.1; min-width:74px; }
+  .chip small { color:var(--muted); font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:.6px; }
+  .chip b { font-size:16px; color:var(--green-deep); }
+  .chip.warn { border-bottom-color:var(--clay); }
+  .chip.warn b { color:var(--clay); }
 
-  /* ---- sağ: rezervasyon istekleri ---- */
-  #queue { position:fixed; top:12px; right:12px; width:238px; z-index:10; display:flex; flex-direction:column; gap:8px; }
-  #queue h3 { font-size:11px; color:#fff; text-transform:uppercase; letter-spacing:.8px; background:var(--ink);
-    padding:5px 10px; border-radius:var(--r-sm); text-align:center; opacity:.9; }
-  .rcard { background:var(--paper); border-radius:var(--r-md); padding:10px 11px; box-shadow:var(--shadow);
-    border-bottom:4px solid var(--edge); cursor:grab; transition:transform .12s, box-shadow .12s; }
-  .rcard:hover { transform:translateY(-2px); box-shadow:0 10px 22px rgba(34,48,60,.28); }
-  .rcard.sel { border-bottom-color:var(--green); transform:translateY(-2px); }
-  .rcard .team { font-weight:800; font-size:14px; }
-  .rcard .when { font-size:13px; font-weight:700; color:var(--blue); }
-  .rcard .meta { font-size:11.5px; color:var(--muted); font-weight:650; margin-top:2px; }
-  .rcard .price { font-weight:800; font-size:15px; color:var(--green-dark); }
-  .rcard .sub { display:inline-block; background:var(--orange); color:#fff; font-size:10px; font-weight:800;
-    padding:1px 6px; border-radius:99px; margin-left:4px; }
-  .bar { height:3px; background:var(--line); border-radius:2px; margin-top:6px; overflow:hidden; }
-  .bar i { display:block; height:100%; background:var(--orange); }
+  /* ===== ALT MERKEZ: REZERVASYON MASASI (kart + takvim BİTİŞİK) ===== */
+  #desk { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:12;
+    background:var(--paper); border-radius:var(--r-lg); box-shadow:var(--shadow);
+    border-bottom:5px solid var(--green-dark); display:flex; overflow:hidden; max-width:96vw; }
+  .desk-head { background:var(--green-deep); color:#eaf6ec; font-size:10.5px; font-weight:800;
+    text-transform:uppercase; letter-spacing:.9px; padding:6px 12px; text-align:center; }
 
-  /* ---- alt: takvim ---- */
-  #cal { position:fixed; left:12px; bottom:12px; background:var(--paper); border-radius:var(--r-lg);
-    box-shadow:var(--shadow); padding:9px; z-index:10; border-bottom:4px solid rgba(34,48,60,.16); }
-  #cal table { border-collapse:separate; border-spacing:2px; }
-  #cal th { font-size:10.5px; color:var(--muted); font-weight:700; padding:1px 2px; }
-  #cal td { padding:0; }
-  .slot { width:30px; height:17px; border-radius:4px; background:var(--paper-2); border:1px solid var(--line);
-    font-size:9px; font-weight:700; color:var(--muted); display:flex; align-items:center; justify-content:center;
-    cursor:pointer; overflow:hidden; }
-  .slot.full { background:var(--green); color:#fff; border-color:var(--green-dark); }
-  .slot.sub { background:var(--orange); border-color:#bd6a1e; color:#fff; }
-  .slot.hint { background:#cfe9d5; border-color:var(--green); animation:pulse 1s infinite; }
-  .slot.now { box-shadow:0 0 0 2px var(--blue); }
-  @keyframes pulse { 50% { background:#a8dcb6; } }
+  /* sol sütun: gelen istekler */
+  #qcol { width:206px; background:var(--paper-2); display:flex; flex-direction:column; }
+  #qlist { padding:8px; display:flex; flex-direction:column; gap:7px; overflow-y:auto; max-height:216px; }
+  .rcard { background:#fff; border-radius:var(--r-md); padding:9px 10px; cursor:pointer;
+    border-bottom:3px solid var(--edge); transition:transform .1s, border-color .1s; }
+  .rcard:hover { transform:translateY(-2px); border-bottom-color:var(--green); }
+  .rcard.sel { border-bottom-color:var(--green); background:#eefaf0; box-shadow:0 0 0 2px var(--green) inset; }
+  .rcard .team { font-weight:800; font-size:13.5px; display:flex; justify-content:space-between; align-items:center; }
+  .rcard .when { font-size:14px; font-weight:800; color:var(--green-dark); }
+  .rcard .meta { font-size:11px; color:var(--muted); font-weight:650; }
+  .rcard .price { font-weight:800; font-size:15px; color:var(--ink); }
+  .tagsub { background:var(--sun); color:#4a3208; font-size:9.5px; font-weight:800; padding:1px 6px; border-radius:99px; }
+  .bar { height:3px; background:var(--line); border-radius:2px; margin-top:5px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--sun); }
+  .empty { padding:16px 10px; font-size:11.5px; color:var(--muted); font-weight:650; text-align:center; line-height:1.4; }
 
-  /* ---- sol alt: ofis butonu ---- */
-  #officebtn { position:fixed; right:12px; bottom:12px; z-index:11; background:var(--red); color:#fff;
-    font-weight:800; font-size:15px; padding:13px 22px; border-radius:var(--r-lg);
-    border-bottom:4px solid var(--red-dark); box-shadow:var(--shadow); }
-  #officebtn:hover { filter:brightness(1.06); }
+  /* sağ sütun: takvim */
+  #calcol { display:flex; flex-direction:column; }
+  #calwrap { padding:8px 10px 10px; }
+  #cal table { border-collapse:separate; border-spacing:3px; }
+  #cal th { font-size:10.5px; color:var(--muted); font-weight:800; padding:0 2px; }
+  #cal th.dayh { text-align:right; padding-right:5px; width:26px; }
+  .slot { width:31px; height:24px; border-radius:6px; background:var(--paper-2); border:1.5px solid transparent;
+    font-size:9.5px; font-weight:800; color:var(--muted); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; overflow:hidden; transition:transform .08s; }
+  .slot:hover { transform:scale(1.12); border-color:var(--green); }
+  .slot.full { background:var(--green); color:#fff; }
+  .slot.sub { background:var(--sun); color:#4a3208; }
+  .slot.hint { background:#c9efd4; border-color:var(--green); animation:pulse .85s infinite; }
+  .slot.now { box-shadow:0 0 0 2px var(--sky); }
+  .slot.prime { background:#dcebd4; }
+  @keyframes pulse { 50% { background:var(--lime); transform:scale(1.1); } }
 
-  /* ---- ofis paneli ---- */
-  #office { position:fixed; inset:0; z-index:40; background:rgba(34,48,60,.5); backdrop-filter:blur(3px);
+  /* ===== SAĞ: GÖREV/ÖNERİ (border-left YOK — tabela kartı) ===== */
+  #tips { position:fixed; right:14px; top:14px; width:246px; z-index:10; display:flex; flex-direction:column; gap:8px; }
+  .tip { background:var(--paper); border-radius:var(--r-md); box-shadow:var(--shadow); overflow:hidden;
+    border-bottom:4px solid var(--green-dark); }
+  .tip .th { background:var(--green); color:#fff; font-size:11px; font-weight:800; padding:5px 11px;
+    text-transform:uppercase; letter-spacing:.6px; }
+  .tip.urgent { border-bottom-color:var(--clay); }
+  .tip.urgent .th { background:var(--clay); }
+  .tip .tb { padding:9px 11px; }
+  .tip .tt { font-weight:800; font-size:13.5px; line-height:1.2; }
+  .tip .tw { font-size:11.5px; color:var(--muted); font-weight:650; margin:3px 0 8px; line-height:1.4; }
+  .tip button { background:var(--green); color:#fff; font-weight:800; font-size:12px; padding:8px 10px;
+    border-radius:9px; width:100%; border-bottom:3px solid var(--green-dark); }
+  .tip.urgent button { background:var(--clay); border-bottom-color:#b45c33; }
+  .tip button:hover { filter:brightness(1.07); }
+
+  /* ===== OFİS ===== */
+  #officebtn { position:fixed; right:14px; bottom:14px; z-index:13; background:var(--green);
+    color:#fff; font-weight:800; font-size:15px; padding:14px 26px; border-radius:var(--r-lg);
+    border-bottom:5px solid var(--green-dark); box-shadow:var(--shadow); letter-spacing:.5px; }
+  #officebtn:hover { filter:brightness(1.07); }
+  #office { position:fixed; inset:0; z-index:40; background:rgba(20,45,30,.52); backdrop-filter:blur(4px);
     display:none; align-items:center; justify-content:center; padding:20px; }
   #office.show { display:flex; }
-  .panel { background:var(--paper); border-radius:20px; width:min(660px,100%); max-height:86vh; overflow:auto;
-    box-shadow:0 20px 60px rgba(0,0,0,.4); border-bottom:6px solid rgba(34,48,60,.2); }
-  .phead { background:var(--red); color:#fff; padding:14px 20px; display:flex; justify-content:space-between; align-items:center;
-    position:sticky; top:0; z-index:2; border-bottom:4px solid var(--red-dark); }
-  .phead b { font-size:18px; }
-  .phead button { background:var(--paper); color:var(--red); font-weight:800; border-radius:9px; padding:5px 12px; font-size:13px; }
-  .tabs { display:flex; gap:6px; padding:10px 14px 0; }
-  .tab { flex:1; background:var(--paper-2); border-radius:10px 10px 0 0; padding:8px; font-weight:700; font-size:13px; color:var(--muted); }
-  .tab.on { background:#fff; color:var(--ink); box-shadow:0 -2px 0 var(--red) inset; }
-  .pbody { padding:14px 16px 20px; }
-  .srow { display:flex; align-items:center; gap:10px; padding:10px 11px; background:#fff; border-radius:var(--r-md);
-    margin-bottom:8px; border-bottom:3px solid var(--line); flex-wrap:wrap; }
+  .panel { background:var(--paper); border-radius:22px; width:min(680px,100%); max-height:86vh; overflow:auto;
+    box-shadow:0 24px 70px rgba(0,0,0,.42); border-bottom:6px solid var(--green-dark); }
+  .phead { background:var(--green-deep); color:#eaf6ec; padding:15px 22px; display:flex;
+    justify-content:space-between; align-items:center; position:sticky; top:0; z-index:2; }
+  .phead b { font-size:19px; letter-spacing:.5px; }
+  .phead button { background:var(--paper); color:var(--green-deep); font-weight:800; border-radius:10px; padding:6px 13px; font-size:13px; }
+  .tabs { display:flex; gap:5px; padding:11px 15px 0; background:var(--paper-2); }
+  .tab { flex:1; background:transparent; border-radius:11px 11px 0 0; padding:9px; font-weight:800; font-size:13px; color:var(--muted); }
+  .tab.on { background:var(--paper); color:var(--green-deep); }
+  .pbody { padding:15px 17px 22px; }
+  .srow { display:flex; align-items:center; gap:10px; padding:11px 12px; background:#fff; border-radius:var(--r-md);
+    margin-bottom:9px; border-bottom:3px solid var(--line); flex-wrap:wrap; }
   .srow .nm { font-weight:800; font-size:14.5px; flex:1 0 auto; }
-  .srow .gn { font-size:12px; font-weight:750; color:var(--green-dark); background:#e4f4e9; padding:2px 8px; border-radius:99px; }
-  .srow .ds { flex:1 0 100%; font-size:11.5px; color:var(--muted); font-weight:650; }
-  .srow .up { font-size:11px; color:var(--red-dark); font-weight:700; }
-  .buy { background:var(--green); color:#fff; font-weight:800; font-size:13px; padding:8px 14px; border-radius:10px;
-    border-bottom:3px solid var(--green-dark); }
-  .buy[disabled] { background:#c9c9c9; border-bottom-color:#a5a5a5; cursor:default; }
+  .srow .gn { font-size:11.5px; font-weight:800; color:var(--green-dark); background:#dff2e4; padding:3px 9px; border-radius:99px; }
+  .srow .ds { flex:1 0 100%; font-size:11.5px; color:var(--muted); font-weight:650; line-height:1.4; }
+  .srow .up { font-size:11px; color:var(--clay); font-weight:800; }
+  .buy { background:var(--green); color:#fff; font-weight:800; font-size:13px; padding:9px 15px; border-radius:10px;
+    border-bottom:3px solid var(--green-dark); white-space:nowrap; }
+  .buy[disabled] { background:#cfd6cd; border-bottom-color:#b3bdb1; cursor:default; }
   .buy.have { background:var(--paper-2); color:var(--muted); border-bottom-color:var(--line); }
 
-  /* ---- öneri kartları ---- */
-  #tips { position:fixed; left:12px; top:60px; width:250px; z-index:10; display:flex; flex-direction:column; gap:7px; }
-  .tip { background:var(--paper); border-radius:var(--r-md); padding:9px 11px; box-shadow:var(--shadow);
-    border-left:5px solid var(--blue); }
-  .tip.urgent { border-left-color:var(--red); }
-  .tip .tt { font-weight:800; font-size:13px; }
-  .tip .tw { font-size:11.5px; color:var(--muted); font-weight:650; margin:2px 0 6px; line-height:1.35; }
-  .tip button { background:var(--blue); color:#fff; font-weight:800; font-size:11.5px; padding:6px 10px; border-radius:8px; width:100%; }
-  .tip.urgent button { background:var(--red); }
-
-  /* ---- toast ---- */
-  #toasts { position:fixed; left:50%; transform:translateX(-50%); bottom:100px; z-index:50;
+  /* ===== TOAST ===== */
+  #toasts { position:fixed; left:50%; transform:translateX(-50%); top:76px; z-index:50;
     display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none; }
-  .toast { background:var(--ink); color:#fff; font-weight:700; font-size:13.5px; padding:9px 18px;
-    border-radius:99px; box-shadow:var(--shadow); animation:pop .25s; }
-  .toast.g { background:var(--green); } .toast.b { background:var(--red); }
-  @keyframes pop { from { transform:translateY(8px); opacity:0 } }
+  .toast { background:var(--green-deep); color:#eaf6ec; font-weight:800; font-size:13.5px; padding:10px 20px;
+    border-radius:99px; box-shadow:var(--shadow); animation:pop .22s; }
+  .toast.g { background:var(--green); } .toast.b { background:var(--clay); }
+  @keyframes pop { from { transform:translateY(-8px); opacity:0 } }
 </style>
 </head>
 <body>
@@ -123,9 +139,16 @@
 
 <div id="tips"></div>
 
-<div id="queue"><h3>Rezervasyon İstekleri</h3><div id="qlist"></div></div>
-
-<div id="cal"></div>
+<div id="desk">
+  <div id="qcol">
+    <div class="desk-head">Gelen İstekler</div>
+    <div id="qlist"></div>
+  </div>
+  <div id="calcol">
+    <div class="desk-head">Haftalık Çizelge — boş saate tıkla</div>
+    <div id="calwrap"><div id="cal"></div></div>
+  </div>
+</div>
 
 <button id="officebtn">OFİS</button>
 
