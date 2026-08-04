@@ -284,11 +284,20 @@ export class World {
   }
 
   private buildParking() {
-    const pad = new THREE.Mesh(new THREE.PlaneGeometry(11, 7.5), lam(0x585f66))
-    pad.position.set(14.5, 7.2, 0.06); pad.receiveShadow = true; this.scene.add(pad)
-    for (let i = 0; i < 5; i++) {
-      const l = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 6.4), lam(0xe9e4d6))
-      l.position.set(10.4 + i * 2.1, 7.2, 0.075); this.scene.add(l)
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(11.6, 8.6), lam(0x585f66))
+    pad.position.set(14.5, 7.0, 0.06); pad.receiveShadow = true; this.scene.add(pad)
+    // ÇİFT SIRA: üst + alt slot şeritleri, ortada sürüş koridoru
+    for (let i = 0; i < 6; i++) {
+      const x = 9.7 + i * 1.95
+      for (const [cy, h] of [[9.55, 2.6], [4.45, 2.6]] as [number, number][]) {
+        const l = new THREE.Mesh(new THREE.PlaneGeometry(0.1, h), lam(0xe9e4d6))
+        l.position.set(x, cy, 0.075); this.scene.add(l)
+      }
+    }
+    // sıra kapama çizgileri
+    for (const cy of [8.25, 5.75]) {
+      const l = new THREE.Mesh(new THREE.PlaneGeometry(9.85, 0.1), lam(0xe9e4d6))
+      l.position.set(14.58, cy, 0.075); this.scene.add(l)
     }
   }
 
@@ -612,10 +621,13 @@ export class World {
     }
     // ARABALAR — otoparkta
     if (k.cars.length) {
-      const slots: [number, number][] = [[11.5, 7.2], [13.6, 7.2], [15.7, 7.2]]
-      slots.forEach(([x, y], i) => {
+      const slots: [number, number, number][] = [
+        [10.7, 9.05, Math.PI], [14.6, 9.05, Math.PI], [16.55, 9.05, Math.PI],  // üst sıra: burnu koridora
+        [11.65, 4.95, 0], [15.55, 4.95, 0],                                     // alt sıra: burnu koridora
+      ]
+      slots.forEach(([x, y, rot], i) => {
         const car = fitModel(k.cars[i % k.cars.length], 1.0)
-        car.position.set(x, y, 0); car.rotation.z = i % 2 ? 0 : Math.PI  // çizgiler arasına dik park
+        car.position.set(x, y, 0); car.rotation.z = rot
         this.scene.add(car); this.parkedCars.push(car)
       })
     }
