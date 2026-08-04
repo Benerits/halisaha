@@ -55,9 +55,17 @@ function renderCal() {
   const nowDay = (game.day - 1) % 7
   if (viewDay < 0) viewDay = nowDay
   const sel = selected !== null ? game.queue.find(r => r.id === selected) : null
-  if (head) head.textContent = sel
-    ? `${sel.team} için saat seç — yanan kutuya tıkla`
-    : 'Çizelge — soldan istek seç'
+  if (head) {
+    if (sel) head.textContent = `${sel.team} için saat seç — yanan kutuya tıkla`
+    else {
+      const todayMatches = game.bookings.filter(b => b.day === nowDay)
+      const next = todayMatches.filter(b => b.hour >= nowHour).sort((a, b) => a.hour - b.hour)[0]
+      head.textContent = todayMatches.length === 0
+        ? `Bugün ${DAY_FULL[nowDay]} — maç yok, telefonu bekle`
+        : `Bugün ${DAY_FULL[nowDay]} · ${todayMatches.length} maç` +
+          (next ? ` · sıradaki ${next.hour}:00 ${next.team}` : ' · bugünkü maçlar bitti')
+    }
+  }
   const desk = document.getElementById('desk')!
   desk.classList.toggle('picking', !!sel)
 
@@ -83,7 +91,8 @@ function renderCal() {
     const hasValid = sel ? HOURS.some(h => game.freeAt(d, h) && game.slotOk(sel, d, h)) : false
     return `<div class="dtab ${d === viewDay ? 'on' : ''} ${d === nowDay ? 'today' : ''}" data-d="${d}">
       ${hasValid ? `<span class="dot ${game.placedCount < 12 ? '' : 'calm'}"></span>` : ''}
-      <b>${nm}</b><div class="obar"><i style="width:${Math.round(occ * 100)}%"></i></div>
+      <b>${nm}</b>${d === nowDay ? '<span class="bugun">BUGÜN</span>' : ''}
+      <div class="obar"><i style="width:${Math.round(occ * 100)}%"></i></div>
     </div>`
   }).join('')
   if (tabsHtml !== tabsCache) {
@@ -105,6 +114,7 @@ function renderCal() {
     if (b) cls.push(free ? 'half' : b.sub ? 'sub' : 'full')
     if (hint) cls.push(game.placedCount < 12 ? 'hint' : 'hint calm')
     if (viewDay === nowDay && hour === nowHour) cls.push('now')
+    if (viewDay === nowDay && hour < nowHour) cls.push('past')
     if (!b && hour >= 20 && hour <= 22) cls.push('prime')
     const label = !b ? '' : bs.length > 1 ? `${b.team.slice(0, 4)} +${bs.length - 1}` : b.team.slice(0, 6)
     const cap = game.pitches > 1 && b ? ` (${bs.length}/${game.pitches} saha)` : ''
@@ -418,7 +428,7 @@ document.querySelectorAll<HTMLElement>('.tab').forEach(t => t.addEventListener('
 function renderHud() {
   const hour = OPEN_HOUR + Math.floor((game.t / DAY_SECONDS) * HOURS.length)
   $('h-money').textContent = '₺' + tl(game.money)
-  $('h-day').textContent = String(game.day)
+  $('h-day').textContent = `${DAY_NAMES[(game.day - 1) % 7]} · ${game.day}`
   const totalMin = Math.floor((game.t / DAY_SECONDS) * 15 * 60)
   const ch = 9 + Math.floor(totalMin / 60), cm = totalMin % 60
   $('h-clock').textContent = String(Math.min(23, ch)).padStart(2, '0') + ':' + String(cm).padStart(2, '0')
