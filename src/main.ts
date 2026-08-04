@@ -82,7 +82,7 @@ function renderCal() {
     const occ = game.bookings.filter(b => b.day === d).length / HOURS.length
     const hasValid = sel ? HOURS.some(h => !game.bookingAt(d, h) && game.slotOk(sel, d, h)) : false
     return `<div class="dtab ${d === viewDay ? 'on' : ''} ${d === nowDay ? 'today' : ''}" data-d="${d}">
-      ${hasValid ? '<span class="dot"></span>' : ''}
+      ${hasValid ? `<span class="dot ${game.placedCount < 12 ? '' : 'calm'}"></span>` : ''}
       <b>${nm}</b><div class="obar"><i style="width:${Math.round(occ * 100)}%"></i></div>
     </div>`
   }).join('')
@@ -101,7 +101,7 @@ function renderCal() {
     const hint = sel && !b && game.slotOk(sel, viewDay, hour)
     const cls = ['dslot']
     if (b) cls.push(b.sub ? 'sub' : 'full')
-    if (hint) cls.push('hint')
+    if (hint) cls.push(game.placedCount < 12 ? 'hint' : 'hint calm')
     if (viewDay === nowDay && hour === nowHour) cls.push('now')
     if (!b && hour >= 20 && hour <= 22) cls.push('prime')
     return `<div class="${cls.join(' ')}" data-h="${hour}"

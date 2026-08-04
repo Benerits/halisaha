@@ -292,6 +292,7 @@ export class Game {
       sub: r.weeks > 0, weeksLeft: r.weeks,
     })
     if (r.weeks > 0) { if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] } this.gSubs++ }
+    this.placedCount++
     return { ok: true, msg: r.weeks > 0 ? `${r.team} ${r.weeks} hafta abone oldu!` : `${r.team} rezervasyonu alındı.` }
   }
 
@@ -356,6 +357,8 @@ export class Game {
   notices: string[] = []
   /** kaçan müşteri bildirimleri (üzgün ses + toast) */
   lostNotices: string[] = []
+  /** toplam yerleştirme sayısı — öğretici vurgular buna göre sakinleşir */
+  placedCount = 0
   queueCap(): number { return this.hasPhone2 ? 6 : 4 }
 
   /** her saniye */
@@ -700,6 +703,7 @@ export class Game {
       hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,
       rentDueDay: this.rentDueDay, rentMissed: this.rentMissed, loyalty: this.loyalty,
       hasPhone2: this.hasPhone2, hasCirak: this.hasCirak, adDays: this.adDays,
+      placedCount: this.placedCount,
       ownedParcels: this.ownedParcels, builds: this.builds,
     }
   }
@@ -715,6 +719,7 @@ export class Game {
     if (Array.isArray(d.bookings)) this.bookings = d.bookings as Booking[]
     this.rentDueDay = n('rentDueDay', 7); this.rentMissed = n('rentMissed', 0)
     this.hasPhone2 = d.hasPhone2 === true; this.hasCirak = d.hasCirak === true; this.adDays = n('adDays', 0)
+    this.placedCount = n('placedCount', 0)
     if (d.loyalty && typeof d.loyalty === 'object') this.loyalty = d.loyalty as Record<string, number>
     if (Array.isArray(d.ownedParcels))
       this.ownedParcels = [...new Set([...STARTER_PARCELS, ...(d.ownedParcels as string[])])]

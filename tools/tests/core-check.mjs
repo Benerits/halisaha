@@ -227,5 +227,19 @@ console.log('\n— ANLAŞMA DONDURMASI + SAAT —')
   }
   check('1 oyun günü = 450 sn (saat=30sn, dakika akışı)', DAY_SECONDS === 450)
 }
+
+console.log('\n— ADAPTİF VURGU SAYACI —')
+{
+  const g = new Game()
+  let r = null
+  for (let i = 0; i < 1500 && !r; i++) { const x = g.spawnReservation(); if (x && !x.flexible) r = x; if (g.queue.length >= 4) g.queue.length = 0 }
+  if (r) {
+    const before = g.placedCount
+    g.place(r.id, r.day, r.hour)
+    check('yerleştirme sayacı artar (öğretici vurgu buna bakar)', g.placedCount === before + 1)
+    const b = new Game(); b.load(g.save())
+    check('sayaç kayıtla korunur', b.placedCount === g.placedCount)
+  }
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)
