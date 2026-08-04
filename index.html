@@ -94,10 +94,13 @@
   #desk.picking { box-shadow:0 0 0 3px var(--sun), 0 10px 30px rgba(160,110,10,.35); }
   #desk.picking .desk-head { background:var(--sun); color:#3d2a06; }
   #pickbar { position:fixed; left:50%; transform:translateX(-50%); z-index:13; display:none;
-    background:var(--sun); color:#3d2a06; font-weight:800; font-size:12.5px; padding:8px 16px;
+    background:var(--sun); color:#3d2a06; font-weight:800; font-size:12.5px; padding:7px 9px 7px 16px;
     border-radius:99px; box-shadow:0 6px 18px rgba(160,110,10,.4); white-space:nowrap;
-    letter-spacing:.2px; pointer-events:none; }
-  #pickbar.show { display:block; animation:bounce 1s ease-in-out infinite; }
+    letter-spacing:.2px; display:none; align-items:center; gap:9px; }
+  #pickbar button { background:#2f3a42; color:#fff; font-weight:800; font-size:12px;
+    padding:6px 13px; border-radius:99px; cursor:pointer; }
+  #pickbar button:hover { background:#1f282e; }
+  #pickbar.show { display:flex; animation:bounce 1s ease-in-out infinite; }
   #pickbar .arr { font-size:14px; margin-left:6px; }
   @keyframes bounce { 0%,100% { transform:translateX(-50%) translateY(0) } 50% { transform:translateX(-50%) translateY(7px) } }
   #daytabs { display:flex; gap:3px; padding:6px 8px 0; }
@@ -127,6 +130,9 @@
   .dslot.sub { background:var(--sun); }
   .dslot.sub .h, .dslot.sub .t { color:#4a3208; }
   .dslot.hint { background:#c9efd4; border:2px solid var(--sun); animation:pulse .7s infinite; }
+  .dslot.best { background:var(--sun); border-color:#c98d1e; }
+  .dslot.best .h, .dslot.best .t { color:#3d2a06; }
+  .dslot.best::after { content:'ÖNERİ'; font-size:6.5px; font-weight:800; color:#3d2a06; letter-spacing:.5px; }
   .dslot.now { box-shadow:0 0 0 2px var(--sky); }
   @keyframes pulse { 50% { background:var(--lime); transform:scale(1.12); box-shadow:0 0 14px rgba(242,181,60,.75); } }
 

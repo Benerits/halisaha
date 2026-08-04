@@ -290,6 +290,21 @@ export class Game {
     return { ok: true, msg: r.weeks > 0 ? `${r.team} ${r.weeks} hafta abone oldu!` : `${r.team} rezervasyonu alındı.` }
   }
 
+  /** ÖNERİLEN SLOT: bitişik saat primi kuran slot öncelikli, yoksa ilk boş geçerli slot */
+  bestSlot(r: Reservation): { day: number; hour: number; adj: boolean } | null {
+    const days = r.flexible ? r.flexDays : [r.day]
+    const hours = r.flexible ? r.flexHours : [r.hour]
+    let first: { day: number; hour: number; adj: boolean } | null = null
+    for (const d of days) for (const h of hours) {
+      if (this.bookingAt(d, h)) continue
+      if (this.bookings.filter(b => b.day === d && b.hour === h).length >= this.pitches) continue
+      const adj = !!(this.bookingAt(d, h - 1) || this.bookingAt(d, h + 1))
+      if (adj) return { day: d, hour: h, adj: true }   // bitişik = kantin primi → en iyi
+      if (!first) first = { day: d, hour: h, adj: false }
+    }
+    return first
+  }
+
   /** bu kart bu slota konabilir mi (esnek istek desteği) */
   slotOk(r: Reservation, day: number, hour: number): boolean {
     if (!r.flexible) return r.day === day && r.hour === hour

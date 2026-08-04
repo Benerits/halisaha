@@ -49,11 +49,21 @@ function renderCal() {
   const desk = document.getElementById('desk')!
   const pickbar = document.getElementById('pickbar')!
   desk.classList.toggle('picking', !!sel)
+  const best = sel ? game.bestSlot(sel) : null
   if (sel) {
-    pickbar.innerHTML = `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''} — yanan saate tıkla<span class="arr">⬇</span>`
+    pickbar.innerHTML = `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''}`
+      + (best ? ` <button id="quickplace">✓ ${DAY_NAMES[best.day]} ${best.hour}:00'e koy${best.adj ? ' · bitişik' : ''}</button>`
+              : ' — yanan saate tıkla<span class="arr">⬇</span>')
     pickbar.classList.add('show')
     const dr = desk.getBoundingClientRect()
     pickbar.style.bottom = `${innerHeight - dr.top + 10}px`
+    const qp = document.getElementById('quickplace')
+    if (qp && best) qp.addEventListener('click', () => {
+      const r = game.place(sel.id, best.day, best.hour)
+      if (r.ok) { audio.place(); selected = null; save() } else audio.bad()
+      toast(r.msg, r.ok ? 'g' : 'b')
+      renderAll()
+    })
   } else {
     pickbar.classList.remove('show')
   }
@@ -77,7 +87,9 @@ function renderCal() {
   cal.innerHTML = HOURS.map(hour => {
     const b = game.bookingAt(viewDay, hour)
     const hint = sel && !b && game.slotOk(sel, viewDay, hour)
+    const isBest = best && best.day === viewDay && best.hour === hour
     const cls = ['dslot']
+    if (isBest) cls.push('best')
     if (b) cls.push(b.sub ? 'sub' : 'full')
     if (hint) cls.push('hint')
     if (viewDay === nowDay && hour === nowHour) cls.push('now')
@@ -115,6 +127,7 @@ function selectCard(id: number) {
   renderQueue(); renderCal()
 }
 const seenCards = new Set<number>()
+const warned = new Set<number>()
 function renderQueue() {
   const list = $('qlist')
   if (game.queue.length === 0) {
@@ -375,6 +388,16 @@ function frame() {
   const prevDay = game.day
   game.tick(dt)
   while (game.notices.length) { toast(game.notices.shift()!, 'g'); audio.place() }
+  // el sıkıştın ama takvime koymadın — kart gitmeden alarm
+  for (const r of game.queue) {
+    if (r.haggled && !warned.has(r.id) && r.patience < r.maxPatience * 0.5) {
+      warned.add(r.id)
+      toast(`${r.team} ile el sıkıştın ama TAKVİME KOYMADIN — birazdan gidecek!`, 'b')
+      audio.bad()
+      const hd = document.querySelector('#queue .desk-head') as HTMLElement | null
+      if (hd) { hd.classList.remove('ringing'); void hd.offsetWidth; hd.classList.add('ringing') }
+    }
+  }
   if (game.day !== prevDay) {
     audio.day()
     toast(`Gün ${game.day} · dün ₺${tl(game.lastDayProfit)} kâr`, game.lastDayProfit >= 0 ? 'g' : 'b'); save()
