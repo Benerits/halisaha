@@ -1,0 +1,225 @@
+/**
+ * HALI SAHA — giriş noktası. Sahne + arayüz + döngü.
+ * SIFIR SÜRTÜNME: kart seç → takvimde yanıp sönen yere tıkla. Başka kural yok.
+ */
+import * as THREE from 'three'
+import { World } from './world'
+import { Game, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, type BuyId } from './state'
+
+const SAVE_KEY = 'halisaha-save-v1'
+const canvas = document.getElementById('c') as HTMLCanvasElement
+const world = new World(canvas)
+const game = new Game()
+
+// kayıt yükle
+try {
+  const raw = localStorage.getItem(SAVE_KEY)
+  if (raw) game.load(JSON.parse(raw))
+} catch { /* bozuk kayıt: sıfırdan */ }
+if (game.pitches >= 2) world.buildPitch(0, 5.2)
+
+let selected: number | null = null
+
+// ---------- arayüz yardımcıları ----------
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
+const tl = (n: number) => Math.round(n).toLocaleString('tr-TR')
+
+function toast(msg: string, kind: '' | 'g' | 'b' = '') {
+  const d = document.createElement('div')
+  d.className = 'toast ' + kind
+  d.textContent = msg
+  $('toasts').appendChild(d)
+  setTimeout(() => d.remove(), 2600)
+}
+
+// ---------- takvim ----------
+function renderCal() {
+  const cal = $('cal')
+  const nowHour = OPEN_HOUR + Math.floor((game.t / DAY_SECONDS) * HOURS.length)
+  const nowDay = (game.day - 1) % 7
+  let h = '<table><tr><th></th>'
+  for (const d of DAY_NAMES) h += `<th>${d}</th>`
+  h += '</tr>'
+  for (const hour of HOURS) {
+    h += `<tr><th>${hour}</th>`
+    for (let d = 0; d < 7; d++) {
+      const b = game.bookingAt(d, hour)
+      const sel = selected !== null ? game.queue.find(r => r.id === selected) : null
+      const hint = sel && sel.day === d && sel.hour === hour && !b
+      const cls = ['slot']
+      if (b) cls.push(b.sub ? 'sub' : 'full')
+      if (hint) cls.push('hint')
+      if (d === nowDay && hour === nowHour) cls.push('now')
+      const label = b ? b.team.slice(0, 4) : ''
+      h += `<td><div class="${cls.join(' ')}" data-d="${d}" data-h="${hour}" title="${b ? b.team + ' · ₺' + tl(b.price) : 'boş'}">${label}</div></td>`
+    }
+    h += '</tr>'
+  }
+  cal.innerHTML = h + '</table>'
+  cal.querySelectorAll<HTMLElement>('.slot').forEach(el => {
+    el.addEventListener('click', () => {
+      if (selected === null) { toast('Önce sağdan bir rezervasyon isteği seç.'); return }
+      const r = game.place(selected, Number(el.dataset.d), Number(el.dataset.h))
+      toast(r.msg, r.ok ? 'g' : 'b')
+      if (r.ok) { selected = null; save() }
+      renderAll()
+    })
+  })
+}
+
+// ---------- rezervasyon kuyruğu ----------
+function renderQueue() {
+  const list = $('qlist')
+  if (game.queue.length === 0) {
+    list.innerHTML = `<div class="rcard" style="opacity:.6"><div class="meta">Şu an istek yok — birazdan telefon çalar.</div></div>`
+    return
+  }
+  list.innerHTML = game.queue.map(r => {
+    const seg = SEGMENTS[r.segment]
+    return `<div class="rcard ${selected === r.id ? 'sel' : ''}" data-id="${r.id}">
+      <div class="team">${r.team}${r.weeks ? `<span class="sub">${r.weeks} HAFTA ABONE</span>` : ''}</div>
+      <div class="when">${DAY_NAMES[r.day]} ${r.hour}:00</div>
+      <div class="meta">${seg.label}</div>
+      <div class="price">₺${tl(r.price)}${r.weeks ? ' <span style="font-size:11px;color:#7a8290">/ hafta</span>' : ''}</div>
+      <div class="bar"><i style="width:${(r.patience / r.maxPatience) * 100}%"></i></div>
+    </div>`
+  }).join('')
+  list.querySelectorAll<HTMLElement>('.rcard').forEach(el => {
+    el.addEventListener('click', () => {
+      selected = Number(el.dataset.id)
+      renderQueue(); renderCal()
+      toast('Takvimde yanıp sönen kutuya tıkla.')
+    })
+  })
+}
+
+// ---------- öneri kartları (sıfır sürtünme çekirdeği) ----------
+function renderTips() {
+  const box = $('tips')
+  box.innerHTML = game.suggestions().map((s, i) => `
+    <div class="tip ${s.urgent ? 'urgent' : ''}">
+      <div class="tt">${s.title}</div>
+      <div class="tw">${s.why}</div>
+      ${s.cta ? `<button data-buy="${s.action}" data-i="${i}">${s.cta}</button>` : ''}
+    </div>`).join('')
+  box.querySelectorAll<HTMLElement>('button[data-buy]').forEach(b => {
+    b.addEventListener('click', () => doBuy(b.dataset.buy as BuyId))
+  })
+}
+
+function doBuy(id: BuyId) {
+  const r = game.buy(id)
+  toast(r.msg, r.ok ? 'g' : 'b')
+  if (r.ok) {
+    if (id === 'pitch2') world.buildPitch(0, 5.2)
+    save(); renderAll(); renderOffice()
+  }
+}
+
+// ---------- ofis ----------
+let officeTab = 'yatirim'
+function renderOffice() {
+  const body = $('pbody')
+  if (officeTab === 'yatirim') {
+    body.innerHTML = game.shop().map(it => `
+      <div class="srow">
+        <span class="nm">${it.label}</span>
+        <span class="gn">${it.gain}</span>
+        ${it.upkeep ? `<span class="up">-₺${tl(it.upkeep)}/gün</span>` : ''}
+        <button class="buy ${it.owned ? 'have' : ''}" data-buy="${it.id}" ${it.owned || it.locked ? 'disabled' : ''}>
+          ${it.owned ? 'VAR ✓' : it.locked ? it.locked : '₺' + tl(it.cost)}
+        </button>
+        <span class="ds">${it.desc}</span>
+      </div>`).join('')
+    body.querySelectorAll<HTMLElement>('button[data-buy]').forEach(b =>
+      b.addEventListener('click', () => doBuy(b.dataset.buy as BuyId)))
+  } else if (officeTab === 'ozet') {
+    const occ = Math.round(game.occupancy() * 100)
+    const sub = Math.round(game.subRatio() * 100)
+    body.innerHTML = `
+      <div class="srow"><span class="nm">Dünkü kâr</span><span class="gn ${game.lastDayProfit < 0 ? 'bad' : ''}">₺${tl(game.lastDayProfit)}</span>
+        <span class="ds">Gelir ₺${tl(game.incomeToday)} · Gider ₺${tl(game.expenseToday)}</span></div>
+      <div class="srow"><span class="nm">Doluluk</span><span class="gn">%${occ}</span>
+        <span class="ds">Haftada ${game.bookings.length} dolu slot. Gündüz saatleri en büyük fırsat.</span></div>
+      <div class="srow"><span class="nm">Abonelik oranı</span><span class="gn">%${sub}</span>
+        <span class="ds">%45-55 ideal. Fazlası prime-time esnekliğini bitirir.</span></div>
+      <div class="srow"><span class="nm">Evrak geçerliliği</span>
+        <span class="gn" style="${game.docs < 0.4 ? 'background:#fbe0e0;color:#b23434' : ''}">%${Math.round(game.docs * 100)}</span>
+        <span class="ds">Düşerse denetimde ceza riski var.</span></div>
+      <div class="srow"><span class="nm">Günlük sabit gider</span><span class="up">-₺${tl(game.dailyUpkeep())}</span>
+        <span class="ds">Elektrik, su, temizlik, personel.</span></div>`
+  } else {
+    body.innerHTML = game.events.slice(-14).reverse()
+      .map(e => `<div class="srow"><span class="ds" style="flex:1">${e}</span></div>`).join('')
+      || '<div class="srow"><span class="ds">Henüz kayıt yok.</span></div>'
+  }
+}
+
+$('officebtn').addEventListener('click', () => { $('office').classList.add('show'); renderOffice() })
+$('closeoffice').addEventListener('click', () => $('office').classList.remove('show'))
+document.querySelectorAll<HTMLElement>('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'))
+  t.classList.add('on'); officeTab = t.dataset.tab!; renderOffice()
+}))
+
+// ---------- HUD ----------
+function renderHud() {
+  const hour = OPEN_HOUR + Math.floor((game.t / DAY_SECONDS) * HOURS.length)
+  $('h-money').textContent = '₺' + tl(game.money)
+  $('h-day').textContent = String(game.day)
+  $('h-clock').textContent = String(hour).padStart(2, '0') + ':00'
+  $('h-rep').textContent = game.rep.toFixed(1)
+  $('h-occ').textContent = '%' + Math.round(game.occupancy() * 100)
+}
+
+function renderAll() { renderHud(); renderQueue(); renderCal(); renderTips() }
+
+function save() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())) } catch { /* kota */ }
+}
+
+// ---------- döngü ----------
+const clock = new THREE.Clock()
+let spawnT = 2
+let uiT = 0
+let saveT = 0
+
+function frame() {
+  requestAnimationFrame(frame)
+  if (document.hidden) { clock.getDelta(); return }
+  const dt = Math.min(clock.getDelta(), 0.05)
+
+  const prevDay = game.day
+  game.tick(dt)
+  if (game.day !== prevDay) { toast(`Gün ${game.day} · dün ₺${tl(game.lastDayProfit)} kâr`, game.lastDayProfit >= 0 ? 'g' : 'b'); save() }
+
+  // rezervasyon üretimi
+  spawnT -= dt
+  if (spawnT <= 0) { spawnT = 3 + Math.random() * 3
+    for (let k = 0; k < 6; k++) if (game.spawnReservation()) { renderQueue(); break } }
+
+  // gün-gece
+  const frac = game.t / DAY_SECONDS
+  const night = frac < 0.62 ? 0 : Math.min(1, (frac - 0.62) / 0.14)
+  world.setNight(night, game.hasLights)
+
+  // o an maç var mı → botlar oynasın
+  const hour = OPEN_HOUR + Math.floor(frac * HOURS.length)
+  const nowDay = (game.day - 1) % 7
+  world.updateMatch(dt, !!game.bookingAt(nowDay, hour))
+
+  uiT -= dt
+  if (uiT <= 0) { uiT = 0.4; renderAll() }
+  saveT -= dt
+  if (saveT <= 0) { saveT = 10; save() }
+
+  world.render()
+}
+
+renderAll()
+frame()
+
+// ilk açılışta yönlendirme
+if (game.day === 1 && game.bookings.length === 0) {
+  setTimeout(() => toast('Sağdan bir rezervasyon isteği seç, takvimde yerine tıkla.'), 900)
+}
