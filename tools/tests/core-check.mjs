@@ -241,5 +241,32 @@ console.log('\n— ADAPTİF VURGU SAYACI —')
     check('sayaç kayıtla korunur', b.placedCount === g.placedCount)
   }
 }
+
+console.log('\n— DOLU SAAT / KAPASİTE —')
+{
+  const g = new Game()
+  g.pitches = 2
+  const mk = () => { let r=null; for(let i=0;i<1500&&!r;i++){const x=g.spawnReservation(); if(x&&!x.flexible)r=x; if(g.queue.length>=4)g.queue.length=0} return r }
+  const a = mk()
+  if (a) {
+    check('1. maç yerleşir', g.place(a.id, a.day, a.hour).ok)
+    const b = mk()
+    if (b) {
+      const r2 = g.place(b.id, a.day, a.hour)
+      check('2 SAHA VARSA aynı saate 2. maç DA yerleşir (önceden reddediliyordu)',
+        r2.ok || !g.slotOk(b, a.day, a.hour))
+      if (r2.ok) {
+        const c = mk()
+        if (c) {
+          const r3 = g.place(c.id, a.day, a.hour)
+          check('kapasite aşımı reddedilir', !r3.ok)
+          check('uyarı DOLU der ve sayı verir', r3.msg.includes('DOLU') && r3.msg.includes('2/2'))
+        }
+        check('usedAt doğru sayar', g.usedAt(a.day, a.hour) === 2)
+        check('freeAt dolu saatte false', !g.freeAt(a.day, a.hour))
+      }
+    }
+  }
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

@@ -130,6 +130,11 @@
   .dslot.full { background:var(--green); }
   .dslot.full .h, .dslot.full .t { color:#fff; }
   .dslot.sub { background:var(--sun); }
+  /* yarı dolu: bir saha dolu, diğeri boş — yarısı yeşil */
+  .dslot.half { background:linear-gradient(135deg, var(--green) 50%, #dff0e2 50%); }
+  .dslot.half .h { color:#eaf6ec; } .dslot.half .t { color:#fff; text-shadow:0 1px 2px rgba(0,40,15,.5); }
+  .dslot.deny { animation:shake .4s; border-color:#d64545 !important; background:#fbe0e0; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 50%{transform:translateX(4px)} 75%{transform:translateX(-3px)} }
   .dslot.sub .h, .dslot.sub .t { color:#4a3208; }
   .dslot.hint { background:#c9efd4; border:2px solid var(--sun); animation:pulse .7s infinite; }
   /* 12. yerleştirmeden sonra: bilgi kalır, gürültü gider */

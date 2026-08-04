@@ -213,6 +213,12 @@ export class Game {
   bookingAt(day: number, hour: number): Booking | undefined {
     return this.bookings.find(b => b.day === day && b.hour === hour)
   }
+  bookingsAt(day: number, hour: number): Booking[] {
+    return this.bookings.filter(b => b.day === day && b.hour === hour)
+  }
+  usedAt(day: number, hour: number): number { return this.bookingsAt(day, hour).length }
+  /** bu saatte hâlâ boş saha var mı */
+  freeAt(day: number, hour: number): boolean { return this.usedAt(day, hour) < this.pitches }
   /** doluluk yüzdesi */
   occupancy(): number {
     const usable = 7 * HOURS.length
@@ -236,7 +242,7 @@ export class Game {
       * (this.hasLights && hour >= 19 ? 1.25 : 1) * (this.hasRoadSign ? 1.2 : 1)
       * (this.adDays > 0 ? 1.5 : 1)
     if (Math.random() > demand) return null
-    if (this.bookingAt(day, hour) && this.pitches < 2) return null
+    if (!this.freeAt(day, hour)) return null
     const weeks = Math.random() < 0.28 ? (Math.random() < 0.5 ? 4 : 8) : 0
     const raw = this.basePrice() * seg.priceMult * (weeks > 0 ? 0.82 : 1)
     // ESNEK İSTEK (%60): "hafta içi akşam olsun" → hangi slota koyacağına SEN karar verirsin
@@ -279,7 +285,11 @@ export class Game {
     const i = this.queue.findIndex(r => r.id === resId)
     if (i < 0) return { ok: false, msg: 'Bu istek artık geçerli değil.' }
     const r = this.queue[i]
-    if (this.bookingAt(day, hour)) return { ok: false, msg: 'O saat dolu.' }
+    if (!this.freeAt(day, hour)) {
+      const alt = this.bestSlot(r)
+      return { ok: false, msg: `${DAY_NAMES[day]} ${hour}:00 DOLU (${this.usedAt(day, hour)}/${this.pitches} saha).`
+        + (alt ? ` En yakın boş: ${DAY_NAMES[alt.day]} ${alt.hour}:00.` : ' Uygun boş saat kalmamış.') }
+    }
     if (hour < OPEN_HOUR || hour >= CLOSE_HOUR) return { ok: false, msg: 'Tesis o saatte kapalı.' }
     if (!this.slotOk(r, day, hour)) {
       return r.flexible
@@ -302,8 +312,7 @@ export class Game {
     const hours = r.flexible ? r.flexHours : [r.hour]
     let first: { day: number; hour: number; adj: boolean } | null = null
     for (const d of days) for (const h of hours) {
-      if (this.bookingAt(d, h)) continue
-      if (this.bookings.filter(b => b.day === d && b.hour === h).length >= this.pitches) continue
+      if (!this.freeAt(d, h)) continue
       const adj = !!(this.bookingAt(d, h - 1) || this.bookingAt(d, h + 1))
       if (adj) return { day: d, hour: h, adj: true }   // bitişik = kantin primi → en iyi
       if (!first) first = { day: d, hour: h, adj: false }

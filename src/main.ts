@@ -80,7 +80,7 @@ function renderCal() {
   const tabs = $('daytabs')
   const tabsHtml = DAY_NAMES.map((nm, d) => {
     const occ = game.bookings.filter(b => b.day === d).length / HOURS.length
-    const hasValid = sel ? HOURS.some(h => !game.bookingAt(d, h) && game.slotOk(sel, d, h)) : false
+    const hasValid = sel ? HOURS.some(h => game.freeAt(d, h) && game.slotOk(sel, d, h)) : false
     return `<div class="dtab ${d === viewDay ? 'on' : ''} ${d === nowDay ? 'today' : ''}" data-d="${d}">
       ${hasValid ? `<span class="dot ${game.placedCount < 12 ? '' : 'calm'}"></span>` : ''}
       <b>${nm}</b><div class="obar"><i style="width:${Math.round(occ * 100)}%"></i></div>
@@ -97,16 +97,20 @@ function renderCal() {
   // SEÇİLİ GÜNÜN ŞERİDİ (önbellekli)
   const cal = $('cal')
   const calHtml = HOURS.map(hour => {
-    const b = game.bookingAt(viewDay, hour)
-    const hint = sel && !b && game.slotOk(sel, viewDay, hour)
+    const bs = game.bookingsAt(viewDay, hour)
+    const b = bs[0]
+    const free = game.freeAt(viewDay, hour)
+    const hint = sel && free && game.slotOk(sel, viewDay, hour)
     const cls = ['dslot']
-    if (b) cls.push(b.sub ? 'sub' : 'full')
+    if (b) cls.push(free ? 'half' : b.sub ? 'sub' : 'full')
     if (hint) cls.push(game.placedCount < 12 ? 'hint' : 'hint calm')
     if (viewDay === nowDay && hour === nowHour) cls.push('now')
     if (!b && hour >= 20 && hour <= 22) cls.push('prime')
+    const label = !b ? '' : bs.length > 1 ? `${b.team.slice(0, 4)} +${bs.length - 1}` : b.team.slice(0, 6)
+    const cap = game.pitches > 1 && b ? ` (${bs.length}/${game.pitches} saha)` : ''
     return `<div class="${cls.join(' ')}" data-h="${hour}"
-      title="${b ? b.team + ' · ₺' + tl(b.price) : DAY_NAMES[viewDay] + ' ' + hour + ':00 — boş'}">
-      <span class="h">${hour}:00</span><span class="t">${b ? b.team.slice(0, 6) : ''}</span>
+      title="${b ? bs.map(x => x.team + ' ₺' + tl(x.price)).join(' · ') + cap : DAY_NAMES[viewDay] + ' ' + hour + ':00 — boş'}">
+      <span class="h">${hour}:00</span><span class="t">${label}</span>
     </div>`
   }).join('')
   if (calHtml !== calCache) {
@@ -118,7 +122,12 @@ function renderCal() {
         const day = viewDay, hour = Number(el.dataset.h)
         const r = game.place(selected, day, hour)
         if (r.ok) audio.place(); else audio.bad()
-        if (r.ok) { selected = null; save(); confirmFlash(day, hour) } else toast(r.msg, 'b')
+        if (r.ok) { selected = null; save(); confirmFlash(day, hour) }
+        else {
+          toast(r.msg, 'b')
+          el.classList.add('deny')
+          setTimeout(() => el.classList.remove('deny'), 500)
+        }
         renderAll()
       })
     })
