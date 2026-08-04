@@ -35,16 +35,14 @@ class Audio {
     osc.start(t0); osc.stop(t0 + dur + 0.04)
   }
 
-  /** TELEFON ÇALIYOR — klasik çift tonlu zil (iki kısa seri) */
+  /** TELEFON — yumuşak iki notalı bildirim (eski 'trrr' sinir bozucuydu) */
   ring() {
     this.ensure()
     if (!this.ctx || !this.on) return
-    for (const off of [0, 0.42]) {
-      // zil "trrr" hissi: iki ton hızlı alternatif
-      for (let i = 0; i < 7; i++) {
-        this.tone(i % 2 ? 880 : 660, 0.045, 'triangle', 0.10, off + i * 0.048)
-      }
-    }
+    // yükselen ikili: sıcak, kısa, dikkat çeker ama rahatsız etmez
+    this.tone(659, 0.16, 'sine', 0.062)          // E5
+    this.tone(988, 0.26, 'sine', 0.052, 0.11)    // B5
+    this.tone(1319, 0.20, 'sine', 0.022, 0.20)   // hafif üst tını
   }
 
   /** rezervasyon yerleşti — onay */

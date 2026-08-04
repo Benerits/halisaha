@@ -155,6 +155,16 @@
   .buy[disabled] { background:#cfd6cd; border-bottom-color:#b3bdb1; cursor:default; }
   .buy.have { background:var(--paper-2); color:var(--muted); border-bottom-color:var(--line); }
 
+  /* ===== ARSA PANELİ ===== */
+  #parcel { position:fixed; left:50%; top:12%; transform:translateX(-50%); z-index:41; width:min(520px,92vw);
+    background:var(--paper); border-radius:16px; box-shadow:0 22px 60px rgba(0,0,0,.4); overflow:hidden; display:none; }
+  #parcel.show { display:block; }
+  #parcel .phead { background:var(--green-deep); color:#dff0e3; padding:12px 18px; display:flex;
+    justify-content:space-between; align-items:center; }
+  #parcel .phead b { font-size:16px; letter-spacing:.5px; }
+  #parcel .phead button { background:var(--paper); color:var(--green-deep); font-weight:800; border-radius:9px; padding:5px 12px; font-size:12px; }
+  #parcel .pbody { padding:13px 15px 17px; max-height:60vh; overflow:auto; }
+
   /* ===== TOAST ===== */
   #toasts { position:fixed; left:50%; transform:translateX(-50%); top:76px; z-index:50;
     display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none; }
@@ -204,6 +214,7 @@
   </div>
 </div>
 
+<div id="parcel"></div>
 <div id="toasts"></div>
 <script type="module" src="/src/main.ts"></script>
 </body>

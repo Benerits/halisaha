@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three'
 import { loadKit, fitModel, fitCharacter, type Kit } from './models'
+import { PARCEL_COLS, PARCEL_ROWS, PARCEL_W, PARCEL_D, parcelKey, type BuildKind } from './state'
 
 export const PITCH_W = 13
 export const PITCH_D = 8
@@ -41,6 +42,10 @@ export class World {
   private walkers: { g: THREE.Group; t: number; from: THREE.Vector3; to: THREE.Vector3 }[] = []
   private billboards: THREE.Group[] = []
   private signBoard: THREE.Group | null = null
+  /** arsa ızgarası: tıklanabilir zeminler */
+  private parcelTiles = new Map<string, THREE.Mesh>()
+  private parcelBuilds = new Map<string, THREE.Group>()
+  private ray = new THREE.Raycaster()
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene.background = new THREE.Color(0xa8dcef)
@@ -78,6 +83,7 @@ export class World {
     this.buildParking()
     this.buildStreet()
     this.spawnPlayers()
+    this.buildParcelGrid()
 
     loadKit().then(k => { this.kit = k; this.dressScene() })
     addEventListener('resize', () => this.onResize())
@@ -102,32 +108,52 @@ export class World {
     walk.position.set(-7.5, 3.2, 0.02); this.scene.add(walk)
   }
 
+  /** Halı saha dokusu: çizgiler+şeritler TEK canvas'a çizilir → z-fighting imkânsız */
+  private pitchTexture(w: number, d: number): THREE.CanvasTexture {
+    const S = 96 // birim başına piksel yoğunluğu
+    const cv = document.createElement('canvas')
+    cv.width = Math.round(w * S); cv.height = Math.round(d * S)
+    const x = cv.getContext('2d')!
+    const px = (u: number) => u * S
+    // çim şeritleri
+    const bands = 8
+    for (let i = 0; i < bands; i++) {
+      x.fillStyle = i % 2 ? '#47a055' : '#3c8d49'
+      x.fillRect((cv.width / bands) * i, 0, cv.width / bands + 1, cv.height)
+    }
+    // çizgiler
+    x.strokeStyle = '#f4f7f2'; x.lineWidth = px(0.12); x.lineCap = 'square'
+    const m = px(0.45)
+    x.strokeRect(m, m, cv.width - m * 2, cv.height - m * 2)          // dış çizgi
+    x.beginPath(); x.moveTo(cv.width / 2, m); x.lineTo(cv.width / 2, cv.height - m); x.stroke() // orta
+    x.beginPath(); x.arc(cv.width / 2, cv.height / 2, px(1.4), 0, Math.PI * 2); x.stroke()      // orta yuvarlak
+    x.beginPath(); x.arc(cv.width / 2, cv.height / 2, px(0.14), 0, Math.PI * 2); x.fillStyle = '#f4f7f2'; x.fill()
+    // ceza sahaları
+    const boxW = px(2.0), boxH = px(3.6)
+    x.strokeRect(m, cv.height / 2 - boxH / 2, boxW, boxH)
+    x.strokeRect(cv.width - m - boxW, cv.height / 2 - boxH / 2, boxW, boxH)
+    // kale ağzı
+    const gaW = px(0.7), gaH = px(1.9)
+    x.strokeRect(m, cv.height / 2 - gaH / 2, gaW, gaH)
+    x.strokeRect(cv.width - m - gaW, cv.height / 2 - gaH / 2, gaW, gaH)
+    const t = new THREE.CanvasTexture(cv)
+    t.colorSpace = THREE.SRGBColorSpace
+    t.anisotropy = 8
+    return t
+  }
+
   buildPitch(cx: number, cy: number) {
     const g = new THREE.Group()
-    const turf = new THREE.Mesh(new THREE.PlaneGeometry(PITCH_W + 0.8, PITCH_D + 0.8), lam(0x2f7a3c))
-    turf.position.z = 0.02; turf.receiveShadow = true; g.add(turf)
-    for (let i = 0; i < 8; i++) {
-      const s = new THREE.Mesh(new THREE.PlaneGeometry(PITCH_W / 8, PITCH_D), lam(i % 2 ? 0x47a055 : 0x3c8d49))
-      s.position.set(-PITCH_W / 2 + PITCH_W / 16 + i * PITCH_W / 8, 0, 0.03); g.add(s)
-    }
-    const line = (w: number, d: number, x: number, y: number) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lam(0xf4f7f2))
-      m.position.set(x, y, 0.04); g.add(m)
-    }
-    line(PITCH_W - 0.5, 0.1, 0, PITCH_D / 2 - 0.25); line(PITCH_W - 0.5, 0.1, 0, -PITCH_D / 2 + 0.25)
-    line(0.1, PITCH_D - 0.5, -PITCH_W / 2 + 0.25, 0); line(0.1, PITCH_D - 0.5, PITCH_W / 2 - 0.25, 0)
-    line(0.1, PITCH_D - 0.5, 0, 0)
-    const circ = new THREE.Mesh(new THREE.RingGeometry(1.35, 1.45, 40), lam(0xf4f7f2))
-    circ.position.z = 0.04; g.add(circ)
-    // ceza sahaları
-    for (const s of [-1, 1]) {
-      line(0.1, 3.4, s * (PITCH_W / 2 - 2.2), 0)
-      line(2.2, 0.1, s * (PITCH_W / 2 - 1.15), 1.7)
-      line(2.2, 0.1, s * (PITCH_W / 2 - 1.15), -1.7)
-    }
+    // kenar bandı (koyu çim)
+    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(PITCH_W + 1.1, PITCH_D + 1.1), lam(0x2a6e35))
+    skirt.position.z = 0.02; skirt.receiveShadow = true; g.add(skirt)
+    // ASIL SAHA — tek düzlem, tek doku
+    const turf = new THREE.Mesh(new THREE.PlaneGeometry(PITCH_W, PITCH_D),
+      new THREE.MeshLambertMaterial({ map: this.pitchTexture(PITCH_W, PITCH_D) }))
+    turf.position.z = 0.045; turf.receiveShadow = true; g.add(turf)
     // kaleler — direk + üst direk + file
-    for (const s of [-1, 1]) {
-      const gx = s * (PITCH_W / 2 - 0.3)
+    for (const sg of [-1, 1]) {
+      const gx = sg * (PITCH_W / 2 - 0.3)
       for (const py of [-1.3, 1.3]) {
         const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.6, 8), lam(0xfaf9f6))
         post.rotation.x = Math.PI / 2; post.position.set(gx, py, 0.8); post.castShadow = true; g.add(post)
@@ -136,7 +162,7 @@ export class World {
       bar.position.set(gx, 0, 1.6); bar.castShadow = true; g.add(bar)
       const net = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.6),
         new THREE.MeshLambertMaterial({ color: 0xeaf0f2, transparent: true, opacity: 0.3, side: THREE.DoubleSide }))
-      net.rotation.y = Math.PI / 2; net.position.set(gx + s * 0.55, 0, 0.8); g.add(net)
+      net.rotation.y = Math.PI / 2; net.position.set(gx + sg * 0.55, 0, 0.8); g.add(net)
     }
     g.position.set(cx, cy, 0)
     this.scene.add(g)
@@ -238,6 +264,99 @@ export class World {
     }
     const kerb = new THREE.Mesh(new THREE.PlaneGeometry(90, 1.2), lam(0xa9a294))
     kerb.position.set(0, 14.4, 0.015); this.scene.add(kerb)
+  }
+
+  /** ARSA IZGARASI — tesisin güney/batı boşluğunda 4x4 */
+  private buildParcelGrid() {
+    const ox = -15.5, oy = -22.5  // ızgaranın sol-alt köşesi
+    for (let c = 0; c < PARCEL_COLS; c++) {
+      for (let r = 0; r < PARCEL_ROWS; r++) {
+        const x = ox + c * (PARCEL_W + 0.4) + PARCEL_W / 2
+        const y = oy + r * (PARCEL_D + 0.4) + PARCEL_D / 2
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W, PARCEL_D),
+          new THREE.MeshLambertMaterial({ color: 0x8a7f63, transparent: true, opacity: 0.9 }))
+        m.position.set(x, y, 0.03)
+        m.receiveShadow = true
+        m.userData = { c, r }
+        this.scene.add(m)
+        this.parcelTiles.set(parcelKey(c, r), m)
+        // kenar çizgisi
+        const edge = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.PlaneGeometry(PARCEL_W, PARCEL_D)),
+          new THREE.LineBasicMaterial({ color: 0xf2e7c8, transparent: true, opacity: 0.55 }))
+        edge.position.set(x, y, 0.05)
+        this.scene.add(edge)
+      }
+    }
+  }
+
+  /** arsa durumlarını güncelle: sahipli/boş renkleri + kurulu yapılar */
+  syncParcels(owned: string[], builds: { key: string; kind: BuildKind }[]) {
+    for (const [key, tile] of this.parcelTiles) {
+      const mat = tile.material as THREE.MeshLambertMaterial
+      mat.color.setHex(owned.includes(key) ? 0xb9b3a1 : 0x8a7f63)
+      mat.opacity = owned.includes(key) ? 1 : 0.75
+    }
+    for (const b of builds) {
+      if (this.parcelBuilds.has(b.key)) continue
+      const tile = this.parcelTiles.get(b.key)
+      if (!tile) continue
+      const g = this.makeBuild(b.kind, tile.position.x, tile.position.y)
+      this.parcelBuilds.set(b.key, g)
+    }
+  }
+
+  private makeBuild(kind: BuildKind, x: number, y: number): THREE.Group {
+    const g = new THREE.Group()
+    if (kind === 'pitch' || kind === 'mini') {
+      const w = kind === 'pitch' ? PARCEL_W - 0.8 : PARCEL_W * 0.62
+      const d = kind === 'pitch' ? PARCEL_D - 0.8 : PARCEL_D * 0.62
+      const skirt2 = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.5, d + 0.5), lam(0x2a6e35))
+      skirt2.position.z = 0.055; g.add(skirt2)
+      const turf = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
+        new THREE.MeshLambertMaterial({ map: this.pitchTexture(w, d) }))
+      turf.position.z = 0.075; turf.receiveShadow = true; g.add(turf)
+      for (const sgn of [-1, 1]) {
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, d * 0.34, 6), lam(0xfaf9f6))
+        bar.position.set(sgn * (w / 2 - 0.2), 0, 0.6); g.add(bar)
+      }
+    } else if (kind === 'parking') {
+      const pad = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W - 1, PARCEL_D - 1), lam(0x585f66))
+      pad.position.z = 0.06; g.add(pad)
+      for (let i = 0; i < 4; i++) {
+        const l = new THREE.Mesh(new THREE.PlaneGeometry(0.09, PARCEL_D - 1.8), lam(0xe9e4d6))
+        l.position.set(-2.4 + i * 1.6, 0, 0.07); g.add(l)
+      }
+      if (this.kit?.cars.length) {
+        for (let i = 0; i < 2; i++) {
+          const car = fitModel(this.kit.cars[i % this.kit.cars.length], 1.0)
+          car.position.set(-1.6 + i * 1.6, 0, 0); car.rotation.z = Math.PI / 2; g.add(car)
+        }
+      }
+    } else {
+      const lawn = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W - 1, PARCEL_D - 1), lam(0x6f9a55))
+      lawn.position.z = 0.06; lawn.receiveShadow = true; g.add(lawn)
+      if (this.kit?.trees.length) {
+        for (const [tx, ty] of [[-2, 1], [1.6, -1.2], [0.2, 1.6]] as [number, number][]) {
+          const t = fitModel(this.kit.trees[Math.floor(Math.random() * this.kit.trees.length)], 2.1)
+          t.position.set(tx, ty, 0); g.add(t)
+        }
+      }
+    }
+    g.position.set(x, y, 0)
+    this.scene.add(g)
+    return g
+  }
+
+  /** ekran koordinatından arsa bul */
+  pickParcel(clientX: number, clientY: number): { c: number; r: number } | null {
+    const nx = (clientX / innerWidth) * 2 - 1
+    const ny = -(clientY / innerHeight) * 2 + 1
+    this.ray.setFromCamera(new THREE.Vector2(nx, ny), this.camera)
+    const hits = this.ray.intersectObjects([...this.parcelTiles.values()], false)
+    if (!hits.length) return null
+    const ud = hits[0].object.userData as { c: number; r: number }
+    return { c: ud.c, r: ud.r }
   }
 
   /** prosedürel yedek oyuncular — kit inince Kenney karakterleriyle değişir */

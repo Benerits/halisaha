@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { World } from './world'
 import { audio } from './audio'
-import { Game, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, type BuyId } from './state'
+import { Game, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, BUILDS, parcelCost, type BuyId, type BuildKind } from './state'
 
 const SAVE_KEY = 'halisaha-save-v1'
 const canvas = document.getElementById('c') as HTMLCanvasElement
@@ -185,6 +185,54 @@ function renderOffice() {
   }
 }
 
+// ---------- ARSA: sahnede tıkla → satın al / yapı kur ----------
+function openParcel(c: number, r: number) {
+  const owned = game.ownsParcel(c, r)
+  const b = game.buildAt(c, r)
+  const box = $('parcel')
+  let h = `<div class="phead"><b>ARSA ${c + 1}-${r + 1}</b><button id="pclose">Kapat ✕</button></div><div class="pbody">`
+  if (b) {
+    h += `<div class="srow"><span class="nm">${BUILDS[b.kind].label}</span>
+      <span class="gn">${BUILDS[b.kind].gain}</span>
+      <span class="ds">${BUILDS[b.kind].desc}</span></div>`
+  } else if (!owned) {
+    h += `<div class="srow"><span class="nm">Boş arsa</span>
+      <button class="buy" id="pbuy">₺${tl(parcelCost(c, r))} — Satın Al</button>
+      <span class="ds">Merkeze yakın arsalar daha pahalı. Aldıktan sonra üstüne saha ya da tesis kurabilirsin.</span></div>`
+  } else {
+    h += `<div class="srow" style="background:#eefaf0"><span class="ds" style="flex:1">Bu arsa senin — ne kuralım?</span></div>`
+    for (const k of Object.keys(BUILDS) as BuildKind[]) {
+      const it = BUILDS[k]
+      h += `<div class="srow"><span class="nm">${it.label}</span><span class="gn">${it.gain}</span>
+        <button class="buy" data-build="${k}">₺${tl(it.cost)}</button>
+        <span class="ds">${it.desc}</span></div>`
+    }
+  }
+  box.innerHTML = h + '</div>'
+  box.classList.add('show')
+  $('pclose').addEventListener('click', () => box.classList.remove('show'))
+  const pb = document.getElementById('pbuy')
+  if (pb) pb.addEventListener('click', () => {
+    const res = game.buyParcel(c, r)
+    if (res.ok) audio.build(); else audio.bad()
+    toast(res.msg, res.ok ? 'g' : 'b')
+    if (res.ok) { save(); world.syncParcels(game.ownedParcels, game.builds); openParcel(c, r) }
+  })
+  box.querySelectorAll<HTMLElement>('button[data-build]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      const res = game.placeBuild(c, r, btn.dataset.build as BuildKind)
+      if (res.ok) audio.build(); else audio.bad()
+      toast(res.msg, res.ok ? 'g' : 'b')
+      if (res.ok) { save(); world.syncParcels(game.ownedParcels, game.builds); box.classList.remove('show'); renderAll() }
+    }))
+}
+
+addEventListener('pointerdown', e => {
+  if ((e.target as HTMLElement).closest('#desk,#office,#rail,#officebtn,#sfxbtn,#zoombar,#parcel,#hud')) return
+  const hit = world.pickParcel(e.clientX, e.clientY)
+  if (hit) { audio.click(); openParcel(hit.c, hit.r) }
+})
+
 $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
 $('zout').addEventListener('click', () => { world.zoomBy(1.22); audio.click() })
 addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#office,#tips,#goals')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
@@ -264,6 +312,7 @@ function frame() {
   world.updateAmbient(dt)
   world.setBillboards(game.hasBillboard)
   world.setRoadSign(game.hasRoadSign)
+  world.syncParcels(game.ownedParcels, game.builds)
 
   uiT -= dt
   if (uiT <= 0) { uiT = 0.4; renderAll() }

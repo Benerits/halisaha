@@ -97,6 +97,29 @@ export interface ShopItem {
   locked: string | null
 }
 
+// ---- ARSA IZGARASI (4x4 = 16 parsel) ----
+export const PARCEL_COLS = 4
+export const PARCEL_ROWS = 4
+/** parsel dünya boyutu (izometrik birim) */
+export const PARCEL_W = 8.5
+export const PARCEL_D = 6.5
+export const parcelKey = (c: number, r: number) => `${c},${r}`
+/** Fiyat merkeze yakınlıkla artar — ana saha (1,1) etrafı pahalı */
+export function parcelCost(c: number, r: number): number {
+  const d = Math.abs(c - 1.5) + Math.abs(r - 1.5)
+  return Math.round((26_000 - d * 3_200) / 500) * 500
+}
+
+export type BuildKind = 'pitch' | 'mini' | 'parking' | 'garden'
+export interface PlacedBuild { key: string; kind: BuildKind }
+
+export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: string; desc: string }> = {
+  pitch:   { label: 'Halı Saha', cost: 120_000, gain: 'Aynı saate +1 maç', desc: 'Kapasiteyi büyütür; prime-time çakışmaları biter.' },
+  mini:    { label: 'Mini Saha 5v5', cost: 55_000, gain: 'İkindi bandı dolar', desc: 'Ucuz saha; çocuk/genç grupları için hızlı devir.' },
+  parking: { label: 'Otopark', cost: 18_000, gain: 'İtibar +0,3', desc: 'Araç sığmayınca müşteri kaçar; park yeri memnuniyeti artırır.' },
+  garden:  { label: 'Yeşil Alan', cost: 9_000, gain: 'İtibar +0,2', desc: 'Oturma alanı ve peyzaj — tesis daha bakımlı görünür.' },
+}
+
 export interface SaveData { [k: string]: unknown }
 
 export class Game {
@@ -128,6 +151,10 @@ export class Game {
   docService = false
   hasBillboard = false   // saha kenarı reklam panoları — kira geliri
   hasRoadSign = false    // yol tabelası — talep artışı
+  /** satın alınmış parseller */
+  ownedParcels: string[] = []
+  /** parsellere kurulan yapılar */
+  builds: PlacedBuild[] = []
 
   /** belge geçerliliği 0-1 (1 = tam) — sıfıra yaklaşınca denetimde ceza */
   docs = 1
@@ -345,6 +372,36 @@ export class Game {
     return { ok: true, msg: `${it.label} hazır — ${it.gain}` }
   }
 
+  // ---- ARSA ----
+  ownsParcel(c: number, r: number) { return this.ownedParcels.includes(parcelKey(c, r)) }
+  buildAt(c: number, r: number): PlacedBuild | undefined {
+    return this.builds.find(b => b.key === parcelKey(c, r))
+  }
+  buyParcel(c: number, r: number): { ok: boolean; msg: string } {
+    if (c < 0 || c >= PARCEL_COLS || r < 0 || r >= PARCEL_ROWS) return { ok: false, msg: 'Geçersiz arsa.' }
+    if (this.ownsParcel(c, r)) return { ok: false, msg: 'Bu arsa zaten senin.' }
+    const cost = parcelCost(c, r)
+    if (this.money < cost) return { ok: false, msg: `₺${(cost - this.money).toLocaleString('tr-TR')} eksik.` }
+    this.money -= cost
+    this.ownedParcels.push(parcelKey(c, r))
+    this.events.push(`Arsa alındı (${c + 1},${r + 1}) — ₺${cost.toLocaleString('tr-TR')}`)
+    return { ok: true, msg: `Arsa senin! Üstüne saha ya da tesis kurabilirsin.` }
+  }
+  placeBuild(c: number, r: number, kind: BuildKind): { ok: boolean; msg: string } {
+    if (!this.ownsParcel(c, r)) return { ok: false, msg: 'Önce arsayı satın al.' }
+    if (this.buildAt(c, r)) return { ok: false, msg: 'Bu arsa dolu.' }
+    const b = BUILDS[kind]
+    if (this.money < b.cost) return { ok: false, msg: `₺${(b.cost - this.money).toLocaleString('tr-TR')} eksik.` }
+    this.money -= b.cost
+    this.builds.push({ key: parcelKey(c, r), kind })
+    if (kind === 'pitch') this.pitches++
+    if (kind === 'mini') this.pitches++
+    if (kind === 'parking') this.rep = Math.min(5, this.rep + 0.3)
+    if (kind === 'garden') this.rep = Math.min(5, this.rep + 0.2)
+    this.events.push(`${b.label} kuruldu.`)
+    return { ok: true, msg: `${b.label} hazır — ${b.gain}` }
+  }
+
   // ---- GÜNLÜK HEDEFLER (oyuncuyu tutan kısa döngü) ----
   goalDay = 0
   gMatches = 0        // bugün oynanan maç
@@ -454,6 +511,7 @@ export class Game {
       hasSchoolDeal: this.hasSchoolDeal, hasTeaRoom: this.hasTeaRoom, hasCorporate: this.hasCorporate,
       staff: this.staff, docService: this.docService, docs: this.docs,
       hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,
+      ownedParcels: this.ownedParcels, builds: this.builds,
     }
   }
   load(d: SaveData) {
@@ -466,5 +524,7 @@ export class Game {
     this.hasTeaRoom = b('hasTeaRoom'); this.hasCorporate = b('hasCorporate'); this.docService = b('docService')
     this.hasBillboard = b('hasBillboard'); this.hasRoadSign = b('hasRoadSign')
     if (Array.isArray(d.bookings)) this.bookings = d.bookings as Booking[]
+    if (Array.isArray(d.ownedParcels)) this.ownedParcels = d.ownedParcels as string[]
+    if (Array.isArray(d.builds)) this.builds = d.builds as PlacedBuild[]
   }
 }
