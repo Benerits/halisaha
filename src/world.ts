@@ -104,10 +104,10 @@ export class World {
     g.receiveShadow = true; this.scene.add(g)
     // AVLU: yalnız giriş parseli (1,0) beton — kalan her yer çimen
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 9.0), lam(0xb6b0a1))
-    pad.position.set(0, 6.9, 0.035); pad.receiveShadow = true; this.scene.add(pad)
+    pad.position.set(0, 6.9, 0.06); pad.receiveShadow = true; this.scene.add(pad)
     // yürüyüş yolu (avlu → saha)
     const walk = new THREE.Mesh(new THREE.PlaneGeometry(3, 3.4), lam(0xc9c3b4))
-    walk.position.set(0, 1.2, 0.036); this.scene.add(walk)
+    walk.position.set(0, 1.2, 0.065); this.scene.add(walk)
   }
 
   /** Halı saha dokusu: çizgiler+şeritler TEK canvas'a çizilir → z-fighting imkânsız */
@@ -148,11 +148,11 @@ export class World {
     const g = new THREE.Group()
     // kenar bandı (koyu çim)
     const skirt = new THREE.Mesh(new THREE.PlaneGeometry(PITCH_W + 1.1, PITCH_D + 1.1), lam(0x2a6e35))
-    skirt.position.z = 0.02; skirt.receiveShadow = true; g.add(skirt)
+    skirt.position.z = 0.075; skirt.receiveShadow = true; g.add(skirt)
     // ASIL SAHA — tek düzlem, tek doku
     const turf = new THREE.Mesh(new THREE.PlaneGeometry(PITCH_W, PITCH_D),
       new THREE.MeshLambertMaterial({ map: this.pitchTexture(PITCH_W, PITCH_D) }))
-    turf.position.z = 0.045; turf.receiveShadow = true; g.add(turf)
+    turf.position.z = 0.09; turf.receiveShadow = true; g.add(turf)
     // kaleler — direk + üst direk + file
     for (const sg of [-1, 1]) {
       const gx = sg * (PITCH_W / 2 - 0.3)
@@ -285,10 +285,10 @@ export class World {
 
   private buildParking() {
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(11, 7.5), lam(0x585f66))
-    pad.position.set(14.5, 7.2, 0.04); pad.receiveShadow = true; this.scene.add(pad)
+    pad.position.set(14.5, 7.2, 0.06); pad.receiveShadow = true; this.scene.add(pad)
     for (let i = 0; i < 5; i++) {
       const l = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 6.4), lam(0xe9e4d6))
-      l.position.set(10.4 + i * 2.1, 7.2, 0.05); this.scene.add(l)
+      l.position.set(10.4 + i * 2.1, 7.2, 0.075); this.scene.add(l)
     }
   }
 
@@ -384,7 +384,7 @@ export class World {
       [t, PARCEL_D, PARCEL_W / 2 - t / 2, 0], [t, PARCEL_D, -PARCEL_W / 2 + t / 2, 0],
     ] as [number, number, number, number][]) {
       const strip = new THREE.Mesh(new THREE.PlaneGeometry(w, d), bm)
-      strip.position.set(px, py, 0.045)
+      strip.position.set(px, py, 0.05)
       g.add(strip)
     }
     for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as [number, number][]) {
@@ -432,10 +432,10 @@ export class World {
       const w = kind === 'pitch' ? PARCEL_W - 0.8 : PARCEL_W * 0.62
       const d = kind === 'pitch' ? PARCEL_D - 0.8 : PARCEL_D * 0.62
       const skirt2 = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.5, d + 0.5), lam(0x2a6e35))
-      skirt2.position.z = 0.055; g.add(skirt2)
+      skirt2.position.z = 0.075; g.add(skirt2)
       const turf = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
         new THREE.MeshLambertMaterial({ map: this.pitchTexture(w, d) }))
-      turf.position.z = 0.075; turf.receiveShadow = true; g.add(turf)
+      turf.position.z = 0.09; turf.receiveShadow = true; g.add(turf)
       for (const sgn of [-1, 1]) {
         const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, d * 0.34, 6), lam(0xfaf9f6))
         bar.position.set(sgn * (w / 2 - 0.2), 0, 0.6); g.add(bar)
