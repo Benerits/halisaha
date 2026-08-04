@@ -47,7 +47,7 @@ function renderCal() {
     h += `<tr><th class="dayh">${DAY_NAMES[d]}</th>`
     for (const hour of HOURS) {
       const b = game.bookingAt(d, hour)
-      const hint = sel && sel.day === d && sel.hour === hour && !b
+      const hint = sel && !b && game.slotOk(sel, d, hour)
       const cls = ['slot']
       if (b) cls.push(b.sub ? 'sub' : 'full')
       if (hint) cls.push('hint')
@@ -79,14 +79,37 @@ function renderQueue() {
   }
   list.innerHTML = game.queue.map(r => {
     const seg = SEGMENTS[r.segment]
+    const when = r.flexible
+      ? `${r.flexDays.length > 5 ? 'Her gün' : r.flexDays[0] >= 5 ? 'Hafta sonu' : 'Hafta içi'} ${r.flexHours[0]}-${r.flexHours[r.flexHours.length - 1] + 1}`
+      : `${DAY_NAMES[r.day]} ${r.hour}:00`
+    const pat = r.patience / r.maxPatience
+    // OKUNABİLİR İPUCU: pazarlık gücü kimde?
+    const lever = pat > 0.55 && (r.hour >= 20 || r.segment === 'kurumsal')
+    const tip = r.haggled ? 'pazarlık bitti'
+      : lever ? 'sıkı müşteri — pazarlık şansı yüksek'
+      : pat < 0.4 ? 'acelesi var, üstüne gitme' : 'normal'
     return `<div class="rcard ${selected === r.id ? 'sel' : ''}" data-id="${r.id}">
       <div class="team">${r.team}</div>${r.weeks ? `<span class="tagsub">${r.weeks} HAFTA</span>` : ''}
-      <div class="when">${DAY_NAMES[r.day]} ${r.hour}:00</div>
+      <div class="when">${when}${r.flexible ? '<span class="flex">ESNEK</span>' : ''}</div>
       <div class="meta">${seg.label}</div>
       <div class="price">₺${tl(r.price)}${r.weeks ? ' <span style="font-size:10.5px;color:#6d8073;font-weight:700">/hafta</span>' : ''}</div>
-      <div class="bar"><i style="width:${(r.patience / r.maxPatience) * 100}%"></i></div>
+      ${r.haggled ? '' : `<div class="hgl">
+        <button data-hg="1" data-id="${r.id}" title="Ölçülü zam iste">+%25</button>
+        <button data-hg="2" data-id="${r.id}" title="Sert pazarlık — riskli">+%50</button>
+      </div>`}
+      <div class="hint2 ${lever ? 'up' : pat < 0.4 ? 'dn' : ''}">${tip}</div>
+      <div class="bar"><i style="width:${pat * 100}%"></i></div>
     </div>`
   }).join('')
+  list.querySelectorAll<HTMLElement>('button[data-hg]').forEach(b => {
+    b.addEventListener('click', ev => {
+      ev.stopPropagation()
+      const res = game.haggle(Number(b.dataset.id), Number(b.dataset.hg) as 1 | 2)
+      if (res.ok) audio.cash(); else audio.bad()
+      toast(res.msg, res.ok ? 'g' : 'b')
+      renderAll()
+    })
+  })
   list.querySelectorAll<HTMLElement>('.rcard').forEach(el => {
     el.addEventListener('click', () => {
       selected = Number(el.dataset.id)
@@ -275,6 +298,9 @@ function renderHud() {
   $('h-clock').textContent = String(hour).padStart(2, '0') + ':00'
   $('h-rep').textContent = game.rep.toFixed(1)
   $('h-occ').textContent = '%' + Math.round(game.occupancy() * 100)
+  const rd = game.daysToRent()
+  $('h-rent').textContent = `₺${tl(game.rentAmount())} · ${rd}g`
+  ;($('h-rent').parentElement as HTMLElement).classList.toggle('warn', rd <= 2)
   const repChip = $('h-rep').parentElement as HTMLElement
   repChip.classList.toggle('warn', game.rep < 2.5)
 }

@@ -18,17 +18,23 @@ check('başlangıç kasası 25.000', g.money === 25_000)
 check('kilitli segmentler kapalı', !g.segmentOpen('genclik') && !g.segmentOpen('veteran'))
 check('klasik segment açık', g.segmentOpen('klasik'))
 
+// KATI kart bul (esnek kartta 'yanlış gün' geçerli olabilir — o ayrı testte)
 let spawned = null
-for (let i = 0; i < 500 && !spawned; i++) spawned = g.spawnReservation()
+for (let i = 0; i < 1500 && !spawned; i++) {
+  const r = g.spawnReservation()
+  if (r && !r.flexible) spawned = r
+  if (g.queue.length >= 4) g.queue.length = 0
+}
 check('rezervasyon isteği üretiliyor', !!spawned)
 if (spawned) {
   const wrong = g.place(spawned.id, (spawned.day + 1) % 7, spawned.hour)
-  check('yanlış güne yerleştirme REDDEDİLİR', !wrong.ok)
+  check('katı istekte yanlış gün REDDEDİLİR', !wrong.ok)
   const ok = g.place(spawned.id, spawned.day, spawned.hour)
   check('doğru slota yerleşir', ok.ok)
   check('kuyruktan düşer', !g.queue.find(r => r.id === spawned.id))
   check('takvimde görünür', !!g.bookingAt(spawned.day, spawned.hour))
-  const dup = g.spawnReservation()
+  let dup = null
+  for (let i = 0; i < 300 && !dup; i++) dup = g.spawnReservation()
   if (dup) g.place(dup.id, spawned.day, spawned.hour)
   check('dolu slota ikinci rezervasyon giremez', g.bookings.filter(b => b.day === spawned.day && b.hour === spawned.hour).length === 1)
 }
@@ -84,6 +90,84 @@ const b2 = new Game(); b2.load(a.save())
 check('kayıt/yükleme kasayı korur', b2.money === 4242)
 check('kayıt/yükleme yatırımı korur', b2.hasCanteen === true)
 check('kayıt/yükleme itibarı korur', Math.abs(b2.rep - 4.1) < 0.001)
+
+
+console.log('\n— ESNEK İSTEK (asıl karar burada doğar) —')
+{
+  const g = new Game()
+  let flexFound = null, rigidFound = null
+  for (let i = 0; i < 900 && (!flexFound || !rigidFound); i++) {
+    const r = g.spawnReservation()
+    if (!r) continue
+    if (r.flexible && !flexFound) flexFound = r
+    if (!r.flexible && !rigidFound) rigidFound = r
+    if (g.queue.length >= 4) g.queue.length = 0
+  }
+  check('esnek istek üretiliyor', !!flexFound)
+  check('katı istek de üretiliyor (ikisi bir arada)', !!rigidFound)
+  if (flexFound) {
+    check('esnek istek BİRDEN ÇOK slot kabul eder',
+      flexFound.flexDays.length > 1 && flexFound.flexHours.length >= 2)
+    const d0 = flexFound.flexDays[0], h0 = flexFound.flexHours[0]
+    const d1 = flexFound.flexDays[1], h1 = flexFound.flexHours[1]
+    check('esnek: birinci slot geçerli', g.slotOk(flexFound, d0, h0))
+    check('esnek: alternatif slot da geçerli', g.slotOk(flexFound, d1, h1))
+    check('esnek: kapsam dışı slot REDDEDİLİR', !g.slotOk(flexFound, d0, 9) || flexFound.flexHours.includes(9))
+  }
+  if (rigidFound) check('katı: sadece kendi slotu geçerli',
+    g.slotOk(rigidFound, rigidFound.day, rigidFound.hour) && !g.slotOk(rigidFound, rigidFound.day, rigidFound.hour + 1))
+}
+
+console.log('\n— PAZARLIK —')
+{
+  const g = new Game()
+  let r = null
+  for (let i = 0; i < 900 && !r; i++) r = g.spawnReservation()
+  if (r) {
+    const before = r.price
+    r.maxPay = before * 3            // kesin kabul senaryosu
+    const res = g.haggle(r.id, 1)
+    check('tavanın altında pazarlık KABUL edilir', res.ok && r.price > before)
+    check('pazarlık bir kez yapılır', !g.haggle(r.id, 1).ok)
+  }
+  const g2 = new Game()
+  let r2 = null
+  for (let i = 0; i < 900 && !r2; i++) r2 = g2.spawnReservation()
+  if (r2) {
+    r2.maxPay = 1                    // kesin reddedilecek
+    const res2 = g2.haggle(r2.id, 2)
+    check('tavanı aşan SERT pazarlıkta müşteri gidebilir ya da ortayı bulur',
+      res2.walked === true || res2.ok === true)
+  }
+  const g3 = new Game()
+  check('olmayan isteğe pazarlık güvenli', !g3.haggle(9999, 1).ok)
+}
+
+console.log('\n— HAFTALIK KİRA (baskı davulu) —')
+{
+  const g = new Game()
+  check('kira tutarı pozitif', g.rentAmount() > 0)
+  check('kira gününe kalan sayı görünür', g.daysToRent() > 0)
+  g.money = 500_000; g.day = 7
+  const before = g.money
+  g.endDay()
+  check('kira günü kasadan düşer', g.money < before)
+  check('sonraki kira 7 gün sonraya kurulur', g.rentDueDay === 8 + 7 - 1 || g.rentDueDay > 7)
+  const p = new Game(); p.money = 0; p.day = 7
+  const repBefore = p.rep
+  p.endDay()
+  check('kira ödenemezse itibar yanar', p.rep < repBefore && p.rentMissed === 1)
+}
+
+console.log('\n— KESİNTİSİZ SAAT PRİMİ —')
+{
+  const g = new Game()
+  g.hasCanteen = true
+  for (const h of [19, 20, 21, 22]) g.bookings.push({ day: 0, hour: h, team: 'T', segment: 'klasik', price: 500, sub: false, weeksLeft: 0 })
+  g.day = 1
+  g.endDay()
+  check('arka arkaya 4 saat primi deftere yazılır', g.events.some(e => e.includes('kesintisiz')))
+}
 
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

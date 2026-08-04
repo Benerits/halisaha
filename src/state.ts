@@ -49,14 +49,20 @@ export interface Reservation {
   id: number
   team: string
   segment: SegmentId
-  /** istenen gün (0-6) — esnekse -1 */
+  /** KATI istekte tek gün; ESNEKte kabul edilen günler */
   day: number
-  /** istenen saat — esnekse -1 */
   hour: number
+  /** esnek mi — birden çok slota konabilir (asıl karar burada doğar) */
+  flexible: boolean
+  flexDays: number[]
+  flexHours: number[]
+  /** müşterinin teklifi */
   price: number
-  /** abonelik teklifi mi (kaç hafta) */
+  /** GİZLİ: en fazla ödeyeceği (pazarlık bunun üstünde patlar) */
+  maxPay: number
+  /** pazarlık yapıldı mı (bir kez) */
+  haggled: boolean
   weeks: number
-  /** kart ekranda kalma süresi (sn) */
   patience: number
   maxPatience: number
 }
@@ -158,6 +164,11 @@ export class Game {
 
   /** belge geçerliliği 0-1 (1 = tam) — sıfıra yaklaşınca denetimde ceza */
   docs = 1
+  /** HAFTALIK KİRA — 7 günde bir öde; ödeyemezsen itibar yanar (baskı davulu) */
+  rentDueDay = 7
+  rentMissed = 0
+  rentAmount(): number { return 12_000 + (this.pitches - 1) * 4_000 }
+  daysToRent(): number { return Math.max(0, this.rentDueDay - this.day + 1) }
 
   // ---- türetilmiş ----
   get slotCount() { return this.pitches * 7 * HOURS.length }
@@ -215,14 +226,36 @@ export class Game {
     if (this.bookingAt(day, hour) && this.pitches < 2) return null
     const weeks = Math.random() < 0.28 ? (Math.random() < 0.5 ? 4 : 8) : 0
     const raw = this.basePrice() * seg.priceMult * (weeks > 0 ? 0.82 : 1)
+    // ESNEK İSTEK (%60): "hafta içi akşam olsun" → hangi slota koyacağına SEN karar verirsin
+    const flexible = Math.random() < 0.6
+    const flexDays: number[] = []
+    const flexHours: number[] = []
+    if (flexible) {
+      const weekendOnly = Math.random() < 0.25
+      for (let d = 0; d < 7; d++) if (weekendOnly ? d >= 5 : d < 5) flexDays.push(d)
+      const span = 2 + Math.floor(Math.random() * 2)
+      for (let k = 0; k < span; k++) { const hh = hour + k; if (hh < CLOSE_HOUR) flexHours.push(hh) }
+    }
+    // TUTARLILIK: esnek kartın temel gün/saati kendi kümesinin İÇİNDE olmalı
+    let baseDay = day, baseHour = hour
+    if (flexible) {
+      if (!flexDays.includes(baseDay)) baseDay = flexDays[Math.floor(Math.random() * flexDays.length)]
+      if (!flexHours.includes(baseHour)) baseHour = flexHours[0]
+    }
+    const team = TEAM_NAMES[Math.floor(Math.random() * TEAM_NAMES.length)]
+    // GİZLİ TAVAN: talep + doluluk + sadakat okunabilir sinyallerden türer
+    const dem = hourDemand(hour, day)
+    const lever = 1 + dem * 0.35 + this.occupancy() * 0.5 + (seg.id === 'kurumsal' ? 0.25 : 0)
+      - (seg.id === 'genclik' ? 0.12 : 0)
     const r: Reservation = {
       id: this.nextId++,
-      team: TEAM_NAMES[Math.floor(Math.random() * TEAM_NAMES.length)],
-      segment: seg.id,
-      day, hour,
+      team, segment: seg.id,
+      day: baseDay, hour: baseHour, flexible, flexDays, flexHours,
       price: Math.round(raw / 10) * 10,
+      maxPay: Math.round(raw * lever / 10) * 10,
+      haggled: false,
       weeks,
-      patience: 30, maxPatience: 30,
+      patience: 34, maxPatience: 34,
     }
     this.queue.push(r)
     return r
@@ -235,8 +268,11 @@ export class Game {
     const r = this.queue[i]
     if (this.bookingAt(day, hour)) return { ok: false, msg: 'O saat dolu.' }
     if (hour < OPEN_HOUR || hour >= CLOSE_HOUR) return { ok: false, msg: 'Tesis o saatte kapalı.' }
-    // katı istek: istediği saatten sapma varsa reddeder
-    if (r.day !== day || r.hour !== hour) return { ok: false, msg: `${r.team} sadece ${DAY_NAMES[r.day]} ${r.hour}:00 istiyor.` }
+    if (!this.slotOk(r, day, hour)) {
+      return r.flexible
+        ? { ok: false, msg: `${r.team} bu saati kabul etmiyor — yanıp sönen slotlardan birini seç.` }
+        : { ok: false, msg: `${r.team} sadece ${DAY_NAMES[r.day]} ${r.hour}:00 istiyor.` }
+    }
     this.queue.splice(i, 1)
     this.bookings.push({
       day, hour, team: r.team, segment: r.segment, price: r.price,
@@ -245,6 +281,43 @@ export class Game {
     if (r.weeks > 0) { if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] } this.gSubs++ }
     return { ok: true, msg: r.weeks > 0 ? `${r.team} ${r.weeks} hafta abone oldu!` : `${r.team} rezervasyonu alındı.` }
   }
+
+  /** bu kart bu slota konabilir mi (esnek istek desteği) */
+  slotOk(r: Reservation, day: number, hour: number): boolean {
+    if (!r.flexible) return r.day === day && r.hour === hour
+    return r.flexDays.includes(day) && r.flexHours.includes(hour)
+  }
+
+  /** PAZARLIK — bir kez. level 1 = ölçülü, 2 = sert. */
+  haggle(resId: number, level: 1 | 2): { ok: boolean; msg: string; walked?: boolean } {
+    const i = this.queue.findIndex(x => x.id === resId)
+    if (i < 0) return { ok: false, msg: 'İstek artık yok.' }
+    const r = this.queue[i]
+    if (r.haggled) return { ok: false, msg: 'Bu takımla zaten pazarlık ettin.' }
+    r.haggled = true
+    const ask = Math.round(r.price * (level === 1 ? 1.25 : 1.5) / 10) * 10
+    const loyal = this.loyalty[r.team] ?? 0
+    if (ask <= r.maxPay) {
+      r.price = ask
+      if (r.weeks > 0 || loyal > 0) this.loyalty[r.team] = loyal - (level === 1 ? 0.5 : 1.2) // müdavimi sıkmanın bedeli
+      return { ok: true, msg: `${r.team} kabul etti — ₺${ask.toLocaleString('tr-TR')}` }
+    }
+    // tavanı aştın: ölçülüyse ortayı bulur, sertse çeker gider
+    const midChance = level === 1 ? 0.72 : 0.25
+    if (Math.random() < midChance) {
+      const mid = Math.round((r.price + r.maxPay) / 2 / 10) * 10
+      r.price = mid
+      this.loyalty[r.team] = loyal - 0.4
+      return { ok: true, msg: `${r.team} ortada buluştu — ₺${mid.toLocaleString('tr-TR')}` }
+    }
+    this.queue.splice(i, 1)
+    this.rep = Math.max(0, this.rep - 0.06)
+    this.loyalty[r.team] = loyal - 2
+    return { ok: false, walked: true, msg: `${r.team} "çok oldu abi" deyip kapattı.` }
+  }
+
+  /** müdavim sadakati — sıkıştırdıkça düşer, aboneliği yenilemeyi belirler */
+  loyalty: Record<string, number> = {}
 
   /** her saniye */
   tick(dt: number) {
@@ -271,9 +344,14 @@ export class Game {
   /** gün sonu: gelir tahsil, gider düş, abonelikleri işle */
   endDay() {
     const todays = this.bookings.filter(b => b.day === (this.day - 1) % 7)
+    // KESİNTİSİZ SAAT PRİMİ: arka arkaya dolu saatler kantini patlatır
+    const hoursSet = new Set(todays.map(b => b.hour))
+    let bestRun = 0, run = 0
+    for (const h of HOURS) { if (hoursSet.has(h)) { run++; bestRun = Math.max(bestRun, run) } else run = 0 }
+    const runBonus = bestRun >= 3 ? 1 + Math.min(0.3, (bestRun - 2) * 0.1) : 1
     let income = 0
     for (const b of todays) {
-      income += b.price + this.extraPerMatch()
+      income += b.price + Math.round(this.extraPerMatch() * runBonus)
       // abonelik haftası tüket
       if (b.sub) {
         b.weeksLeft--
@@ -298,10 +376,24 @@ export class Game {
     this.lastDayProfit = income - upkeep
     this.incomeToday = income
     this.expenseToday = upkeep
+    // KİRA GÜNÜ
+    if (this.day >= this.rentDueDay) {
+      const rent = this.rentAmount()
+      if (this.money >= rent) {
+        this.money -= rent
+        this.events.push(`Haftalık kira ödendi: ₺${rent.toLocaleString('tr-TR')}`)
+      } else {
+        this.rentMissed++
+        this.rep = Math.max(0, this.rep - 0.5)
+        this.events.push(`KİRA ÖDENEMEDİ! (₺${rent.toLocaleString('tr-TR')}) — itibar düştü.`)
+      }
+      this.rentDueDay = this.day + 7
+    }
     this.day++
     // memnuniyet: dolulukla hafif artar
     if (todays.length > 0) this.rep = Math.min(5, this.rep + 0.03)
-    this.events.push(`Gün ${this.day - 1}: ${todays.length} maç · gelir ₺${income.toLocaleString('tr-TR')} · gider ₺${upkeep.toLocaleString('tr-TR')}`)
+    this.events.push(`Gün ${this.day - 1}: ${todays.length} maç · gelir ₺${income.toLocaleString('tr-TR')} · gider ₺${upkeep.toLocaleString('tr-TR')}`
+      + (bestRun >= 3 ? ` · ${bestRun} saat kesintisiz (+%${Math.round((runBonus - 1) * 100)} kantin)` : ''))
     // denetim riski: belgeler zayıfsa
     if (this.docs < 0.35 && Math.random() < 0.4) {
       const fine = Math.round(this.basePrice() * 1.5)
@@ -326,7 +418,7 @@ export class Game {
         desc: 'Işık kalitesi akşam maçlarını çeker; elektrik gideri artar.', owned: this.hasLights, locked: null },
       { id: 'shower', label: 'Duş & Soyunma', gain: 'İtibar +0,5', cost: 18_000, upkeep: 70,
         desc: 'Kalite algısını yükseltir, abonelikler daha uzun sürer.', owned: this.hasShower, locked: null },
-      { id: 'pitch2', label: '2. Halı Saha', gain: 'Aynı saate 2 maç', cost: 120_000, upkeep: 200,
+      { id: 'pitch2', label: '2. Halı Saha', gain: 'Aynı saate 2 maç', cost: 62_000, upkeep: 200,
         desc: 'Kapasiteyi ikiye katlar — prime time çakışmaları biter.', owned: this.pitches >= 2, locked: null },
       { id: 'schooldeal', label: 'Okul Anlaşması', gain: 'Gençlik segmenti açılır (14-18)', cost: 12_000, upkeep: 0,
         desc: 'Öğleden sonra ölü saatleri okul takımlarıyla doldurursun.', owned: this.hasSchoolDeal, locked: null },
@@ -450,7 +542,7 @@ export class Game {
     if (!this.hasBillboard) return { label: 'Reklam panolarını as', have: this.money, need: 11_000 }
     if (!this.hasRoadSign) return { label: 'Yol tabelası dik', have: this.money, need: 16_000 }
     if (!this.hasShower) return { label: 'Duş & soyunma yenile', have: this.money, need: 18_000 }
-    if (this.pitches < 2) return { label: '2. halı sahayı aç', have: this.money, need: 120_000 }
+    if (this.pitches < 2) return { label: '2. halı sahayı aç', have: this.money, need: 62_000 }
     return null
   }
 
@@ -511,6 +603,7 @@ export class Game {
       hasSchoolDeal: this.hasSchoolDeal, hasTeaRoom: this.hasTeaRoom, hasCorporate: this.hasCorporate,
       staff: this.staff, docService: this.docService, docs: this.docs,
       hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,
+      rentDueDay: this.rentDueDay, rentMissed: this.rentMissed, loyalty: this.loyalty,
       ownedParcels: this.ownedParcels, builds: this.builds,
     }
   }
@@ -524,6 +617,8 @@ export class Game {
     this.hasTeaRoom = b('hasTeaRoom'); this.hasCorporate = b('hasCorporate'); this.docService = b('docService')
     this.hasBillboard = b('hasBillboard'); this.hasRoadSign = b('hasRoadSign')
     if (Array.isArray(d.bookings)) this.bookings = d.bookings as Booking[]
+    this.rentDueDay = n('rentDueDay', 7); this.rentMissed = n('rentMissed', 0)
+    if (d.loyalty && typeof d.loyalty === 'object') this.loyalty = d.loyalty as Record<string, number>
     if (Array.isArray(d.ownedParcels)) this.ownedParcels = d.ownedParcels as string[]
     if (Array.isArray(d.builds)) this.builds = d.builds as PlacedBuild[]
   }
