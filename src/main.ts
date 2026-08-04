@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three'
 import { World } from './world'
+import { audio } from './audio'
 import { Game, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, type BuyId } from './state'
 
 const SAVE_KEY = 'halisaha-save-v1'
@@ -61,6 +62,7 @@ function renderCal() {
     el.addEventListener('click', () => {
       if (selected === null) { toast('Önce soldan bir istek seç.'); return }
       const r = game.place(selected, Number(el.dataset.d), Number(el.dataset.h))
+      if (r.ok) audio.place(); else audio.bad()
       toast(r.msg, r.ok ? 'g' : 'b')
       if (r.ok) { selected = null; save() }
       renderAll()
@@ -88,10 +90,33 @@ function renderQueue() {
   list.querySelectorAll<HTMLElement>('.rcard').forEach(el => {
     el.addEventListener('click', () => {
       selected = Number(el.dataset.id)
+      audio.click()
       renderQueue(); renderCal()
       toast('Takvimde yanıp sönen kutuya tıkla.')
     })
   })
+}
+
+// ---------- hedefler (oyunda tutan kısa döngü) ----------
+function renderGoals() {
+  const gs = game.goals()
+  const ms = game.nextMilestone()
+  const done = gs.filter(g => g.done).length
+  let h = `<div class="gh"><span>Günün Hedefleri</span><span>${done}/${gs.length}</span></div><div class="gb">`
+  for (const g of gs) {
+    const pct = Math.min(100, Math.round((g.now / g.need) * 100))
+    h += `<div class="goal ${g.done ? 'ok' : ''}">
+      <div class="gl"><span>${g.done ? '✓ ' : ''}${g.label}</span>
+        <span class="gv">${g.done ? '<span class="grew">+₺' + tl(g.reward) + '</span>' : tl(g.now) + '/' + tl(g.need)}</span></div>
+      <div class="gbar"><i style="width:${pct}%"></i></div></div>`
+  }
+  if (ms) {
+    const pct = Math.min(100, Math.round((ms.have / ms.need) * 100))
+    h += `<div class="mstone"><div class="ml">Sıradaki: ${ms.label}</div>
+      <div class="gbar"><i style="width:${pct}%"></i></div>
+      <div class="mv">₺${tl(Math.max(0, ms.need - ms.have))} kaldı</div></div>`
+  }
+  $('goals').innerHTML = h + '</div>'
 }
 
 // ---------- öneri kartları (sıfır sürtünme çekirdeği) ----------
@@ -113,6 +138,7 @@ function renderTips() {
 
 function doBuy(id: BuyId) {
   const r = game.buy(id)
+  if (r.ok) audio.build(); else audio.bad()
   toast(r.msg, r.ok ? 'g' : 'b')
   if (r.ok) {
     if (id === 'pitch2') world.buildPitch(0, 5.2)
@@ -159,7 +185,16 @@ function renderOffice() {
   }
 }
 
-$('officebtn').addEventListener('click', () => { $('office').classList.add('show'); renderOffice() })
+$('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
+$('zout').addEventListener('click', () => { world.zoomBy(1.22); audio.click() })
+addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#office,#tips,#goals')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
+$('sfxbtn').addEventListener('click', () => {
+  const on = audio.toggle()
+  $('sfxbtn').classList.toggle('off', !on)
+  $('sfxbtn').textContent = on ? 'SES' : 'SESSİZ'
+})
+addEventListener('pointerdown', () => audio.ensure(), { once: true })
+$('officebtn').addEventListener('click', () => { audio.click(); $('office').classList.add('show'); renderOffice() })
 $('closeoffice').addEventListener('click', () => $('office').classList.remove('show'))
 document.querySelectorAll<HTMLElement>('.tab').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'))
@@ -178,7 +213,7 @@ function renderHud() {
   repChip.classList.toggle('warn', game.rep < 2.5)
 }
 
-function renderAll() { renderHud(); renderQueue(); renderCal(); renderTips() }
+function renderAll() { renderHud(); renderQueue(); renderCal(); renderGoals(); renderTips() }
 
 function save() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())) } catch { /* kota */ }
@@ -197,12 +232,21 @@ function frame() {
 
   const prevDay = game.day
   game.tick(dt)
-  if (game.day !== prevDay) { toast(`Gün ${game.day} · dün ₺${tl(game.lastDayProfit)} kâr`, game.lastDayProfit >= 0 ? 'g' : 'b'); save() }
+  if (game.day !== prevDay) {
+    audio.day()
+    toast(`Gün ${game.day} · dün ₺${tl(game.lastDayProfit)} kâr`, game.lastDayProfit >= 0 ? 'g' : 'b'); save()
+  }
+  for (const g of game.claimGoals()) { audio.cash(); toast(`HEDEF TAMAM: ${g.label} · +₺${tl(g.reward)}`, 'g') }
 
   // rezervasyon üretimi
   spawnT -= dt
   if (spawnT <= 0) { spawnT = 3 + Math.random() * 3
-    for (let k = 0; k < 6; k++) if (game.spawnReservation()) { renderQueue(); break } }
+    for (let k = 0; k < 6; k++) if (game.spawnReservation()) {
+      renderQueue(); audio.ring()
+      const hd = document.querySelector('#qcol .desk-head') as HTMLElement | null
+      if (hd) { hd.classList.remove('ringing'); void hd.offsetWidth; hd.classList.add('ringing') }
+      break
+    } }
 
   // gün-gece
   const frac = game.t / DAY_SECONDS

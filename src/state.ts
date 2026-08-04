@@ -211,6 +211,7 @@ export class Game {
       day, hour, team: r.team, segment: r.segment, price: r.price,
       sub: r.weeks > 0, weeksLeft: r.weeks,
     })
+    if (r.weeks > 0) { if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] } this.gSubs++ }
     return { ok: true, msg: r.weeks > 0 ? `${r.team} ${r.weeks} hafta abone oldu!` : `${r.team} rezervasyonu alındı.` }
   }
 
@@ -259,6 +260,8 @@ export class Game {
         this.bookings = this.bookings.filter(x => x !== b)
       }
     }
+    this.gMatches += todays.length
+    this.gEarned += income
     const upkeep = this.dailyUpkeep()
     this.money += income - upkeep
     this.lastDayProfit = income - upkeep
@@ -330,6 +333,56 @@ export class Game {
     }
     this.events.push(`${it.label} alındı.`)
     return { ok: true, msg: `${it.label} hazır — ${it.gain}` }
+  }
+
+  // ---- GÜNLÜK HEDEFLER (oyuncuyu tutan kısa döngü) ----
+  goalDay = 0
+  gMatches = 0        // bugün oynanan maç
+  gEarned = 0         // bugün kazanılan
+  gSubs = 0           // bugün yapılan abonelik
+  goalsDone: string[] = []
+
+  /** gün başında hedefler sıfırlanır */
+  private resetGoals() {
+    this.goalDay = this.day
+    this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = []
+  }
+
+  goals(): { id: string; label: string; now: number; need: number; reward: number; done: boolean }[] {
+    if (this.goalDay !== this.day) this.resetGoals()
+    const needM = Math.min(6, 2 + Math.floor(this.day / 4))
+    const needE = 1500 + this.day * 250
+    return [
+      { id: 'm', label: `${needM} maç oynat`, now: this.gMatches, need: needM,
+        reward: 800 + this.day * 40, done: this.goalsDone.includes('m') },
+      { id: 'e', label: `₺${needE.toLocaleString('tr-TR')} kazan`, now: Math.round(this.gEarned), need: needE,
+        reward: 1000 + this.day * 50, done: this.goalsDone.includes('e') },
+      { id: 's', label: 'Bir abonelik bağla', now: this.gSubs, need: 1,
+        reward: 1500, done: this.goalsDone.includes('s') },
+    ]
+  }
+
+  /** hedef tamamlandıysa ödülü ver — main her tikte çağırır */
+  claimGoals(): { label: string; reward: number }[] {
+    const out: { label: string; reward: number }[] = []
+    for (const g of this.goals()) {
+      if (!g.done && g.now >= g.need) {
+        this.goalsDone.push(g.id)
+        this.money += g.reward
+        out.push({ label: g.label, reward: g.reward })
+      }
+    }
+    return out
+  }
+
+  /** SIRADAKİ BÜYÜK HEDEF — uzun döngü (D11 kalıbı: ne kadar kaldı görünsün) */
+  nextMilestone(): { label: string; have: number; need: number } | null {
+    if (!this.hasCanteen) return { label: 'Kantin kur', have: this.money, need: 9_000 }
+    if (!this.hasLights) return { label: 'LED projektör tak', have: this.money, need: 14_000 }
+    if (!this.hasSchoolDeal) return { label: 'Okul anlaşması yap', have: this.money, need: 12_000 }
+    if (!this.hasShower) return { label: 'Duş & soyunma yenile', have: this.money, need: 18_000 }
+    if (this.pitches < 2) return { label: '2. halı sahayı aç', have: this.money, need: 120_000 }
+    return null
   }
 
   // ---- ÖNERİ KARTLARI (sıfır sürtünme çekirdeği) ----

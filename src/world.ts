@@ -77,7 +77,7 @@ export class World {
     addEventListener('resize', () => this.onResize())
   }
 
-  private onResize() {
+  onResize() {
     const a = innerWidth / innerHeight
     this.camera.left = -this.zoom * a / 2; this.camera.right = this.zoom * a / 2
     this.camera.top = this.zoom / 2; this.camera.bottom = -this.zoom / 2
@@ -374,6 +374,11 @@ export class World {
     for (const m of this.lightMats) m.color.setHex(on ? 0xfff6d2 : 0x3a4148)
     for (const bm of this.beams) (bm.material as THREE.MeshBasicMaterial).opacity = on ? 0.07 * n : 0
     if (on) { this.hemi.intensity += 0.30; this.sun.intensity += 0.12 }
+  }
+
+  zoomBy(f: number) {
+    this.zoom = Math.max(12, Math.min(60, this.zoom * f))
+    this.onResize()
   }
 
   render() { this.renderer.render(this.scene, this.camera) }
