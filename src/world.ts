@@ -599,6 +599,76 @@ export class World {
     return g
   }
 
+  // ---- İNŞAAT: 3D izometrik önizleme + elde taşıma hayaleti (BenelOil mekaniği) ----
+  private thumbCache = new Map<string, string>()
+  private thumbRenderer: THREE.WebGLRenderer | null = null
+  /** yapıyı offscreen izometrik render edip dataURL döner (katalog görseli) */
+  renderThumb(kind: BuildKind): string {
+    const hit = this.thumbCache.get(kind)
+    if (hit) return hit
+    const g = this.makeBuild(kind, 0, 0)
+    this.scene.remove(g)
+    const sc = new THREE.Scene()
+    sc.add(new THREE.HemisphereLight(0xffffff, 0x99aa88, 1.15))
+    const dl = new THREE.DirectionalLight(0xfff4e0, 1.0); dl.position.set(8, -10, 14); sc.add(dl)
+    const base = new THREE.Mesh(new THREE.PlaneGeometry(15, 11), new THREE.MeshLambertMaterial({ color: 0x86a763 }))
+    sc.add(base); sc.add(g)
+    const cam = new THREE.OrthographicCamera(-8.6, 8.6, 6.4, -6.4, -60, 120)
+    cam.up.set(0, 0, 1); cam.position.set(11, -22, 11); cam.lookAt(0, 0, 0.8)
+    if (!this.thumbRenderer) {
+      this.thumbRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+      this.thumbRenderer.setSize(148, 110)
+      this.thumbRenderer.outputColorSpace = THREE.SRGBColorSpace
+    }
+    this.thumbRenderer.render(sc, cam)
+    const url = this.thumbRenderer.domElement.toDataURL()
+    sc.remove(g)
+    this.thumbCache.set(kind, url)
+    return url
+  }
+
+  private ghost: THREE.Group | null = null
+  private ghostRing: THREE.Mesh | null = null
+  /** yapıyı ELİNE VER: yarı saydam hayalet imleci izler */
+  startGhost(kind: BuildKind) {
+    this.clearGhost()
+    const g = this.makeBuild(kind, 0, 0)
+    this.scene.remove(g)
+    g.traverse(o => {
+      const m = o as THREE.Mesh
+      if (m.isMesh) {
+        const mat = (m.material as THREE.Material).clone()
+        mat.transparent = true; mat.opacity = 0.55
+        m.material = mat
+      }
+    })
+    const ring = new THREE.Mesh(new THREE.RingGeometry(4.6, 5.1, 36),
+      new THREE.MeshBasicMaterial({ color: 0x2f9e57, transparent: true, opacity: 0.85, side: THREE.DoubleSide }))
+    ring.position.z = 0.12
+    g.add(ring)
+    this.ghostRing = ring
+    g.visible = false
+    this.scene.add(g)
+    this.ghost = g
+  }
+  /** hayaleti imlecin altındaki parsele oturt; parseli döner */
+  moveGhost(cx: number, cy: number): { c: number; r: number } | null {
+    if (!this.ghost) return null
+    const hit = this.pickParcel(cx, cy)
+    if (!hit) { this.ghost.visible = false; return null }
+    const [x, y] = this.parcelCenter(hit.c, hit.r)
+    this.ghost.visible = true
+    this.ghost.position.set(x, y, 0.25)
+    return hit
+  }
+  /** halka rengi: yeşil = kurulabilir, kırmızı = olmaz */
+  setGhostOk(ok: boolean) {
+    if (this.ghostRing) (this.ghostRing.material as THREE.MeshBasicMaterial).color.setHex(ok ? 0x2f9e57 : 0xd64545)
+  }
+  clearGhost() {
+    if (this.ghost) { this.scene.remove(this.ghost); this.ghost = null; this.ghostRing = null }
+  }
+
   /** ekran koordinatından arsa bul */
   pickParcel(clientX: number, clientY: number): { c: number; r: number } | null {
     const nx = (clientX / innerWidth) * 2 - 1

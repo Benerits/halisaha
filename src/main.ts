@@ -120,7 +120,7 @@ function renderCal() {
   const cal = $('cal')
   const N = game.pitches
   const fullN = game.fullPitchCount()
-  const laneLbl = (l: number) => l < fullN ? `S${l + 1}` : `M${l - fullN + 1}`
+  const laneLbl = (l: number) => l < fullN ? `Saha ${l + 1}` : `Mini ${l - fullN + 1}`
   const cellHint = (r: typeof sel, hour: number, lane: number): boolean => {
     if (!r) return false
     if (!game.canPlaceAt(r, viewDay, hour)) return false
@@ -388,9 +388,23 @@ const buildDone = (k: BuildKind): boolean =>
 function startPlacing(k: BuildKind) {
   pendingBuild = k
   $('office').classList.remove('show')
-  toast(`${BUILDS[k].label} — kendi BOŞ arsana tıkla (yeşil sınırlı parseller).`)
+  world.startGhost(k)
+  toast(`${BUILDS[k].label} elinde — arsaya taşı, tıkla kur. Sağ tık / ESC: vazgeç.`)
   audio.click()
 }
+function cancelPlacing(msg = true) {
+  if (!pendingBuild) return
+  pendingBuild = null
+  world.clearGhost()
+  if (msg) toast('İnşaat iptal edildi.')
+}
+addEventListener('keydown', e => { if (e.key === 'Escape') cancelPlacing() })
+addEventListener('contextmenu', e => { if (pendingBuild) { e.preventDefault(); cancelPlacing() } })
+addEventListener('pointermove', e => {
+  if (!pendingBuild) return
+  const hit = world.moveGhost(e.clientX, e.clientY)
+  if (hit) world.setGhostOk(game.ownsParcel(hit.c, hit.r) && !game.buildAt(hit.c, hit.r))
+})
 
 function renderOffice() {
   const body = $('pbody')
@@ -463,7 +477,7 @@ function renderOffice() {
       <div class="bgrid">${(Object.keys(BUILDS) as BuildKind[]).map(k => {
         const b = BUILDS[k]
         const done = buildDone(k)
-        return `<div class="bcard ${done ? 'done' : ''}">${THUMB[k]}
+        return `<div class="bcard ${done ? 'done' : ''}"><img src="${world.renderThumb(k)}" width="74" height="55" style="border-radius:8px; flex-shrink:0" alt="">
           <div class="bi"><div class="bn">${b.label}</div>
             <div class="bg2">${b.gain}</div>
             <div class="bd">${b.desc}</div></div>
@@ -580,6 +594,7 @@ function openParcel(c: number, r: number) {
 // SAHNE GEZİNME: sürükle → kaydır, bırak → (hareket yoksa) arsa tıklaması
 let dragging = false, dragMoved = 0, lastX = 0, lastY = 0
 addEventListener('pointerdown', e => {
+  if (pendingBuild) return
   if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud')) return
   dragging = true; dragMoved = 0; lastX = e.clientX; lastY = e.clientY
 })
@@ -593,27 +608,30 @@ addEventListener('pointermove', e => {
 })
 addEventListener('pointerup', e => {
   document.body.style.cursor = ''
+  // ELİNDE YAPI VARKEN: sürükleme kontrolünden ÖNCE yerleştir (pan bu modda kapalı)
+  if (pendingBuild) {
+    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar')) return
+    const hit = world.pickParcel(e.clientX, e.clientY)
+    if (!hit) return
+    const k = pendingBuild
+    if (!game.ownsParcel(hit.c, hit.r)) { toast('Bu arsa senin değil — önce satın al.', 'b'); audio.bad(); openParcel(hit.c, hit.r); return }
+    if (game.buildAt(hit.c, hit.r)) { toast('Bu arsa dolu — boş arsana taşı.', 'b'); audio.bad(); return }
+    const res = game.placeBuild(hit.c, hit.r, k)
+    if (res.ok) {
+      pendingBuild = null
+      world.clearGhost()
+      audio.build(); toast(res.msg, 'g')
+      save(); world.syncParcels(game.ownedParcels, game.builds); renderAll()
+    } else { audio.bad(); toast(res.msg, 'b') }
+    return
+  }
   if (!dragging) return
   dragging = false
   if (dragMoved > 6) return                    // sürükleme yaptıysa tıklama sayma
   if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud')) return
   if (world.pickYazihane(e.clientX, e.clientY)) { openOffice(); return }
   const hit = world.pickParcel(e.clientX, e.clientY)
-  if (hit) {
-    if (pendingBuild) {
-      const k = pendingBuild
-      if (!game.ownsParcel(hit.c, hit.r)) { toast('Bu arsa senin değil — önce satın al.', 'b'); audio.bad(); openParcel(hit.c, hit.r); return }
-      if (game.buildAt(hit.c, hit.r)) { toast('Bu arsa dolu — boş arsana tıkla.', 'b'); audio.bad(); return }
-      const res = game.placeBuild(hit.c, hit.r, k)
-      if (res.ok) {
-        pendingBuild = null
-        audio.build(); toast(res.msg, 'g')
-        save(); world.syncParcels(game.ownedParcels, game.builds); renderAll()
-      } else { audio.bad(); toast(res.msg, 'b') }
-      return
-    }
-    audio.click(); openParcel(hit.c, hit.r)
-  }
+  if (hit) { audio.click(); openParcel(hit.c, hit.r) }
 })
 
 $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
