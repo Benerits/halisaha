@@ -548,7 +548,10 @@ function renderOffice() {
         <span class="ds">Arka plan melodisi.
           <input type="range" id="musvol" min="0" max="100" value="${Math.round(audio.musicVol * 100)}" style="width:100%; margin-top:6px; accent-color:var(--green)"></span></div>
       <div class="srow"><span class="nm">Dil / Language</span>
-        <button class="buy" id="langrow" style="background:${lang === 'en' ? 'var(--sky)' : 'var(--green)'}">${lang === 'en' ? 'English' : 'Türkçe'}</button>
+        <span style="display:flex; gap:6px">
+          <button class="buy" id="langtr" style="background:${lang === 'tr' ? 'var(--green)' : 'var(--paper-2)'}; color:${lang === 'tr' ? '#fff' : 'var(--ink)'}">Türkçe</button>
+          <button class="buy" id="langen" style="background:${lang === 'en' ? 'var(--green)' : 'var(--paper-2)'}; color:${lang === 'en' ? '#fff' : 'var(--ink)'}">English</button>
+        </span>
         <span class="ds">UI language. Game flavor texts stay Turkish (it's a mahalle game).</span></div>
       <div class="srow"><span class="nm">Kamera</span>
         <button class="buy" id="camreset">Görünümü sıfırla</button>
@@ -565,11 +568,8 @@ function renderOffice() {
       audio.setSfxVol(Number((e.target as HTMLInputElement).value) / 100))
     ;($('musvol') as HTMLInputElement).addEventListener('input', e =>
       audio.setMusicVol(Number((e.target as HTMLInputElement).value) / 100))
-    $('langrow').addEventListener('click', () => {
-      setLang(lang === 'en' ? 'tr' : 'en')
-      renderOffice(); renderAll()
-      toast(lang === 'en' ? 'Language: English' : 'Dil: Türkçe', 'g')
-    })
+    $('langtr').addEventListener('click', () => { setLang('tr'); renderOffice(); renderAll(); toast('Dil: Türkçe', 'g') })
+    $('langen').addEventListener('click', () => { setLang('en'); renderOffice(); renderAll(); toast('Language: English', 'g') })
     $('camreset').addEventListener('click', () => { world.resetCam(); audio.click() })
     const lo = document.getElementById('alogout')
     if (lo) lo.addEventListener('click', () => { auth.logout(); location.reload() })
@@ -834,6 +834,17 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
 
   const prevDay = game.day
+  // misafir gün 3'e geldiyse: günde bir kez 'hesap aç' dürtmesi (ilerleme risk mesajıyla)
+  if (!auth.loggedIn() && game.day >= 3 && localStorage.getItem('hs-regnudge') !== String(game.day)
+      && !$('gate').classList.contains('show')) {
+    localStorage.setItem('hs-regnudge', String(game.day))
+    const gr = document.getElementById('greason')
+    if (gr) {
+      gr.style.display = 'block'
+      gr.textContent = `${game.day}. gündesin ve ilerlemen SADECE bu cihazda. Hesap aç: buluta taşınsın + ₺2.500 hediye.`
+    }
+    $('gate').classList.add('show')
+  }
   const gateOpen = $('gate').classList.contains('show')
   if (!gateOpen) game.tick(dt)
   while (game.notices.length) { toast(game.notices.shift()!, 'g'); audio.place() }
@@ -1037,7 +1048,13 @@ setInterval(() => {
     save()
     setTimeout(() => toast('Hoş geldin! Kayıt hediyesi: +₺2.500 kasanda.', 'g'), 1600)
   }
-  fetch('/api/visit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) }).catch(() => {})
+  const utm = new URLSearchParams(location.search)
+  fetch('/api/visit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+    ref: document.referrer.slice(0, 200),
+    utm: [utm.get('utm_source'), utm.get('utm_medium'), utm.get('utm_campaign')].filter(Boolean).join('/').slice(0, 120),
+    lang, screen: `${screen.width}x${screen.height}`,
+    guest: !auth.loggedIn(),
+  }) }).catch(() => {})
   if (auth.loggedIn()) {
     try {
       const sv = await auth.pullSave()

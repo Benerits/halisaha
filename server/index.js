@@ -79,6 +79,11 @@ async function initDb() {
   )`)
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS halisaha_player_email_lower ON halisaha_player (lower(email))`)
   // IAP: verilmiş satın alma transaction'ları (replay/çift-verme önleme) — transaction_id PK ile idempotent
+  await pool.query(`CREATE TABLE IF NOT EXISTS halisaha_visit (
+    id bigserial PRIMARY KEY,
+    at timestamptz NOT NULL DEFAULT now(),
+    ip text, ua text, ref text, utm text, lang text, screen text, guest boolean
+  )`)
   await pool.query(`CREATE TABLE IF NOT EXISTS halisaha_iap_grant (
     transaction_id text PRIMARY KEY, email text NOT NULL, product_id text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
@@ -699,7 +704,16 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true })
     }
     if (url === '/api/visit' && req.method === 'POST') {
-      if (rateLimit('visit:' + clientIp(req), 1, 30_000)) bumpStat('visits')
+      if (rateLimit('visit:' + clientIp(req), 1, 30_000)) {
+        bumpStat('visits')
+        const vb2 = await readBody(req).catch(() => ({}))
+        pool.query(`INSERT INTO halisaha_visit(ip, ua, ref, utm, lang, screen, guest)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [clientIp(req), String(req.headers['user-agent'] || '').slice(0, 200),
+           String(vb2.ref || '').slice(0, 200), String(vb2.utm || '').slice(0, 120),
+           String(vb2.lang || '').slice(0, 8), String(vb2.screen || '').slice(0, 16),
+           vb2.guest === true]).catch(() => {})
+      }
       // yeni MİSAFİR (client ilk kez oynamaya başladı, localStorage'da dedup'lı) → ekibe ayrı push.
       // IP başına saatte 1 ile spam engellenir (kötü niyetli çağrı da bunu aşamaz).
       const vb = await readBody(req).catch(() => ({}))
@@ -1443,6 +1457,36 @@ async function handleVs(req, res, url) {
         ],
         asOf: new Date().toISOString(),
       })
+    }
+    if (url === '/vs/v1/visits' && req.method === 'GET') {
+      const r2 = await pool.query(`SELECT id, at, ip, ua, ref, utm, lang, screen, guest
+        FROM halisaha_visit ORDER BY id DESC LIMIT 200`)
+      return json(res, 200, { data: r2.rows.map(v => ({
+        id: String(v.id), createdAt: v.at, ip: v.ip,
+        cihaz: /mobile|android|iphone|ipad/i.test(v.ua || '') ? 'Mobil' : 'Masaüstü',
+        kaynak: v.utm || (v.ref ? new URL(v.ref).hostname : 'direkt'),
+        dil: v.lang || '-', ekran: v.screen || '-', tip: v.guest ? 'misafir' : 'hesaplı',
+      })), nextCursor: null })
+    }
+    if (url === '/vs/v1/audience' && req.method === 'GET') {
+      const r2 = await pool.query(`SELECT
+        count(*)::int AS toplam,
+        count(*) FILTER (WHERE ua ~* 'mobile|android|iphone|ipad')::int AS mobil,
+        count(*) FILTER (WHERE guest)::int AS misafir,
+        count(*) FILTER (WHERE lang='en')::int AS ingilizce,
+        count(*) FILTER (WHERE utm <> '')::int AS kampanyali
+        FROM halisaha_visit WHERE at > now() - interval '30 days'`)
+      const t2 = r2.rows[0] || {}
+      const kaynak = await pool.query(`SELECT COALESCE(NULLIF(utm,''), 'organik/direkt') AS k, count(*)::int AS n
+        FROM halisaha_visit WHERE at > now() - interval '30 days' GROUP BY 1 ORDER BY n DESC LIMIT 12`)
+      return json(res, 200, { data: [
+        { metric: 'Ziyaret (30g)', value: t2.toplam || 0 },
+        { metric: 'Mobil %', value: t2.toplam ? Math.round(100 * t2.mobil / t2.toplam) : 0 },
+        { metric: 'Misafir %', value: t2.toplam ? Math.round(100 * t2.misafir / t2.toplam) : 0 },
+        { metric: 'İngilizce UI %', value: t2.toplam ? Math.round(100 * t2.ingilizce / t2.toplam) : 0 },
+        { metric: 'Kampanyadan gelen %', value: t2.toplam ? Math.round(100 * t2.kampanyali / t2.toplam) : 0 },
+        ...kaynak.rows.map(k => ({ metric: 'Kaynak: ' + k.k, value: k.n })),
+      ] })
     }
     if (url === '/vs/v1/kpi' && req.method === 'GET') {
       // tek KPI kartı için sade değer: {data:{value,label,deltaPct?}}
