@@ -236,15 +236,17 @@
   .tip button:hover { filter:brightness(1.07); }
 
   /* ===== OFİS ===== */
-  #locbar { position:fixed; top:44px; left:10px; z-index:11; display:flex; gap:4px; align-items:center; }
+  #locbar { position:fixed; top:44px; left:10px; z-index:11; display:flex; gap:4px; align-items:stretch; }
   .loclbl { font-size:8px; font-weight:800; color:#3d4a3f; letter-spacing:.8px;
-    background:rgba(255,255,255,.75); padding:3px 7px; border-radius:5px; }
+    background:rgba(255,255,255,.75); padding:0 8px; border-radius:6px;
+    display:flex; align-items:center; }
   .loc { background:var(--paper); color:var(--ink); font-weight:800; font-size:10px; letter-spacing:.5px;
-    padding:5px 11px; border-radius:6px; box-shadow:var(--shadow); border-bottom:3px solid #b9c9ae; }
+    height:27px; padding:0 11px; border-radius:6px; box-shadow:var(--shadow);
+    border-bottom:3px solid #b9c9ae; display:flex; align-items:center; gap:6px; box-sizing:border-box; }
   .loc.on { background:var(--green); color:#fff; border-bottom-color:var(--green-dark); }
   .loc.plus { color:var(--green-dark); border-bottom-color:#9fc9a8; }
   .loc.plus:hover { background:#eefaf0; }
-  .loc .linc { display:block; font-size:8.5px; font-weight:800; color:var(--green-dark); line-height:1.1; }
+  .loc .linc { font-size:8.5px; font-weight:800; color:var(--green-dark); line-height:1; }
   .loc.on .linc { color:#dff5e4; }
   .loc .linc.neg { color:var(--clay); }
   #yazpill { position:fixed; z-index:9; transform:translate(-50%,-100%); cursor:pointer;
@@ -264,6 +266,19 @@
   .panel { background:var(--paper); border-radius:22px; width:min(680px,100%); max-height:86vh;
     overflow:hidden; display:flex; flex-direction:column;
     box-shadow:0 24px 70px rgba(0,0,0,.42); }
+  /* İNŞAAT KATALOĞU: görselli kartlar */
+  .bgrid { display:grid; grid-template-columns:1fr 1fr; gap:9px; padding:4px; }
+  .bcard { background:#fff; border:1.5px solid #e2ece0; border-radius:12px; padding:10px; display:flex;
+    gap:10px; align-items:center; }
+  .bcard svg { flex-shrink:0; border-radius:8px; }
+  .bcard .bi { flex:1; min-width:0; }
+  .bcard .bn { font-weight:800; font-size:12.5px; }
+  .bcard .bg2 { font-size:10px; font-weight:750; color:var(--green-dark); }
+  .bcard .bd { font-size:9.5px; color:var(--muted); line-height:1.35; margin-top:2px; }
+  .bcard button { background:var(--green); color:#fff; font-weight:800; font-size:10.5px;
+    padding:7px 9px; border-radius:8px; border-bottom:2.5px solid var(--green-dark); white-space:nowrap; }
+  .bcard button:disabled { background:#cfd8cc; border-bottom-color:#b5c2b1; color:#7d8a7a; }
+  .bcard.done { opacity:.72; }
   .phead { background:var(--head); color:var(--head-ink); padding:15px 22px; display:flex; flex-shrink:0;
     justify-content:space-between; align-items:center; position:sticky; top:0; z-index:2; }
   .phead b { font-size:19px; letter-spacing:.5px; }
@@ -350,6 +365,7 @@
     <div class="phead"><b>YAZIHANE</b><button id="closeoffice">Kapat ✕</button></div>
     <div class="tabs">
       <button class="tab on" data-tab="yatirim">Yatırım</button>
+      <button class="tab" data-tab="insaat">İnşaat</button>
       <button class="tab" data-tab="ozet">Özet</button>
       <button class="tab" data-tab="personel">Personel</button>
       <button class="tab" data-tab="subeler">Şubeler</button>

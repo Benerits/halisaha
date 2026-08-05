@@ -553,6 +553,30 @@ export class World {
       const net = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 5.8),
         new THREE.MeshLambertMaterial({ color: 0xeff3f4, transparent: true, opacity: 0.55, side: THREE.DoubleSide }))
       net.rotation.x = Math.PI / 2; net.position.set(0, 0, 1.45); g.add(net)
+    } else if (kind === 'kantin' || kind === 'dus' || kind === 'wc') {
+      // İŞLETME BİNALARI — kenney ticari bina + tür işareti; kit yoksa prosedürel kutu
+      const pad2 = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W - 2, PARCEL_D - 2), lam(0xc9c3b4))
+      pad2.position.z = 0.06; pad2.receiveShadow = true; g.add(pad2)
+      const bh = kind === 'kantin' ? 2.9 : kind === 'dus' ? 2.5 : 1.9
+      if (this.kit?.buildings.length) {
+        const idx = kind === 'kantin' ? 1 : kind === 'dus' ? 2 : 3
+        const b = fitModel(this.kit.buildings[idx % this.kit.buildings.length], bh)
+        b.rotation.z = Math.PI
+        g.add(b)
+      } else {
+        box(4.5, 3, bh, 0xf2ece0, 0, 0, bh / 2, g)
+        box(4.7, 3.2, 0.25, kind === 'dus' ? 0x3f8fe4 : 0x27a05a, 0, 0, bh + 0.1, g)
+      }
+      // tür bandı (renk kodu: kantin yeşil, duş mavi, wc gri)
+      const band = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.22, 0.5),
+        lam(kind === 'kantin' ? 0x27a05a : kind === 'dus' ? 0x3f8fe4 : 0x8d97a1))
+      band.position.set(0, -1.8, bh * 0.75); band.castShadow = true; g.add(band)
+      if (kind === 'kantin') {
+        for (const [tx, ty] of [[-2.6, -1.6], [2.6, -1.6]] as [number, number][]) {
+          const top = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.06, 10), lam(0xf7f4ec))
+          top.rotation.x = Math.PI / 2; top.position.set(tx, ty, 0.7); top.castShadow = true; g.add(top)
+        }
+      }
     } else if (kind === 'parking') {
       const pad = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W - 1, PARCEL_D - 1), lam(0x585f66))
       pad.position.z = 0.06; g.add(pad)

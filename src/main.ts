@@ -368,6 +368,29 @@ function doBuy(id: BuyId) {
 
 // ---------- ofis ----------
 let officeTab = 'yatirim'
+// ---- İNŞAAT: görselli katalog + yerleştirme modu ----
+let pendingBuild: BuildKind | null = null
+const THUMB: Record<BuildKind, string> = {
+  pitch: `<svg width="62" height="44"><rect width="62" height="44" fill="#3c8d49"/><rect x="4" y="4" width="54" height="36" fill="none" stroke="#fff" stroke-width="2"/><line x1="31" y1="4" x2="31" y2="40" stroke="#fff" stroke-width="2"/><circle cx="31" cy="22" r="7" fill="none" stroke="#fff" stroke-width="2"/></svg>`,
+  mini: `<svg width="62" height="44"><rect width="62" height="44" fill="#dff0e2"/><rect x="12" y="8" width="38" height="28" fill="#47a055"/><rect x="14" y="10" width="34" height="24" fill="none" stroke="#fff" stroke-width="1.5"/><line x1="31" y1="10" x2="31" y2="34" stroke="#fff" stroke-width="1.5"/></svg>`,
+  basket: `<svg width="62" height="44"><rect width="62" height="44" fill="#c97a3d"/><rect x="4" y="4" width="54" height="36" fill="none" stroke="#f4efe2" stroke-width="2"/><circle cx="31" cy="22" r="8" fill="none" stroke="#f4efe2" stroke-width="2"/><rect x="2" y="16" width="4" height="12" fill="#f4efe2"/><rect x="56" y="16" width="4" height="12" fill="#f4efe2"/></svg>`,
+  voley: `<svg width="62" height="44"><rect width="62" height="44" fill="#dcc492"/><rect x="4" y="4" width="54" height="36" fill="none" stroke="#fff" stroke-width="2"/><line x1="31" y1="2" x2="31" y2="42" stroke="#8d97a1" stroke-width="3"/><line x1="26" y1="8" x2="36" y2="8" stroke="#8d97a1" stroke-width="2"/></svg>`,
+  parking: `<svg width="62" height="44"><rect width="62" height="44" fill="#585f66"/><line x1="14" y1="6" x2="14" y2="20" stroke="#e9e4d6" stroke-width="2"/><line x1="28" y1="6" x2="28" y2="20" stroke="#e9e4d6" stroke-width="2"/><line x1="42" y1="6" x2="42" y2="20" stroke="#e9e4d6" stroke-width="2"/><line x1="14" y1="26" x2="14" y2="40" stroke="#e9e4d6" stroke-width="2"/><line x1="28" y1="26" x2="28" y2="40" stroke="#e9e4d6" stroke-width="2"/><rect x="16" y="8" width="10" height="9" rx="2" fill="#d64545"/></svg>`,
+  garden: `<svg width="62" height="44"><rect width="62" height="44" fill="#699a4d"/><circle cx="18" cy="18" r="8" fill="#3c7a3c"/><rect x="16.5" y="24" width="3" height="8" fill="#7a542f"/><circle cx="42" cy="26" r="6" fill="#3c7a3c"/><rect x="40.8" y="30" width="2.4" height="6" fill="#7a542f"/></svg>`,
+  kantin: `<svg width="62" height="44"><rect width="62" height="44" fill="#e9f2e2"/><rect x="10" y="14" width="42" height="24" fill="#f2ece0" stroke="#c9c3b4"/><rect x="8" y="10" width="46" height="7" fill="#27a05a"/><rect x="26" y="24" width="9" height="14" fill="#33404a"/><circle cx="46" cy="30" r="4" fill="#f2b53c"/></svg>`,
+  dus: `<svg width="62" height="44"><rect width="62" height="44" fill="#e9f2e2"/><rect x="12" y="12" width="38" height="26" fill="#f2ece0" stroke="#c9c3b4"/><rect x="10" y="8" width="42" height="7" fill="#3f8fe4"/><circle cx="24" cy="26" r="2" fill="#3f8fe4"/><circle cx="31" cy="30" r="2" fill="#3f8fe4"/><circle cx="38" cy="25" r="2" fill="#3f8fe4"/></svg>`,
+  wc: `<svg width="62" height="44"><rect width="62" height="44" fill="#e9f2e2"/><rect x="16" y="14" width="30" height="24" fill="#f2ece0" stroke="#c9c3b4"/><rect x="14" y="10" width="34" height="6" fill="#8d97a1"/><rect x="27" y="24" width="8" height="14" fill="#33404a"/></svg>`,
+}
+const buildDone = (k: BuildKind): boolean =>
+  k === 'kantin' ? game.hasCanteen : k === 'dus' ? game.hasShower : k === 'wc' ? game.hasWC : false
+
+function startPlacing(k: BuildKind) {
+  pendingBuild = k
+  $('office').classList.remove('show')
+  toast(`${BUILDS[k].label} — kendi BOŞ arsana tıkla (yeşil sınırlı parseller).`)
+  audio.click()
+}
+
 function renderOffice() {
   const body = $('pbody')
   if (officeTab === 'yatirim') {
@@ -432,6 +455,22 @@ function renderOffice() {
         toast(res.msg, res.ok ? 'g' : 'b')
         save(); renderOffice(); renderAll()
       }))
+  } else if (officeTab === 'insaat') {
+    body.innerHTML = `<div class="srow" style="background:#eefaf0"><span class="ds" style="flex:1">
+      Seç → sahnede kendi boş arsana tıkla, kurulsun. Arsan yoksa önce dümdüz çimen
+      parsele tıklayıp satın al.</span></div>
+      <div class="bgrid">${(Object.keys(BUILDS) as BuildKind[]).map(k => {
+        const b = BUILDS[k]
+        const done = buildDone(k)
+        return `<div class="bcard ${done ? 'done' : ''}">${THUMB[k]}
+          <div class="bi"><div class="bn">${b.label}</div>
+            <div class="bg2">${b.gain}</div>
+            <div class="bd">${b.desc}</div></div>
+          <button data-place="${k}" ${done ? 'disabled' : ''}>${done ? 'VAR ✓' : '₺' + tl(b.cost) + '<br>YERLEŞTİR'}</button>
+        </div>`
+      }).join('')}</div>`
+    body.querySelectorAll<HTMLElement>('button[data-place]').forEach(b =>
+      b.addEventListener('click', () => startPlacing(b.dataset.place as BuildKind)))
   } else if (officeTab === 'subeler') {
     body.innerHTML = `
       <div class="srow" style="background:#eefaf0"><span class="ds" style="flex:1">
@@ -559,7 +598,21 @@ addEventListener('pointerup', e => {
   if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud')) return
   if (world.pickYazihane(e.clientX, e.clientY)) { openOffice(); return }
   const hit = world.pickParcel(e.clientX, e.clientY)
-  if (hit) { audio.click(); openParcel(hit.c, hit.r) }
+  if (hit) {
+    if (pendingBuild) {
+      const k = pendingBuild
+      if (!game.ownsParcel(hit.c, hit.r)) { toast('Bu arsa senin değil — önce satın al.', 'b'); audio.bad(); openParcel(hit.c, hit.r); return }
+      if (game.buildAt(hit.c, hit.r)) { toast('Bu arsa dolu — boş arsana tıkla.', 'b'); audio.bad(); return }
+      const res = game.placeBuild(hit.c, hit.r, k)
+      if (res.ok) {
+        pendingBuild = null
+        audio.build(); toast(res.msg, 'g')
+        save(); world.syncParcels(game.ownedParcels, game.builds); renderAll()
+      } else { audio.bad(); toast(res.msg, 'b') }
+      return
+    }
+    audio.click(); openParcel(hit.c, hit.r)
+  }
 })
 
 $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })

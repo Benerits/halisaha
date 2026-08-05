@@ -136,7 +136,7 @@ export function parcelCost(c: number, r: number): number {
   return Math.max(14_000, 26_000 - d * 4_000)
 }
 
-export type BuildKind = 'pitch' | 'mini' | 'basket' | 'voley' | 'parking' | 'garden'
+export type BuildKind = 'pitch' | 'mini' | 'basket' | 'voley' | 'parking' | 'garden' | 'kantin' | 'dus' | 'wc'
 export interface PlacedBuild { key: string; kind: BuildKind }
 
 export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: string; desc: string }> = {
@@ -146,7 +146,12 @@ export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: stri
   voley:   { label: 'Voleybol Sahası', cost: 20_000, gain: 'Günde +₺550 · itibar +0,2', desc: 'Kum zemin; yazın çok tutar, tesise çeşitlilik katar.' },
   parking: { label: 'Ek Otopark', cost: 18_000, gain: 'İtibar +0,3', desc: 'Araç sığmayınca müşteri kaçar; park yeri memnuniyeti artırır.' },
   garden:  { label: 'Yeşil Alan', cost: 9_000, gain: 'İtibar +0,2', desc: 'Oturma alanı ve peyzaj — tesis daha bakımlı görünür.' },
+  kantin:  { label: 'Kantin Binası', cost: 9_000, gain: 'Her maçtan +₺120', desc: 'Çay, tost, ayran — maç sonrası oturulan yer. (Mağazadaki kantinle aynı etki, binalı.)' },
+  dus:     { label: 'Duş & Soyunma', cost: 18_000, gain: 'İtibar +0,5', desc: 'Kalite algısını yükseltir; abonelikler uzar.' },
+  wc:      { label: 'Tuvalet', cost: 4_000, gain: 'İtibar +0,2', desc: 'Olmazsa olmaz — yoksa kimse uzun kalmaz.' },
 }
+/** tek kurulabilen işletme binaları (tesiste bir tane) */
+export const SINGLETON_BUILDS: BuildKind[] = ['kantin', 'dus', 'wc']
 
 // ---- LOKASYONLAR (şubeler): kasa/gün ortak; takvim, kuyruk, arsa, saha ŞUBEYE AİT ----
 export type LocId = 'mahalle' | 'sanayi' | 'sahil'
@@ -201,6 +206,7 @@ export class Game {
   hasCleats = false
   hasKeeper = false
   hasTost = false
+  hasWC = false
   hasBaklava = false
   hasLights = false
   hasShower = false
@@ -944,6 +950,18 @@ export class Game {
     this.builds.push({ key: parcelKey(c, r), kind })
     if (kind === 'pitch') this.pitches++
     if (kind === 'mini') this.pitches++
+    if (kind === 'kantin') {
+      if (this.hasCanteen) return { ok: false, msg: 'Kantin zaten var.' }
+      this.hasCanteen = true
+    }
+    if (kind === 'dus') {
+      if (this.hasShower) return { ok: false, msg: 'Duş & soyunma zaten var.' }
+      this.hasShower = true; this.rep = Math.min(5, this.rep + 0.5)
+    }
+    if (kind === 'wc') {
+      if (this.hasWC) return { ok: false, msg: 'Tuvalet zaten var.' }
+      this.hasWC = true; this.rep = Math.min(5, this.rep + 0.2)
+    }
     if (kind === 'basket') this.rep = Math.min(5, this.rep + 0.1)
     if (kind === 'voley') this.rep = Math.min(5, this.rep + 0.2)
     if (kind === 'parking') this.rep = Math.min(5, this.rep + 0.3)
@@ -962,6 +980,9 @@ export class Game {
       if (this.pitches <= 1) return { ok: false, msg: 'Son sahanı yıkamazsın.' }
       this.pitches--
     }
+    if (b.kind === 'kantin') this.hasCanteen = false
+    if (b.kind === 'dus') this.hasShower = false
+    if (b.kind === 'wc') this.hasWC = false
     this.builds.splice(i, 1)
     this.money += refund
     this.events.push(`${BUILDS[b.kind].label} yıkıldı — ₺${refund.toLocaleString('tr-TR')} iade.`)
@@ -1074,7 +1095,7 @@ export class Game {
       lastSeen: Date.now(),
       money: this.money, rep: this.rep, day: this.day, bookings: this.bookings,
       pitches: this.pitches, hasCanteen: this.hasCanteen, hasFridge: this.hasFridge,
-      hasCleats: this.hasCleats, hasKeeper: this.hasKeeper, hasTost: this.hasTost, hasBaklava: this.hasBaklava, hasLights: this.hasLights, hasShower: this.hasShower,
+      hasCleats: this.hasCleats, hasKeeper: this.hasKeeper, hasTost: this.hasTost, hasWC: this.hasWC, hasBaklava: this.hasBaklava, hasLights: this.hasLights, hasShower: this.hasShower,
       hasSchoolDeal: this.hasSchoolDeal, hasTeaRoom: this.hasTeaRoom, hasCorporate: this.hasCorporate,
       staff: this.staff, docService: this.docService, docs: this.docs,
       hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,
