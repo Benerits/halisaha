@@ -99,7 +99,7 @@ console.log('\n— ESNEK İSTEK (asıl karar burada doğar) —')
   for (let i = 0; i < 900 && (!flexFound || !rigidFound); i++) {
     const r = g.spawnReservation()
     if (!r) continue
-    if (r.flexible && !flexFound) flexFound = r
+    if (r.flexible && r.hours === 1 && !flexFound) flexFound = r
     if (!r.flexible && !rigidFound) rigidFound = r
     if (g.queue.length >= 4) g.queue.length = 0
   }
@@ -290,7 +290,7 @@ console.log('\n— KALECİ + 2 SAATLİK MAÇ —')
 
   const t = new Game()
   let r2 = null
-  for (let i = 0; i < 4000 && !r2; i++) { const x = t.spawnReservation(); if (x && x.hours === 2) r2 = x; if (t.queue.length >= 4) t.queue.length = 0 }
+  for (let i = 0; i < 4000 && !r2; i++) { if (t.queue.length >= 4) t.queue.length = 0; const x = t.spawnReservation(); if (x && x.hours === 2) r2 = x }
   if (r2) {
     const slot = t.bestSlot(r2)
     check('2 saatlik kart için uygun başlangıç bulunur', !!slot)
