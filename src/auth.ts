@@ -127,11 +127,12 @@ export async function requestReset(email: string): Promise<void> {
 
 /** Save'i sunucuya yaz. Çoklu cihaz guard: yüklediğimizden beri başka cihaz yazmışsa
  *  sunucu 409 + yeni save döner → çağıran yeniyi uygular (clobber yok, ilerleme karışmaz). */
-export async function pushSave(save: unknown): Promise<{ conflict: boolean; kicked?: boolean; save?: unknown; updatedAt?: string }> {
+export async function pushSave(save: unknown, keepalive = false): Promise<{ conflict: boolean; kicked?: boolean; save?: unknown; updatedAt?: string }> {
   const res = await fetch('/api/save', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-auth': localStorage.getItem(TOKEN_KEY) ?? '', 'x-session': SESSION_ID },
     body: JSON.stringify({ save, baseUpdatedAt: _lastUpdatedAt }),
+    keepalive, // pagehide çıkış push'u: sekme kapanırken istek yaşasın
   })
   const data = await res.json().catch(() => ({}))
   if ((data as { kicked?: boolean }).kicked) { triggerKicked(); return { conflict: false, kicked: true } }

@@ -842,32 +842,42 @@ let lastPushHash = ''
 let lastBookWarnAt = 0
 let lastPushErrAt = 0
 let cloudBlocked = false
+// BULUT KAYIT: girişliyse sunucuya (çakışmada sunucu kazanır)
+// K7: kayıt diyeti — içerik DEĞİŞMEDİYSE buluta gönderme (400KB × her 10sn israfı)
+// force: kritik anlar (tabela adı, çıkış) 20sn diyetini bekleyemez — hash kontrolü yine de korunur
+function cloudPush(force = false, keepalive = false) {
+  if (!auth.loggedIn() || auth.isKicked() || cloudBlocked) return
+  if (!force && Date.now() - lastPush < 20_000) return
+  const snap = game.save()
+  const body = JSON.stringify(snap)
+  if (body === lastPushHash) return
+  lastPushHash = body
+  lastPush = Date.now()
+  auth.pushSave(snap, keepalive).then(r => {
+    if (r.kicked) return // onKicked bildirimi zaten gösterildi; bu cihaz artık yazmaz
+    if (r.conflict) {
+      if (r.save) { game.load(r.save as never); applyLocSwitch(); toast('Diğer cihazdaki güncel kayıt yüklendi.') }
+      else toast('Sunucu bu kaydı kabul etmedi — ilerleme buluta yazılamıyor.', 'b')
+    }
+  }).catch(() => {
+    // sessiz yutma YOK (denetim K7): dakikada en çok bir kez uyar
+    if (Date.now() - lastPushErrAt > 60_000) { lastPushErrAt = Date.now(); toast('Buluta kaydedilemedi — bağlantını kontrol et.', 'b') }
+  })
+}
 function save() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())) } catch { /* kota */ }
   if (game.bookings.length > 1800 && Date.now() - lastBookWarnAt > 300_000) {
     lastBookWarnAt = Date.now()
     toast(t('Takvim arşivi doluyor — en eski kayıtlar yakında düşecek.'), 'b')
   }
-  // BULUT KAYIT: girişliyse 10 sn'de bir sunucuya (çakışmada sunucu kazanır)
-  // K7: kayıt diyeti — içerik DEĞİŞMEDİYSE buluta gönderme (400KB × her 10sn israfı)
-  if (auth.loggedIn() && !auth.isKicked() && !cloudBlocked && Date.now() - lastPush > 20_000) {
-    const snap = game.save()
-    const body = JSON.stringify(snap)
-    if (body === lastPushHash) return
-    lastPushHash = body
-    lastPush = Date.now()
-    auth.pushSave(snap).then(r => {
-      if (r.kicked) return // onKicked bildirimi zaten gösterildi; bu cihaz artık yazmaz
-      if (r.conflict) {
-        if (r.save) { game.load(r.save as never); applyLocSwitch(); toast('Diğer cihazdaki güncel kayıt yüklendi.') }
-        else toast('Sunucu bu kaydı kabul etmedi — ilerleme buluta yazılamıyor.', 'b')
-      }
-    }).catch(() => {
-      // sessiz yutma YOK (denetim K7): dakikada en çok bir kez uyar
-      if (Date.now() - lastPushErrAt > 60_000) { lastPushErrAt = Date.now(); toast('Buluta kaydedilemedi — bağlantını kontrol et.', 'b') }
-    })
-  }
+  cloudPush()
 }
+// ÇIKIŞ GARANTİSİ: sekme kapanırken son durum keepalive ile buluta gider —
+// yoksa son ≤20 sn'lik ilerleme (özellikle 0. dakikada verilen tesis adı) kayboluyordu
+window.addEventListener('pagehide', () => {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())) } catch { /* kota */ }
+  cloudPush(true, true)
+})
 
 // ---------- döngü ----------
 const clock = new THREE.Clock()
@@ -1103,6 +1113,7 @@ $('nameok').addEventListener('click', () => {
   game.facilityName = nm
   world.setSignName(nm)
   save()
+  cloudPush(true) // tabela adı 0. dakikada verilir — 20sn diyetini beklerse reload'da kaybolur
   $('namemodal').classList.remove('show')
   audio.build()
   toast(`${nm.toUpperCase()} ${t('tabelası asıldı — hayırlı olsun!')}`, 'g')
