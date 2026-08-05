@@ -48,21 +48,20 @@
     background:var(--paper-2); }
   /* ORTAK KAYDIRMA DİLİ: bounce/beyazlık yok + ince yeşil scrollbar (Chrome+Safari+Firefox) */
   #parcel .pbody { max-height:68vh; overflow-y:auto; }
-  #qlist, .panel, #parcel .pbody {
+  .pbody { overflow-y:auto; flex:1; min-height:0; }
+  #qlist, .pbody {
     overscroll-behavior:contain;
     scrollbar-width:thin; scrollbar-color:#bcd4bb transparent; }
-  #qlist::-webkit-scrollbar, .panel::-webkit-scrollbar, #parcel .pbody::-webkit-scrollbar { width:7px; }
-  #qlist::-webkit-scrollbar-track, .panel::-webkit-scrollbar-track, #parcel .pbody::-webkit-scrollbar-track {
-    background:transparent; }
-  #qlist::-webkit-scrollbar-thumb, .panel::-webkit-scrollbar-thumb, #parcel .pbody::-webkit-scrollbar-thumb {
+  #qlist::-webkit-scrollbar, .pbody::-webkit-scrollbar { width:7px; }
+  #qlist::-webkit-scrollbar-track, .pbody::-webkit-scrollbar-track { background:transparent; }
+  #qlist::-webkit-scrollbar-thumb, .pbody::-webkit-scrollbar-thumb {
     background:#bcd4bb; border-radius:99px; border:1.5px solid var(--paper);
     background-clip:padding-box; }
-  #qlist::-webkit-scrollbar-thumb:hover, .panel::-webkit-scrollbar-thumb:hover,
-  #parcel .pbody::-webkit-scrollbar-thumb:hover { background:var(--green); }
+  #qlist::-webkit-scrollbar-thumb:hover, .pbody::-webkit-scrollbar-thumb:hover { background:var(--green); }
   .rcard { background:#fff; border-radius:10px; padding:8px 9px; cursor:pointer;
     border:1.5px solid #e2ece0; transition:border-color .1s; position:relative; flex-shrink:0; }
   .rcard:hover { border-color:var(--green); }
-  .rcard.sel { border-color:var(--green); background:#eefaf0; box-shadow:0 0 0 2px var(--green) inset; }
+  .rcard.sel { border-color:#8cc9a0; background:#eefaf0; box-shadow:0 2px 10px rgba(47,158,87,.16); }
   .rcard.new { animation:slidein .38s cubic-bezier(.2,.9,.3,1.1); }
   @keyframes slidein { from { transform:translateX(-115%); opacity:0 } to { transform:none; opacity:1 } }
   .rcard .team { font-weight:800; font-size:12px; white-space:nowrap; overflow:hidden;
@@ -262,13 +261,14 @@
   #office { position:fixed; inset:0; z-index:40; background:rgba(20,45,30,.52); backdrop-filter:blur(4px);
     display:none; align-items:center; justify-content:center; padding:20px; }
   #office.show { display:flex; }
-  .panel { background:var(--paper); border-radius:22px; width:min(680px,100%); max-height:86vh; overflow:auto;
+  .panel { background:var(--paper); border-radius:22px; width:min(680px,100%); max-height:86vh;
+    overflow:hidden; display:flex; flex-direction:column;
     box-shadow:0 24px 70px rgba(0,0,0,.42); }
-  .phead { background:var(--head); color:var(--head-ink); padding:15px 22px; display:flex;
+  .phead { background:var(--head); color:var(--head-ink); padding:15px 22px; display:flex; flex-shrink:0;
     justify-content:space-between; align-items:center; position:sticky; top:0; z-index:2; }
   .phead b { font-size:19px; letter-spacing:.5px; }
   .phead button { background:var(--paper); color:var(--green-deep); font-weight:800; border-radius:10px; padding:6px 13px; font-size:13px; }
-  .tabs { display:flex; gap:5px; padding:11px 15px 0; background:var(--paper-2); }
+  .tabs { display:flex; gap:5px; padding:11px 15px 0; background:var(--paper-2);  flex-shrink:0; }
   .tab { flex:1; background:transparent; border-radius:11px 11px 0 0; padding:9px; font-weight:800; font-size:13px; color:var(--muted); }
   .tab.on { background:var(--paper); color:var(--green-deep); }
   .pbody { padding:15px 17px 22px; }
