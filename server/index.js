@@ -372,39 +372,44 @@ function auditCheat(email, kind, info) {
   console.warn(`[hile-freni] ${kind} ${email}`, info)
 }
 
+// ---- HALI SAHA ekonomi tabloları (src/state.ts ile BİREBİR senkron) ----
+const HS_BUILD_COST = { pitch: 62000, mini: 34000, basket: 26000, voley: 20000, parking: 18000, garden: 9000, kantin: 9000, dus: 18000, wc: 4000 }
+const HS_SHOP = [['hasCanteen',9000],['hasFridge',3500],['hasCleats',4200],['hasKeeper',5000],['hasTost',3000],['hasBaklava',4500],['hasLights',14000],['hasShower',18000],['hasSchoolDeal',12000],['hasTeaRoom',7500],['hasCorporate',15000],['hasBillboard',11000],['hasRoadSign',16000],['docService',9500],['hasPhone2',5500],['hasWC',4000]]
+const HS_LOC_COST = { sanayi: 150000, sahil: 400000 }
+function hsLocValue(sn) {
+  if (!sn || typeof sn !== 'object') return 0
+  let v = 0
+  if (Array.isArray(sn.builds)) for (const b of sn.builds) v += (b && HS_BUILD_COST[b.kind]) || 0
+  if (Array.isArray(sn.ownedParcels)) v += Math.max(0, sn.ownedParcels.length - 4) * 14000
+  const p = sn.personel
+  if (p && typeof p === 'object') {
+    if (p.mudur >= 1) v += 25000
+    if (p.mudur >= 2) v += 60000
+    if (p.cirak) v += 8000
+    if (p.kantinci) v += 6000
+    if (p.sekreter) v += 5000
+  }
+  return v
+}
+
 function maxIncomeRate(s) {
   if (!s) return 20
   const n = (v, d = 0) => (typeof v === 'number' && isFinite(v) ? v : d)
-  const fac = (n(s.marketLevel) > 0 ? n(s.marketLevel) : 0)
-    + (s.hasCoffee ? 1 : 0) + (s.hasRestaurant ? 1 : 0) + (s.hasWash ? 1 : 0)
-    + (s.hasOil ? 1 : 0) + (s.hasTruckPark ? 1 : 0) + n(s.selfWashCount)
-    + n(s.airWaterCount) * 0.5 + (s.hasSMR ? 2 : 0)
-  // MARİNA: tekne başı ciro yüksek ama frekans 10x düşük → bağlama/tesis başına pay
-  const marina = (Array.isArray(s.marinaFacs) ? s.marinaFacs.length : 0) * 2
-    + (s.berths && typeof s.berths === 'object'
-        ? Object.values(s.berths).reduce((a, v) => a + n(v), 0) * 1.5 : 0)
-  const base = 1 + n(s.pumps) * 1.2 + n(s.evChargers) * 0.8 + fac * 0.6 + marina * 0.6
-  const stars = Math.max(0, Math.min(40, n(s.brandStars)))
-  // base*8 = aktif oyunda meşru tepe kazanç (ölçüm: gelişmiş istasyon ~267 ₺/sn).
-  // starMult oyunun KENDİ prestij çarpanıyla aynı (state.ts prestigeMult = 1+0.25*yıldız).
-  // SAFETY=3 yanlış alarm payı: bu repoda aşırı sıkı guard'lar "param gitti" şikâyeti
-  // üretmişti, o yüzden meşru tepenin 3 katından aşağı inilmiyor.
-  const SAFETY = 3
-  // ŞUBE MÜDÜRLERİ (pasif şube geliri): oyuncu başka şubedeyken müdürlü şubeler kendi
-  // kasalarına yazıyor ve oyuncu bunu TEK SEFERDE topluyor. Bu sıçrama meşrudur; kova
-  // hızına şubelerin kapasitesi eklenmezse "param gitti" sınıfı yanlış alarm doğar
-  // (bu repoda aşırı sıkı guard'lar tam bunu üretmişti).
-  let branch = 0
-  if (s.locSnapshots && typeof s.locSnapshots === 'object') {
-    for (const sn of Object.values(s.locSnapshots)) {
-      if (!sn || typeof sn !== 'object' || !sn.f || typeof sn.f !== 'object') continue
-      const lvl = Math.max(0, Math.min(3, Math.round(n(sn.f.managerLevel))))
-      if (lvl > 0) branch += 6 + lvl * 4
+  let pitches = Math.max(1, n(s.pitches, 1)), courts = 0, mudur = 0
+  if (s.locStore && typeof s.locStore === 'object') {
+    pitches = 0
+    for (const sn of Object.values(s.locStore)) {
+      if (!sn || typeof sn !== 'object') continue
+      pitches += Math.max(1, n(sn.pitches, 1))
+      if (Array.isArray(sn.builds)) for (const b of sn.builds)
+        if (b && (b.kind === 'basket' || b.kind === 'voley')) courts++
+      if (sn.personel && typeof sn.personel === 'object') mudur += Math.max(0, Math.min(2, n(sn.personel.mudur)))
     }
   }
-  // AZALAN VERİM (30 Tem, istemci prestigeMult ile AYNI): 10★ sonrası +%10, 20★ sonrası +%5
-  const starMult = 1 + 0.25 * Math.min(stars, 10) + 0.10 * Math.min(Math.max(stars - 10, 0), 10) + 0.05 * Math.max(stars - 20, 0)
-  return Math.max(20, (base + branch) * 8 * SAFETY * starMult)
+  pitches = Math.max(1, Math.min(24, pitches))
+  // ölçüm: saha başına aktif tepe ~40 TL/sn (15 slot x ~1200 / 450 sn) + kort + müdür payı
+  const SAFETY = 3
+  return Math.max(20, (10 + pitches * 40 + courts * 4 + mudur * 8) * SAFETY)
 }
 
 /** ŞUBE KASASI CLAMP'İ: istemci tavanıyla BİREBİR (state.ts BRANCH_VAULT_HARD).
@@ -428,7 +433,7 @@ function clampBranchVault(s) {
 }
 
 /** Jeton kovası tavanı: tek seferlik meşru sıçramayı (gün dönüşü + sözleşme ödemesi) karşılar */
-const ALLOW_BURST = 260_000
+const ALLOW_BURST = 300_000  // halisaha: 2 günlük offline raporu + şube toplamı sığar
 
 function marinaValue(s) {
   let v = 0
@@ -443,223 +448,55 @@ const FLAT = { solar: 9000, dieselgen: 4000, smr: 40000, wash: 8000, oil: 12000,
 const sumUpto = (arr, k) => { let t = 0; const n = Math.max(0, Math.min(arr.length, Math.floor(k) || 0)); for (let i = 0; i < n; i++) t += arr[i]; return t }
 function buildingValue(s) {
   if (!s || typeof s !== 'object') return 0
-  const n = (v, d = 0) => (typeof v === 'number' && isFinite(v) ? v : d)
   let v = 0
-  v += sumUpto(COST.pump, n(s.pumps, 1))
-  v += sumUpto(COST.sign, n(s.signLevel)) + sumUpto(COST.tank, n(s.tankLevel)) + sumUpto(COST.market, n(s.marketLevel))
-  v += sumUpto(COST.market, n(s.market2Level)) // karşı yaka marketi (aynı maliyet tablosu)
-  v += sumUpto(COST.toilet, n(s.toilet2Level)) // B8: karşı yaka tesis nüshaları
-  if (s.hasWash2) v += FLAT.wash
-  if (s.hasOil2) v += FLAT.oil
-  if (s.hasCoffee2) v += FLAT.coffee
-  if (s.hasRestaurant2) v += FLAT.restaurant
-  v += sumUpto(MANAGER_COSTS, n(s.managerLevel))               // müdür kurulumu servete girer
-  v += sumUpto(STAFF_TRAIN_COSTS, Math.max(0, n(s.staffLevel, 1) - 1)) // personel eğitimi
-  v += sumUpto(DECOR_COSTS, n(s.decorLevel))                            // dekorasyon
-  if (s.insurance) v += 5000                                            // sigorta kurulumu
-  v += sumUpto(COST.toilet, n(s.toiletLevel)) + sumUpto(COST.grid, n(s.gridLevel)) + sumUpto(COST.battery, n(s.batteryLevel))
-  v += sumUpto(COST.ev, n(s.evChargers))
-  if (s.tankCounts && typeof s.tankCounts === 'object') for (const k of ['benzin', 'dizel', 'lpg']) v += sumUpto(COST.tankAdd, n(s.tankCounts[k], 1))
-  v += FLAT.solar * n(s.solarCount) + FLAT.airwater * n(s.airWaterCount) + FLAT.selfwash * n(s.selfWashCount) + FLAT.parking * n(s.parkingCount)
-  v += FLAT.lamp * n(s.lampCount) // sokak lambası (state.ts LAMP_COST ile senkron)
-  v += marinaValue(s)             // marina tesisleri + bağlama + kışlama (src/marina.ts senkronu)
-  if (s.hasDiesel) v += FLAT.dieselgen
-  if (s.hasSMR) v += FLAT.smr
-  if (s.hasWash) v += FLAT.wash
-  if (s.hasOil) v += FLAT.oil
-  if (s.hasCoffee) v += FLAT.coffee
-  if (s.hasRestaurant) v += FLAT.restaurant
-  if (s.hasTruckPark) v += FLAT.truckpark
-  if (s.wideGates) v += FLAT.widegate
-  // parseller DÜŞÜK tahmin: gerçek parselCost dinamik (6k-28k); düşük tutmak satın almanın
-  // asla "servet artışı" gibi görünmemesini garanti eder (false-positive önlemi).
-  if (Array.isArray(s.ownedParcels)) v += s.ownedParcels.length * 5000
-  if (Array.isArray(s.pavedParcels)) v += s.pavedParcels.length * 2000
+  for (const [k, c] of HS_SHOP) if (s[k]) v += c
+  if ((Number(s.staff) || 0) >= 1) v += 6000
+  if (Array.isArray(s.unlockedLocs)) for (const id of s.unlockedLocs) v += HS_LOC_COST[id] || 0
+  if (s.locStore && typeof s.locStore === 'object' && !Array.isArray(s.locStore)) {
+    for (const sn of Object.values(s.locStore)) v += hsLocValue(sn)
+  } else {
+    v += hsLocValue({ builds: s.builds, ownedParcels: s.ownedParcels, personel: s.personel })
+  }
   return v
 }
 /** ÇOKLU ŞUBE: pasif şubelerin ekipmanı da servete girer — yoksa şube değişimi
  *  "servet çöktü/zıpladı" sanılıp regresyon/hile guard'ını tetikler (409). */
-function snapshotsValue(s) {
-  if (!s || typeof s.locSnapshots !== 'object' || !s.locSnapshots) return 0
-  let v = 0
-  for (const sn of Object.values(s.locSnapshots)) {
-    if (!sn || typeof sn !== 'object' || !sn.f || typeof sn.f !== 'object') continue
-    const flat = { ...sn.f, tankCounts: sn.tankCounts, ownedParcels: sn.ownedParcels, pavedParcels: sn.pavedParcels }
-    v += buildingValue(flat)
-  }
-  return v
-}
+function snapshotsValue() { return 0 } // halisaha: şubeler buildingValue içinde (locStore)
 function sanitizeSave(save) {
   if (save === null) return null
   if (typeof save !== 'object' || Array.isArray(save)) return undefined
-  const s = save.s
-  if (!s || typeof s !== 'object') return undefined
-  s.money = clamp(s.money, 0, 10_000_000_000, 5000) // ileri oyuncular 2M'yi aşabilir — sağlık tavanı yükseltildi
-  s.reputation = clamp(s.reputation, 0, 5, 3)
+  const s = save // HALI SAHA kaydı DÜZ nesne (BenelOil'in {s:...} zarfı yok)
+  s.money = clamp(s.money, 0, 1_000_000_000, 25000)
+  s.rep = clamp(s.rep, 0, 5, 3)
   s.day = clamp(s.day, 1, 100000, 1)
-  s.pumps = clamp(s.pumps, 1, 14, 1) // state.ts MAX_PUMPS = 14
-  // Bu ünitelerin istemcide sınırı YOK ("sınırsız kurulur"). 30 clamp'i 31. üniteyi
-  // save'de siliyordu (para gitti, ünite yok — gir-çık şikâyetinin bir kolu). 200 = abuse
-  // tavanı; meşru oyuncunun asla ulaşamayacağı kadar yüksek.
-  for (const k of ['parkingCount', 'solarCount', 'selfWashCount', 'airWaterCount', 'lampCount']) {
-    if (k in s) s[k] = clamp(s[k], 0, 200, 0)
+  s.pitches = clamp(s.pitches, 1, 12, 1)
+  if ('adDays' in s) s.adDays = clamp(s.adDays, 0, 3, 0)
+  if ('placedCount' in s) s.placedCount = clamp(s.placedCount, 0, 1e6, 0)
+  if ('rentMissed' in s) s.rentMissed = clamp(s.rentMissed, 0, 1e4, 0)
+  const okLoc = ['mahalle', 'sanayi', 'sahil']
+  if (Array.isArray(s.unlockedLocs)) s.unlockedLocs = [...new Set(s.unlockedLocs.filter(x => okLoc.includes(x)))]
+  if (s.activeLoc && !okLoc.includes(s.activeLoc)) s.activeLoc = 'mahalle'
+  const snapClamp = sn => {
+    if (!sn || typeof sn !== 'object') return null
+    if (Array.isArray(sn.bookings)) sn.bookings = sn.bookings.slice(0, 2000)
+    if (Array.isArray(sn.queue)) sn.queue = sn.queue.slice(0, 12)
+    if (Array.isArray(sn.builds)) sn.builds = sn.builds.filter(b => b && HS_BUILD_COST[b.kind]).slice(0, 60)
+    if (Array.isArray(sn.ownedParcels)) sn.ownedParcels = [...new Set(sn.ownedParcels.filter(x => typeof x === 'string'))].slice(0, 9)
+    sn.pitches = clamp(sn.pitches, 1, 12, 1)
+    return sn
   }
-  s.evChargers = clamp(s.evChargers, 0, 12, 0) // state.ts EV_COSTS = 12 kademe
-  s.signLevel = clamp(s.signLevel, 0, 3, 0)
-  s.tankLevel = clamp(s.tankLevel, 0, 3, 0)
-  s.marketLevel = clamp(s.marketLevel, 0, 3, 0) // market 3 seviye (istemci ile aynı) — 2'ye kırpınca Sv.3 senkronda geri düşüyordu
-  if ('market2Level' in s) s.market2Level = clamp(s.market2Level, 0, 3, 0) // karşı market (additive alan — eski save'lerde yok)
-  if ('toilet2Level' in s) s.toilet2Level = clamp(s.toilet2Level, 0, 2, 0)  // B8 karşı yaka nüshaları
-  if ('managerLevel' in s) s.managerLevel = clamp(s.managerLevel, 0, 3, 0)   // müdür otomasyonu
-  if ('staffLevel' in s) s.staffLevel = clamp(s.staffLevel, 1, 4, 1)         // personel eğitimi
-  if ('decorLevel' in s) s.decorLevel = clamp(s.decorLevel, 0, 3, 0)         // dekorasyon sink'i
-  if ('wear' in s) s.wear = clamp(s.wear, 0, 1, 0)                           // ekipman yaşlanması
-  clampMarina(s)                                                            // marina alanları (additive)
-  clampBranchVault(s)                                                       // şube müdürü kasaları (additive)
-  clampRival(s)                                                             // AI rakip durumu
-  // _ab (jeton kovası) SUNUCU-SAHİPLİ: istemci ne yazarsa yazsın sınırlanır.
+  snapClamp(s)
+  if (s.locStore && typeof s.locStore === 'object' && !Array.isArray(s.locStore)) {
+    const out = {}
+    for (const k of Object.keys(s.locStore)) if (okLoc.includes(k)) { const c = snapClamp(s.locStore[k]); if (c) out[k] = c }
+    s.locStore = out
+  }
+  // _ab (jeton kovası) SUNUCU-SAHİPLİ
   if ('_ab' in s) {
     const a = s._ab
-    s._ab = (a && typeof a === 'object' && !Array.isArray(a))
-      ? { t: clamp(a.t, 0, 4e12, 0), b: clamp(a.b, 0, 260000, 0) } : null
+    s._ab = (a && typeof a === 'object' && !Array.isArray(a)) ? { t: clamp(a.t, 0, 4e12, 0), b: clamp(a.b, 0, 300000, 0) } : null
   }
-  if ('licenseDueDay' in s) s.licenseDueDay = clamp(s.licenseDueDay, 0, 100000, 30)
-  if ('insurance' in s) s.insurance = !!s.insurance
-  if ('marketingBudget' in s) s.marketingBudget = clamp(s.marketingBudget, 0, 8000, 0) // reklam sink'i (additive)
-  if ('brandStars' in s) s.brandStars = clamp(s.brandStars, 0, 40, 0)      // prestij (additive)
-  if ('handoverCount' in s) s.handoverCount = clamp(s.handoverCount, 0, 40, 0)
-  if ('contractsDone' in s) s.contractsDone = clamp(s.contractsDone, 0, 100000, 0)
-  if ('contractsFailed' in s) s.contractsFailed = clamp(s.contractsFailed, 0, 100000, 0)
-  // aktif B2B sözleşmesi (additive): alanları makul sınırlara kırp, bozuksa düşür
-  if (s.contract && typeof s.contract === 'object' && !Array.isArray(s.contract)) {
-    const c = s.contract
-    if (!['benzin', 'dizel', 'lpg'].includes(c.fuel)) s.contract = null
-    else {
-      c.name = String(c.name || '-').slice(0, 40)
-      c.id = String(c.id || 'c').slice(0, 40)
-      // clamp'ler oyunun GERÇEK üretim aralığına yakın: kurcalanmış save ile bedava prim yok
-      c.daysTotal = clamp(c.daysTotal, 5, 20, 7)
-      c.daysLeft = Math.min(clamp(c.daysLeft, 1, 20, 1), c.daysTotal)
-      c.dailyLiters = clamp(c.dailyLiters, 50, 4000, 500)
-      c.pricePerL = clamp(c.pricePerL, 1, 20, 8)
-      c.bonus = clamp(c.bonus, 0, 120000, 0)
-      c.penalty = clamp(c.penalty, 0, 60000, 0)
-      c.deliveredToday = clamp(c.deliveredToday, 0, 100000, 0)
-      c.missedDays = clamp(c.missedDays, 0, 60, 0)
-    }
-  } else if ('contract' in s) s.contract = null
-  if ('opexStart' in s) s.opexStart = clamp(s.opexStart, 0, 100000, 0) // OPEX rampa başlangıç günü (additive)
-  s.toiletLevel = clamp(s.toiletLevel, 0, 2, 0)
-  s.gridLevel = clamp(s.gridLevel, 0, 2, 0)
-  s.batteryLevel = clamp(s.batteryLevel, 0, 6, 0)   // state.ts BATTERY_CAP = 7 kademe
-  s.battery = clamp(s.battery, 0, 4500, 0)          // en yüksek kademe kapasitesi
-  s.uranium = clamp(s.uranium, 0, 100, 0)
-  s.loginStreak = clamp(s.loginStreak, 0, 3650, 0)
-  s.dailyServed = clamp(s.dailyServed, 0, 10000, 0)
-  // Tank kapasitesi = seviye hacmi × tank adedi (adet 1-4). Sabit 5000 clamp'i çok-tanklı
-  // oyuncunun dolu deposunu (20.000L'ye kadar) durduk yere 5000'e düşürüyordu.
-  const TANK_CAP = [800, 1500, 3000, 5000]
-  if (s.tankCounts && typeof s.tankCounts === 'object') {
-    for (const k of ['benzin', 'dizel', 'lpg']) s.tankCounts[k] = clamp(s.tankCounts[k], 1, 4, 1)
-  }
-  if (s.tanks && typeof s.tanks === 'object') {
-    for (const k of ['benzin', 'dizel', 'lpg']) {
-      const cnt = (s.tankCounts && typeof s.tankCounts[k] === 'number') ? clamp(s.tankCounts[k], 1, 4, 1) : 1
-      s.tanks[k] = clamp(s.tanks[k], 0, TANK_CAP[s.tankLevel] * cnt, 0)
-    }
-  }
-  if (s.pendingCash && typeof s.pendingCash === 'object') {
-    // kumbara cap'i tesis gelişmişliğine göre 1800'e kadar çıkabilir (istemci pendingCap);
-    // sabit 600 clamp'i geliştirilmiş kumbarayı senkronda kırpıyordu → 2500'e (güvenli tavan) çıkarıldı
-    for (const k of Object.keys(s.pendingCash)) s.pendingCash[k] = clamp(s.pendingCash[k], 0, 8000, 0) // taşma tavanı 3x cap
-  }
-  if (typeof s.stationName === 'string') s.stationName = s.stationName.slice(0, 14)
-  if (s.prices && typeof s.prices === 'object') {
-    for (const k of ['benzin', 'dizel', 'lpg']) s.prices[k] = clamp(s.prices[k], 1, 30, 10)
-  }
-  if ('elecPrice' in s) {
-    s.elecPrice = clamp(s.elecPrice, 4, 18, 8)
-  }
-  // 64 azdı: 14 pompa + 12 şarj + sınırsız otopark/panel/self-yıkama rahat aşıyor; taşan
-  // yapıların çakışma dikdörtgenleri sessizce düşüyordu. 512 ≈ 30KB, body limitine uzak.
-  if (Array.isArray(save.placedRects) && save.placedRects.length > 512) save.placedRects = save.placedRects.slice(0, 512)
-  // muhasebe log'ları: şişmeyi/abuse'ı önlemek için son 40 kayda kırp
-  if (Array.isArray(s.fuelLog) && s.fuelLog.length > 40) s.fuelLog = s.fuelLog.slice(-40)
-  if (Array.isArray(s.wageLog) && s.wageLog.length > 40) s.wageLog = s.wageLog.slice(-40)
-  if (Array.isArray(s.salesLog) && s.salesLog.length > 370) s.salesLog = s.salesLog.slice(-370)
-  // parsel koordinatlarını doğrula: sınır dışı (0,4 gibi) key'ler client'ı açılışta crash ettiriyordu
-  const validParcelKey = k => {
-    const p = String(k).split(','); if (p.length !== 2) return false
-    const c = Number(p[0]), r = Number(p[1])
-    return Number.isInteger(c) && Number.isInteger(r) && c >= 0 && c < 6 && r >= 0 && r < 3
-  }
-  if (Array.isArray(s.ownedParcels)) s.ownedParcels = s.ownedParcels.filter(validParcelKey)
-  if (Array.isArray(s.pavedParcels)) s.pavedParcels = s.pavedParcels.filter(validParcelKey)
-  if (Array.isArray(s.ownedParcels) && s.ownedParcels.length > 18) s.ownedParcels = s.ownedParcels.slice(0, 18)
-  if (Array.isArray(s.achievements) && s.achievements.length > 32) s.achievements = s.achievements.slice(0, 32)
-  // ---- ÇOKLU ŞUBE (additive) ----
-  const VALID_LOC = ['kasaba', 'cevreyolu', 'otoyol', 'marina', 'metropol']
-  if ('activeLoc' in s && !VALID_LOC.includes(s.activeLoc)) s.activeLoc = 'kasaba'
-  if ('unlockedLocs' in s) {
-    s.unlockedLocs = Array.isArray(s.unlockedLocs)
-      ? [...new Set(s.unlockedLocs.filter(x => VALID_LOC.includes(x)))].slice(0, 5)
-      : ['kasaba']
-    if (!s.unlockedLocs.includes('kasaba')) s.unlockedLocs.unshift('kasaba')
-    if (s.activeLoc && !s.unlockedLocs.includes(s.activeLoc)) s.activeLoc = 'kasaba'
-  }
-  if (s.locSnapshots && typeof s.locSnapshots === 'object' && !Array.isArray(s.locSnapshots)) {
-    const out = {}
-    for (const [k, sn] of Object.entries(s.locSnapshots)) {
-      if (!VALID_LOC.includes(k) || !sn || typeof sn !== 'object' || !sn.f) continue
-      // snapshot ekipmanına AKTİF şubeyle AYNI clamp'ler uygulanır (hile enjeksiyonu yok)
-      const f = sn.f
-      f.pumps = clamp(f.pumps, 1, 14, 1)
-      f.evChargers = clamp(f.evChargers, 0, 12, 0)
-      f.signLevel = clamp(f.signLevel, 0, 3, 0)
-      f.tankLevel = clamp(f.tankLevel, 0, 3, 0)
-      f.marketLevel = clamp(f.marketLevel, 0, 3, 0)
-      if ('market2Level' in f) f.market2Level = clamp(f.market2Level, 0, 3, 0)
-      if ('toilet2Level' in f) f.toilet2Level = clamp(f.toilet2Level, 0, 2, 0)
-      if ('managerLevel' in f) f.managerLevel = clamp(f.managerLevel, 0, 3, 0)
-      if ('staffLevel' in f) f.staffLevel = clamp(f.staffLevel, 1, 4, 1)
-      if ('decorLevel' in f) f.decorLevel = clamp(f.decorLevel, 0, 3, 0)
-      if ('wear' in f) f.wear = clamp(f.wear, 0, 1, 0)
-      f.toiletLevel = clamp(f.toiletLevel, 0, 2, 0)
-      f.gridLevel = clamp(f.gridLevel, 0, 2, 0)
-      f.batteryLevel = clamp(f.batteryLevel, 0, 6, 0)
-      f.battery = clamp(f.battery, 0, 4500, 0)
-      f.uranium = clamp(f.uranium, 0, 100, 0)
-      for (const key of ['parkingCount', 'solarCount', 'selfWashCount', 'airWaterCount', 'lampCount']) {
-        if (key in f) f[key] = clamp(f[key], 0, 200, 0)
-      }
-      clampMarina(f) // marina şubesi anlık görüntüsü de temizlenir
-      clampRival(f)
-      if (sn.tankCounts && typeof sn.tankCounts === 'object') {
-        for (const fu of ['benzin', 'dizel', 'lpg']) sn.tankCounts[fu] = clamp(sn.tankCounts[fu], 1, 4, 1)
-      }
-      const TANK_CAP2 = [800, 1500, 3000, 5000]
-      if (sn.tanks && typeof sn.tanks === 'object') {
-        for (const fu of ['benzin', 'dizel', 'lpg']) {
-          const cnt = clamp(sn.tankCounts?.[fu], 1, 4, 1)
-          sn.tanks[fu] = clamp(sn.tanks[fu], 0, TANK_CAP2[f.tankLevel || 0] * cnt, 0)
-        }
-      }
-      if (sn.pendingCash && typeof sn.pendingCash === 'object') {
-        for (const key of Object.keys(sn.pendingCash)) sn.pendingCash[key] = clamp(sn.pendingCash[key], 0, 8000, 0)
-      }
-      for (const arr of ['ownedParcels', 'pavedParcels']) {
-        if (Array.isArray(sn[arr])) sn[arr] = sn[arr].filter(k2 => {
-          const pp = String(k2).split(','); if (pp.length !== 2) return false
-          const c2 = Number(pp[0]), r2 = Number(pp[1])
-          return Number.isInteger(c2) && Number.isInteger(r2) && c2 >= 0 && c2 < 6 && r2 >= 0 && r2 < 3
-        }).slice(0, 18)
-      }
-      if (Array.isArray(sn.placedRects) && sn.placedRects.length > 512) sn.placedRects = sn.placedRects.slice(0, 512)
-      out[k] = sn
-    }
-    s.locSnapshots = out
-  }
-  return save
+  return s
 }
 
 // ---- hız limitleri (bellek içi; tek konteyner için yeterli) ----
@@ -1099,115 +936,61 @@ async function handleApi(req, res, url) {
       // hızda artamaz. Satın alma servet-nötr (para↓ bina↑) → sadece KAZANÇ serveti
       // artırır. Böylece PARA ve İLERLEME (bina/seviye/day) enjeksiyonu tek tavanla kapanır.
       // Offline kazanç da elapsed×600 payı içinde kaldığından bu tavandan sorunsuz geçer.
-      if (clean && clean.s && typeof clean.s === 'object') {
-        const START_MONEY = 5000
+      if (clean && typeof clean === 'object') {
+        const START_MONEY = 25000
         const prevSave = prev.rows[0]?.save
-        // yeni hesabın İLK save'i (misafirden taşınmış olabilir): elapsed≈0 olur ama oyuncu misafirken
-        // gerçekte GUEST_MAX_DAY(5)'e kadar oynamış olabilir → tavanı OYUN GÜNÜNE göre ver, wall-clock'a değil.
-        const firstSave = !(prevSave && prevSave.s)
+        const firstSave = !prevSave
         const sinceTs = prev.rows[0]?.updated_at || prev.rows[0]?.created_at
         const elapsed = sinceTs ? Math.max(1, (Date.now() - new Date(sinceTs).getTime()) / 1000) : 1
-        const gameDays = (typeof clean.s.day === 'number') ? Math.min(Math.max(0, clean.s.day), 8) : 0 // misafir eşiği 5 + tampon
-        // İlk-save (misafirden taşınan) tavanı SIKI: legit gün-5 misafiri ~50-100k yapar.
-        // Eski gün×400k tavanı localStorage'ı elle şişiren hilecinin 1.86M'sini geçirdi (furkan123 vakası).
-        // Marka yıldızı (prestij) geliri kalıcı çarpar; tavan da aynı oranda genişlemeli,
-        // yoksa devretmiş oyuncunun meşru geliri "imkânsız artış" sanılıp kırpılır.
-        // GÜVENLİK: yıldız istemci alanı → DOĞRULANIR, yoksa tavan ×11 yapılıp para enjekte edilir.
-        //  • ilk save'de (yeni/misafirden taşınan hesap) prestij YOK sayılır
-        //  • yıldız, önceki save'in yıldızından en fazla +1 olabilir (devir tek tek yapılır)
-        const prevStars = Math.max(0, Math.min(40, Number(prevSave?.s?.brandStars) || 0))
-        let stars = Math.max(0, Math.min(40, Number(clean.s.brandStars) || 0))
-        // KAYDEDİLEN DEĞER de düzeltilir — yalnız allowance'ı düzeltmek yetmiyordu: ilk save
-        // 40 yıldızı SQL'e yazınca sonraki save'lerde prevStars=40 olup doğrulama anlamsızlaşıyordu.
-        if (firstSave) { stars = 0; clean.s.brandStars = 0 }
-        else if (stars > prevStars + 1) {
-          // artış +1'den büyük olamaz (devir tek tek yapılır) → kırp + LOGLA
-          pool.query('INSERT INTO halisaha_starlog(email, prev, next, kind) VALUES ($1,$2,$3,$4)',
-            [email, prevStars, stars, 'clamp-artis']).catch(() => {})
-          stars = prevStars; clean.s.brandStars = prevStars
-        } else if (stars < prevStars) {
-          // YILDIZ MONOTONIK — ASLA AZALMAZ (Oğuz vakası 29 Tem: bayat sekme/kayıt eski
-          // stars'ı yazınca yıldızlar siliniyordu; azalış hiç doğrulanmıyordu). Meşru
-          // sıfırlama pushSave(null) üzerinden firstSave yolunu kullanır.
-          pool.query('INSERT INTO halisaha_starlog(email, prev, next, kind) VALUES ($1,$2,$3,$4)',
-            [email, prevStars, stars, 'azalis-engellendi']).catch(() => {})
-          stars = prevStars; clean.s.brandStars = prevStars
-          if (typeof clean.s.handoverCount === 'number') clean.s.handoverCount = Math.max(clean.s.handoverCount, prevStars)
-        } else if (stars === prevStars + 1) {
-          pool.query('INSERT INTO halisaha_starlog(email, prev, next, kind) VALUES ($1,$2,$3,$4)',
-            [email, prevStars, stars, 'devir']).catch(() => {})
-        }
-        // handoverCount de yıldızla tutarlı olmalı (kurcalanmış save ile eşik atlanmasın)
-        if (typeof clean.s.handoverCount === 'number') clean.s.handoverCount = Math.min(clean.s.handoverCount, clean.s.brandStars)
-        const starMult = 1 + 0.25 * Math.min(stars, 10) + 0.10 * Math.min(Math.max(stars - 10, 0), 10) + 0.05 * Math.max(stars - 20, 0) // istemci prestigeMult ile aynı (azalan verim)
-        // JETON KOVASI: allowance artık push BAŞINA değil ZAMAN başına birikiyor.
-        // Kova save içinde taşınır (_ab, sunucu-sahipli alan); istemci kurcalarsa
-        // aşağıda clamp'lenir. Böylece hızlı push spam'i bedava para getirmez —
-        // 40 push/dakika ile 1 push/dakika aynı toplam allowance'ı verir.
-        const rate = maxIncomeRate(clean.s)
-        const prevAb = (prevSave && prevSave.s && prevSave.s._ab) || null
+        const gameDays = (typeof clean.day === 'number') ? Math.min(Math.max(0, clean.day), 8) : 0
+        const rate = maxIncomeRate(clean)
+        const prevAb = (prevSave && prevSave._ab) || null
         const abT = prevAb && typeof prevAb.t === 'number' ? prevAb.t : 0
         const abB = prevAb && typeof prevAb.b === 'number' ? clamp(prevAb.b, 0, ALLOW_BURST, 0) : ALLOW_BURST
         const nowMs = Date.now()
         const refillSec = abT > 0 ? Math.max(0, (nowMs - abT) / 1000) : elapsed
         let bucket = Math.min(ALLOW_BURST, abB + refillSec * rate)
-        const allowance = firstSave
-          ? (60_000 + gameDays * 40_000) * starMult   // misafirden taşınan ilk save: serbest
-          : bucket
-        const prevWealth = (prevSave && prevSave.s)
-          ? (Number(prevSave.s.money) || 0) + buildingValue(prevSave.s) + snapshotsValue(prevSave.s)
-          : START_MONEY
-        const bval = buildingValue(clean.s) + snapshotsValue(clean.s)
-        let money = Number(clean.s.money) || 0
-        // REGRESYON GUARD'ı: İLERLEMİŞ kaydın üstüne "taze başlangıç" save'i YAZILAMAZ.
-        // (Misafir Gün-1 state'i taşıyan istemci login sonrası bulut kaydını eziyordu —
-        //  baseUpdatedAt=null olduğundan çoklu-cihaz 409 guard'ı bypass oluyordu.)
-        // Meşru sıfırlama pushSave(null) kullanır (save=NULL) → sonraki push firstSave sayılır, serbest.
+        const allowance = firstSave ? (60_000 + gameDays * 40_000) : bucket
+        const prevWealth = prevSave ? (Number(prevSave.money) || 0) + buildingValue(prevSave) : START_MONEY
+        const bval = buildingValue(clean)
+        let money = Number(clean.money) || 0
+        // REGRESYON GUARD'ları (BenelOil dersleri birebir)
         if (!firstSave) {
-          const prevDay = Number(prevSave.s.day) || 1
-          const newDay = Number(clean.s.day) || 1
+          const prevDay = Number(prevSave.day) || 1
+          const newDay = Number(clean.day) || 1
           const newWealth = money + bval
-          const prevBval = buildingValue(prevSave.s)
-          // (1) TAZE BAŞLANGIÇ hiçbir ilerlemenin üstüne yazılamaz — eski eşik (gün>=5 VE
-          //     servet>50k) yeni/erken hesapları korumuyordu: gün-3 / 25k oyuncu gün-1'e
-          //     düşüyordu ("baştan başladım" şikâyetinin kökü).
+          const prevBval = buildingValue(prevSave)
           const freshStart = newDay <= 2 && bval <= 0 && newWealth <= START_MONEY * 1.5
           const hasProgress = prevDay > 1 || prevBval > 0 || prevWealth > START_MONEY
           if (freshStart && hasProgress) {
             return json(res, 409, { conflict: true, save: prevSave, updatedAt: prev.rows[0]?.updated_at || null })
           }
-          // (2) GERİ GİDİŞ: gün geriye gidiyor ve servet yarıdan aza düşüyorsa bu eski/donuk
-          //     bir sekmenin state'idir (oyunda gün asla azalmaz) → clobber etme.
           if (newDay < prevDay - 1 && newWealth < prevWealth * 0.5) {
             return json(res, 409, { conflict: true, save: prevSave, updatedAt: prev.rows[0]?.updated_at || null })
           }
         }
         let clamped = 0
         if (money + bval > prevWealth + allowance) {
-          // fazlalığı önce paradan düş (para enjeksiyonu / hızlı kazanç freni)
           const excess = (money + bval) - (prevWealth + allowance)
           clamped = excess
           money = Math.max(0, money - excess)
-          clean.s.money = Math.round(money)
-          // bina değeri tek başına tavanı aşıyorsa = bina/seviye ENJEKSİYONU → reddet, öncekini koru.
+          clean.money = Math.round(money)
           if (money + bval > prevWealth + allowance + 250_000) {
             auditCheat(email, 'inject', { excess: Math.round(excess), rate: Math.round(rate) })
             return json(res, 409, { conflict: true, save: prevSave || null, updatedAt: prev.rows[0]?.updated_at || null })
           }
         }
         if (!firstSave) {
-          // HARCANAN JETON: kabul edilen servet artışı kovadan düşülür. Kova bittiğinde
-          // oyuncu ancak zamanla dolduğu kadar kazanabilir (push sıklığı işe yaramaz).
           const gain = Math.max(0, (money + bval) - prevWealth)
           bucket = Math.max(0, bucket - gain)
           if (clamped > 5000) auditCheat(email, 'clamp', { clamped: Math.round(clamped), rate: Math.round(rate) })
         }
-        clean.s._ab = { t: nowMs, b: Math.round(bucket) }
-        // day (ilerleme) hız freni: gün ~160sn/oyun-günü hızında ilerler. İlk save'de misafir eşiğine (5+tampon) izin.
-        if (typeof clean.s.day === 'number') {
-          const prevDay = (prevSave && prevSave.s && typeof prevSave.s.day === 'number') ? prevSave.s.day : 1
-          const maxDay = firstSave ? Math.max(prevDay + 3, 8) : prevDay + Math.ceil(elapsed / 160) + 3
-          if (clean.s.day > maxDay) clean.s.day = maxDay
+        clean._ab = { t: nowMs, b: Math.round(bucket) }
+        // gün hız freni: 1 oyun günü = 450 sn (HOUR_SECONDS=30 x 15 saat)
+        if (typeof clean.day === 'number') {
+          const prevDay = (prevSave && typeof prevSave.day === 'number') ? prevSave.day : 1
+          const maxDay = firstSave ? Math.max(prevDay + 3, 8) : prevDay + Math.ceil(elapsed / 450) + 3
+          if (clean.day > maxDay) clean.day = maxDay
         }
       }
       // save yazarken oturumu da bu cihaza sabitle (session_id null'sa claim et)

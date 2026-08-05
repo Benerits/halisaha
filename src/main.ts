@@ -22,8 +22,11 @@ try {
     const rep = game.applyOffline(Date.now())
     if (rep) setTimeout(() => { toast(rep, 'g'); audio.cash() }, 1200)
   }
-  const cheat = new URLSearchParams(location.search).get('para')
-  if (cheat) game.money = Math.max(game.money, Number(cheat) || 0)
+  // ?para hilesi SADECE yerel geliştirmede (prod'da kapalı — anticheat)
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    const cheat = new URLSearchParams(location.search).get('para')
+    if (cheat) game.money = Math.max(game.money, Number(cheat) || 0)
+  }
 } catch { /* bozuk kayıt: sıfırdan */ }
 if (game.pitches >= 2) world.buildPitch(0, 5.2)
 
