@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f9e57"/><stop offset="1" stop-color="#14532d"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <!-- saha çizgileri -->
+  <rect x="38" y="58" width="180" height="140" rx="10" fill="none" stroke="#f4f7f2" stroke-width="10"/>
+  <line x1="128" y1="58" x2="128" y2="198" stroke="#f4f7f2" stroke-width="10"/>
+  <circle cx="128" cy="128" r="30" fill="none" stroke="#f4f7f2" stroke-width="10"/>
+  <circle cx="128" cy="128" r="8" fill="#f4f7f2"/>
+  <!-- kale ağızları -->
+  <rect x="26" y="103" width="22" height="50" fill="none" stroke="#f2b53c" stroke-width="9"/>
+  <rect x="208" y="103" width="22" height="50" fill="none" stroke="#f2b53c" stroke-width="9"/>
+</svg>
