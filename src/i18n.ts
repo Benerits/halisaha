@@ -5,6 +5,7 @@ export let lang: Lang = (localStorage.getItem('hs-lang') as Lang) || 'tr'
 const EN: Record<string, string> = {
   'Gelen İstekler': 'Incoming Requests',
   'Çizelge — soldan istek seç': 'Schedule — pick a request',
+  'Çizelge — boş saate tıkla': 'Schedule — tap a free hour',
   'YAZIHANE': 'FRONT OFFICE',
   'Yatırım': 'Upgrades', 'İnşaat': 'Build', 'Özet': 'Summary', 'Personel': 'Staff',
   'Şubeler': 'Branches', 'Defter': 'Ledger', 'Ayarlar': 'Settings',

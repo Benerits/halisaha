@@ -1153,6 +1153,11 @@ export class Game {
       rentDueDay: this.rentDueDay, rentMissed: this.rentMissed, loyalty: this.loyalty,
       hasPhone2: this.hasPhone2, hasCirak: this.hasCirak, adDays: this.adDays,
       placedCount: this.placedCount,
+      goalDay: this.goalDay, gMatches: this.gMatches, gEarned: this.gEarned,
+      gSubs: this.gSubs, goalsDone: this.goalsDone,
+      events: this.events.slice(-40), incomeToday: this.incomeToday,
+      expenseToday: this.expenseToday, lastDayProfit: this.lastDayProfit,
+      locIncome: this.locIncome, t: this.t,
       activeLoc: this.activeLoc, unlockedLocs: this.unlockedLocs,
       locStore: (this.syncLoc(), this.locStore),
       ownedParcels: this.ownedParcels, builds: this.builds,
@@ -1169,9 +1174,20 @@ export class Game {
     this.hasBillboard = b('hasBillboard'); this.hasRoadSign = b('hasRoadSign')
     if (Array.isArray(d.bookings)) this.bookings = d.bookings as Booking[]
     this.rentDueDay = n('rentDueDay', 7); this.rentMissed = n('rentMissed', 0)
+    this.hasKeeper = d.hasKeeper === true
+    this.hasTost = d.hasTost === true
+    this.hasBaklava = d.hasBaklava === true
+    this.hasWC = d.hasWC === true
     this.hasPhone2 = d.hasPhone2 === true; this.hasCirak = d.hasCirak === true; this.adDays = n('adDays', 0)
     if (this.hasCirak) this.personel.cirak = true
     this.placedCount = n('placedCount', 0)
+    this.goalDay = n('goalDay', 0); this.gMatches = n('gMatches', 0)
+    this.gEarned = n('gEarned', 0); this.gSubs = n('gSubs', 0)
+    if (Array.isArray(d.goalsDone)) this.goalsDone = d.goalsDone as string[]
+    if (Array.isArray(d.events)) this.events = d.events as string[]
+    this.incomeToday = n('incomeToday', 0); this.expenseToday = n('expenseToday', 0)
+    this.lastDayProfit = n('lastDayProfit', 0); this.t = n('t', 0)
+    if (d.locIncome && typeof d.locIncome === 'object') this.locIncome = d.locIncome as Record<string, number>
     this.loadedLastSeen = n('lastSeen', 0)
     if (Array.isArray(d.unlockedLocs) && d.unlockedLocs.length) this.unlockedLocs = d.unlockedLocs as LocId[]
     if (typeof d.activeLoc === 'string' && this.unlockedLocs.includes(d.activeLoc as LocId)) this.activeLoc = d.activeLoc as LocId

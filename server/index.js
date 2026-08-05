@@ -8,7 +8,7 @@ import pg from 'pg'
 import { WebSocketServer } from 'ws'
 
 const PORT = Number(process.env.PORT || 80)
-const SECRET = process.env.AUTH_SECRET || 'benzinlik-dev-secret'
+const SECRET = process.env.AUTH_SECRET || 'halisaha-dev-secret'
 const DIST = path.resolve(process.cwd(), 'dist')
 
 const pool = process.env.DATABASE_URL
@@ -177,7 +177,7 @@ async function oauthUpsertPlayer(provider, sub, email) {
     }
   }
   // yeni hesap: e-posta gizliyse benzersiz placeholder; şifre kullanılamaz (rastgele)
-  const em = (email && /^\S+@\S+\.\S+$/.test(email)) ? email.toLowerCase() : `${provider}_${sub}@login.beneloil`
+  const em = (email && /^\S+@\S+\.\S+$/.test(email)) ? email.toLowerCase() : `${provider}_${sub}@login.halisaha`
   const pass = hashPassword(crypto.randomBytes(24).toString('hex'))
   const ins = await pool.query(
     `INSERT INTO halisaha_player(email, pass, ${col}, email_verified) VALUES ($1,$2,$3,true)
@@ -189,7 +189,7 @@ async function oauthUpsertPlayer(provider, sub, email) {
 }
 async function sendEmail(to, subject, html) {
   const key = process.env.RESEND_API_KEY
-  const from = process.env.MAIL_FROM || 'BenelOil <noreply@benerits.com>'
+  const from = process.env.MAIL_FROM || 'HALI SAHA <noreply@benerits.com>'
   if (!key) { console.log('[mail] RESEND_API_KEY yok — atlandı:', to, '/', subject); return false }
   try {
     const r = await fetch('https://api.resend.com/emails', {
@@ -214,14 +214,14 @@ function mailTemplate(kind, lang, url) {
   const en = lang === 'en'
   const C = {
     verify: {
-      subject: en ? 'BenelOil — Verify your email' : 'BenelOil — E-postanı doğrula',
+      subject: en ? 'HALI SAHA — Verify your email' : 'HALI SAHA — E-postanı doğrula',
       title: en ? 'Verify your email' : 'E-postanı doğrula',
-      body: en ? 'Welcome to BenelOil! Confirm your email address to keep running your station.'
-        : 'BenelOil’e hoş geldin! İstasyonunu işletmeye devam etmek için e-postanı doğrula.',
+      body: en ? 'Welcome to HALI SAHA! Confirm your email address to keep running your station.'
+        : 'HALI SAHA’e hoş geldin! İstasyonunu işletmeye devam etmek için e-postanı doğrula.',
       btn: en ? 'Verify my email' : 'E-postamı doğrula',
     },
     reset: {
-      subject: en ? 'BenelOil — Reset your password' : 'BenelOil — Şifre sıfırlama',
+      subject: en ? 'HALI SAHA — Reset your password' : 'HALI SAHA — Şifre sıfırlama',
       title: en ? 'Reset your password' : 'Şifreni sıfırla',
       body: en ? 'We received a request to reset your password. Tap below to set a new one — this link is valid for 1 hour.'
         : 'Şifreni sıfırlama isteği aldık. Yeni şifre belirlemek için aşağıya dokun — bağlantı 1 saat geçerli.',
@@ -234,7 +234,7 @@ function mailTemplate(kind, lang, url) {
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#eef1f4">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f4;padding:28px 12px"><tr><td align="center">
 <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 6px 24px rgba(9,9,11,.08);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
-<tr><td style="background:linear-gradient(135deg,#e8862e,#d64545);padding:26px 28px;text-align:center"><div style="font-size:30px;font-weight:800;color:#fff;letter-spacing:-.5px">BenelOil</div></td></tr>
+<tr><td style="background:linear-gradient(135deg,#e8862e,#d64545);padding:26px 28px;text-align:center"><div style="font-size:30px;font-weight:800;color:#fff;letter-spacing:-.5px">HALI SAHA</div></td></tr>
 <tr><td style="padding:34px 30px 10px;text-align:center">
 <h1 style="margin:0 0 12px;font-size:22px;color:#1c2530">${C.title}</h1>
 <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:#5a6570">${C.body}</p>
@@ -244,7 +244,7 @@ function mailTemplate(kind, lang, url) {
 <p style="margin:0 0 6px;font-size:12px;color:#9aa4ae;line-height:1.5">${ignore}</p>
 <p style="margin:0;font-size:11px;color:#9aa4ae">${copy}<br><span style="color:#7fa8e6;word-break:break-all">${url}</span></p>
 <hr style="border:none;border-top:1px solid #eef1f4;margin:18px 0">
-<p style="margin:0;font-size:11px;color:#b5bdc5">BenelOil · a Benerits game · operated by Hopsule Inc. (Delaware, USA)</p>
+<p style="margin:0;font-size:11px;color:#b5bdc5">HALI SAHA · a Benerits game · operated by Hopsule Inc. (Delaware, USA)</p>
 </td></tr></table></td></tr></table></body></html>`
   return { subject: C.subject, html }
 }
@@ -380,7 +380,10 @@ const HS_LOC_COST = { sanayi: 150000, sahil: 400000 }
 function hsLocValue(sn) {
   if (!sn || typeof sn !== 'object') return 0
   let v = 0
-  if (Array.isArray(sn.builds)) for (const b of sn.builds) v += (b && HS_BUILD_COST[b.kind]) || 0
+  if (Array.isArray(sn.builds)) for (const b of sn.builds) {
+    if (b && (b.kind === 'kantin' || b.kind === 'dus' || b.kind === 'wc')) continue // bayraktan sayılıyor (çift sayım fixi)
+    v += (b && HS_BUILD_COST[b.kind]) || 0
+  }
   if (Array.isArray(sn.ownedParcels)) v += Math.max(0, sn.ownedParcels.length - 4) * 14000
   const p = sn.personel
   if (p && typeof p === 'object') {
@@ -466,7 +469,7 @@ function snapshotsValue() { return 0 } // halisaha: şubeler buildingValue için
 function sanitizeSave(save) {
   if (save === null) return null
   if (typeof save !== 'object' || Array.isArray(save)) return undefined
-  const s = save // HALI SAHA kaydı DÜZ nesne (BenelOil'in {s:...} zarfı yok)
+  const s = save // HALI SAHA kaydı DÜZ nesne (HALI SAHA'in {s:...} zarfı yok)
   s.money = clamp(s.money, 0, 1_000_000_000, 25000)
   s.rep = clamp(s.rep, 0, 5, 3)
   s.day = clamp(s.day, 1, 100000, 1)
@@ -482,7 +485,7 @@ function sanitizeSave(save) {
     if (Array.isArray(sn.bookings)) sn.bookings = sn.bookings.slice(0, 2000)
     if (Array.isArray(sn.queue)) sn.queue = sn.queue.slice(0, 12)
     if (Array.isArray(sn.builds)) sn.builds = sn.builds.filter(b => b && HS_BUILD_COST[b.kind]).slice(0, 60)
-    if (Array.isArray(sn.ownedParcels)) sn.ownedParcels = [...new Set(sn.ownedParcels.filter(x => typeof x === 'string'))].slice(0, 9)
+    if (Array.isArray(sn.ownedParcels)) sn.ownedParcels = [...new Set(sn.ownedParcels.filter(x => typeof x === 'string'))].slice(0, 18)
     sn.pitches = clamp(sn.pitches, 1, 12, 1)
     return sn
   }
@@ -579,13 +582,13 @@ async function handleApi(req, res, url) {
       if (!lbCache.data || now - lbCache.at > 60_000) {
         const r = await pool.query(`
           SELECT email,
-                 COALESCE((save->'s'->>'money')::numeric, 0) AS money,
+                 COALESCE((COALESCE(save->'s'->>'money', save->>'money'))::numeric, 0) AS money,
                  COALESCE((save->'s'->>'day')::int, 1) AS day,
-                 COALESCE((save->'s'->>'brandStars')::int, 0) AS stars
+                 COALESCE((COALESCE(save->'s'->>'brandStars', '0'))::int, 0) AS stars
           FROM halisaha_player
           WHERE save IS NOT NULL AND banned_at IS NULL
-          ORDER BY (COALESCE((save->'s'->>'money')::numeric, 0)
-                    + COALESCE((save->'s'->>'brandStars')::int, 0) * 250000) DESC
+          ORDER BY (COALESCE((COALESCE(save->'s'->>'money', save->>'money'))::numeric, 0)
+                    + COALESCE((COALESCE(save->'s'->>'brandStars', '0'))::int, 0) * 250000) DESC
           LIMIT 20`)
         // e-posta YALNIZ "bu satır sensin" eşlemesi için tutulur; asla yanıta yazılmaz.
         lbCache = { data: r.rows.map((x, i) => ({
@@ -957,7 +960,7 @@ async function handleApi(req, res, url) {
         const prevWealth = prevSave ? (Number(prevSave.money) || 0) + buildingValue(prevSave) : START_MONEY
         const bval = buildingValue(clean)
         let money = Number(clean.money) || 0
-        // REGRESYON GUARD'ları (BenelOil dersleri birebir)
+        // REGRESYON GUARD'ları (HALI SAHA dersleri birebir)
         if (!firstSave) {
           const prevDay = Number(prevSave.day) || 1
           const newDay = Number(clean.day) || 1
@@ -1070,9 +1073,9 @@ async function handleApi(req, res, url) {
       const r = await pool.query('SELECT save FROM halisaha_player WHERE email=$1', [email])
       const save = r.rows[0]?.save || { s: {} }; save.s = save.s || {}
       if (productId === 'remove_ads') save.s.noAds = true
-      else save.s.money = Math.round((Number(save.s.money) || 0) + COINS[productId])
+      else save.money = Math.round((Number(save.money) || 0) + COINS[productId])
       await pool.query('UPDATE halisaha_player SET save=$2, updated_at=now() WHERE email=$1', [email, JSON.stringify(save)])
-      return json(res, 200, { ok: true, money: Math.round(Number(save.s.money) || 0), noAds: !!save.s.noAds })
+      return json(res, 200, { ok: true, money: Math.round(Number(save.money) || 0), noAds: !!save.s.noAds })
     }
     // App Store 5.1.1(v): kullanıcı kendi hesabını uygulama içinden silebilmeli
     if (url === '/api/account' && req.method === 'DELETE') {
@@ -1320,7 +1323,7 @@ async function handleVs(req, res, url) {
     if (url === '/vs/v1/appeals' && req.method === 'GET') {
       const r = await pool.query(`SELECT a.id, a.email, a.message, a.created_at,
           p.id AS player_id, p.banned_at, p.ban_reason,
-          (p.save->'s'->>'money')::numeric::bigint AS money, (p.save->'s'->>'day')::int AS day
+          (p.COALESCE(save->'s'->>'money', save->>'money'))::numeric::bigint AS money, (p.save->'s'->>'day')::int AS day
         FROM halisaha_appeal a LEFT JOIN halisaha_player p ON p.email = a.email
         ORDER BY a.created_at DESC LIMIT 500`)
       return json(res, 200, { data: r.rows })
@@ -1548,7 +1551,7 @@ const server = http.createServer(async (req, res) => {
       ? decodeURIComponent(url.slice('/reset/'.length))
       : (new URL(req.url, 'http://x').searchParams.get('token') || '')
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-    return res.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>BenelOil — Şifre Sıfırla</title>
+    return res.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>HALI SAHA — Şifre Sıfırla</title>
 <body style="font-family:system-ui,sans-serif;background:#0d1420;color:#eaf1fb;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px">
 <div style="max-width:380px;width:100%;text-align:center"><div style="font-size:40px"></div><h2>Yeni şifre belirle</h2>
 <input id="pw" type="password" placeholder="Yeni şifre (en az 4 karakter)" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #33465f;background:#12233d;color:#fff;font-size:15px;margin:8px 0">
