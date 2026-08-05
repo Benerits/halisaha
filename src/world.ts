@@ -282,9 +282,7 @@ export class World {
     const ctx = cvs.getContext('2d')!
     ctx.fillStyle = '#1d7c45'; ctx.beginPath(); ctx.roundRect(0, 0, 640, 160, 22); ctx.fill()
     ctx.fillStyle = '#f7fbf4'; ctx.font = '800 74px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText('HALI SAHA', 320, 62)
-    ctx.font = '700 34px sans-serif'; ctx.fillStyle = '#bfe8cd'
-    ctx.fillText('SALI 21:00 SENİNDİR', 320, 118)
+    ctx.fillText('HALI SAHA', 320, 80)
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 1.3),
       new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cvs), transparent: true }))
     sign.position.set(0, -2.28, 3.5); sign.rotation.x = Math.PI / 2
@@ -305,10 +303,8 @@ export class World {
     ctx.strokeStyle = '#f2b53c'; ctx.lineWidth = 12; ctx.beginPath(); ctx.roundRect(10, 10, 620, 180, 20); ctx.stroke()
     const title = (name || (this.theme === 'sanayi' ? 'SANAYİ SAHA' : this.theme === 'sahil' ? 'SAHİL SAHA' : 'HALI SAHA')).toUpperCase()
     ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.font = `800 ${title.length > 10 ? 58 : 80}px sans-serif`
-    ctx.fillText(title, 320, 76)
-    ctx.font = '800 42px sans-serif'; ctx.fillStyle = '#f2b53c'
-    ctx.fillText('SALI 21:00 SENİNDİR', 320, 150)
+    ctx.font = `800 ${title.length > 10 ? 62 : 86}px sans-serif`
+    ctx.fillText(title, 320, 100)
     const t = new THREE.CanvasTexture(cvs); t.colorSpace = THREE.SRGBColorSpace
     return t
   }
