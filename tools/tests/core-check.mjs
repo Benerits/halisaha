@@ -518,5 +518,21 @@ console.log('\n— ANALİZ RAPORU P1 (K4/K5/K6 sink paketi) —')
     const x = k6.spawnReservation(); if (x && x.weeks > 0) { sawSub = true; break } }
   check('K6: abone oranı tavanında yeni abonelik teklifi gelmez', !sawSub)
 }
+
+console.log('\n— ANALİZ RAPORU P2 (K12 sezon/prestij) —')
+{
+  const g = new Game()
+  check('K12: şart sağlanmadan sezon kapanmaz', !g.closeSeason().ok)
+  g.day = 31; g.money = 1_200_000; g.facilityName = 'ARENA'
+  g.buy = g.buy.bind(g)
+  const r = g.closeSeason()
+  check('K12: sezon kapanır', r.ok)
+  check('K12: yıldız takılır, her şey sıfırlanır', g.stars === 1 && g.money === 25_000 && g.day === 1)
+  check('K12: tesis adı sezonlar arası KALIR', g.facilityName === 'ARENA')
+  check('K12: yıldız fiyatlara kalıcı +%5 işler', Math.abs(g.starMult() - 1.05) < 1e-9)
+  g.day = 31; g.money = 1_200_000
+  g.closeSeason()
+  check('K12: ikinci yıldız birikir (+%10)', g.stars === 2 && Math.abs(g.starMult() - 1.10) < 1e-9)
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

@@ -394,7 +394,7 @@ export class Game {
     const twoH = weeks === 0 && Math.random() < 0.18
     const subPenalty = srNow > 0.6 ? Math.max(0.7, 1 - (srNow - 0.6) * 0.75) : 1  // K6: aboneye boğulan tesiste tek maç ucuzlar
     const raw = this.basePrice() * seg.priceMult * (weeks > 0 ? 0.82 : 1) * this.locDef().priceMult
-      * (twoH ? 1.9 : 1) * subPenalty
+      * (twoH ? 1.9 : 1) * subPenalty * this.starMult()
     // ESNEK İSTEK (%60): "hafta içi akşam olsun" → hangi slota koyacağına SEN karar verirsin
     const flexible = Math.random() < 0.6
     const flexDays: number[] = []
@@ -592,6 +592,26 @@ export class Game {
   lostNotices: string[] = []
   /** toplam yerleştirme sayısı — öğretici vurgular buna göre sakinleşir */
   placedCount = 0
+  /** K12: ŞAMPİYONLUK YILDIZLARI — sezon kapatınca +1; kalıcı fiyat çarpanı */
+  stars = 0
+  starMult(): number { return 1 + 0.05 * Math.min(20, this.stars) }
+  /** sezonu kapatma şartı ve ödülü: gün ≥ 30 VE kasa ≥ ₺1M */
+  canCloseSeason(): boolean { return this.day >= 30 && this.money >= 1_000_000 }
+  /** SEZONU ŞAMPİYON BİTİR: her şey sıfırlanır, yıldız kalır (+%5 kalıcı fiyat) */
+  closeSeason(): { ok: boolean; msg: string } {
+    if (!this.canCloseSeason()) return { ok: false, msg: 'Şart: 30. gün + kasada ₺1.000.000.' }
+    const star = this.stars + 1
+    const keepName = this.facilityName
+    const keepLang = 1
+    void keepLang
+    const fresh = new Game()
+    Object.assign(this, fresh)
+    this.stars = star
+    this.facilityName = keepName
+    this.events.push(`⭐ SEZON ŞAMPİYONU! ${star}. yıldız takıldı — tüm fiyatlar kalıcı +%5.`)
+    return { ok: true, msg: `⭐ ${star}. yıldız! Yeni sezon: sıfırdan ama %${star * 5} daha değerli bir isimle.` }
+  }
+
   /** K5: itibar bonusu verilmiş yapı türleri (tür başına TEK sefer) */
   repGiven: string[] = []
   private giveRepOnce(kind: string, amt: number) {
@@ -1207,7 +1227,7 @@ export class Game {
       hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,
       rentDueDay: this.rentDueDay, rentMissed: this.rentMissed, loyalty: this.loyalty,
       hasPhone2: this.hasPhone2, hasCirak: this.hasCirak, adDays: this.adDays,
-      placedCount: this.placedCount, facilityName: this.facilityName, repGiven: this.repGiven,
+      placedCount: this.placedCount, facilityName: this.facilityName, repGiven: this.repGiven, stars: this.stars,
       goalDay: this.goalDay, gMatches: this.gMatches, gEarned: this.gEarned,
       gSubs: this.gSubs, goalsDone: this.goalsDone,
       events: this.events.slice(-40), incomeToday: this.incomeToday,
@@ -1238,6 +1258,7 @@ export class Game {
     this.placedCount = n('placedCount', 0)
     if (typeof d.facilityName === 'string') this.facilityName = d.facilityName.slice(0, 16)
     if (Array.isArray(d.repGiven)) this.repGiven = d.repGiven as string[]
+    this.stars = n('stars', 0)
     this.goalDay = n('goalDay', 0); this.gMatches = n('gMatches', 0)
     this.gEarned = n('gEarned', 0); this.gSubs = n('gSubs', 0)
     if (Array.isArray(d.goalsDone)) this.goalsDone = d.goalsDone as string[]

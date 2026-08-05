@@ -589,11 +589,11 @@ async function handleApi(req, res, url) {
           SELECT email,
                  COALESCE((COALESCE(save->'s'->>'money', save->>'money'))::numeric, 0) AS money,
                  COALESCE(COALESCE(save->'s'->>'day', save->>'day')::int, 1) AS day,
-                 COALESCE((COALESCE(save->'s'->>'brandStars', '0'))::int, 0) AS stars
-          FROM halisaha_player
+                 COALESCE((COALESCE(save->>'stars', '0'))::int, 0) AS stars
+          , save->>'facilityName' AS tesis FROM halisaha_player
           WHERE save IS NOT NULL AND banned_at IS NULL
           ORDER BY (COALESCE((COALESCE(save->'s'->>'money', save->>'money'))::numeric, 0)
-                    + COALESCE((COALESCE(save->'s'->>'brandStars', '0'))::int, 0) * 250000) DESC
+                    + COALESCE((COALESCE(save->>'stars', '0'))::int, 0) * 250000) DESC
           LIMIT 20`)
         // e-posta YALNIZ "bu satır sensin" eşlemesi için tutulur; asla yanıta yazılmaz.
         lbCache = { data: r.rows.map((x, i) => ({

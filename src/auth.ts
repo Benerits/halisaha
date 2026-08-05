@@ -10,7 +10,7 @@ export function currentEmail(): string | null {
   return localStorage.getItem(EMAIL_KEY)
 }
 
-// ---- Misafir modu: hesapsız oynanan ilerleme yerelde tutulur; kayıt/giriş olunca sunucuya taşınır ----
+// ---- (K11) Misafir kovası KULLANILMIYOR: oyun SAVE_KEY üzerinden tek kaynak çalışır; API geriye dönük duruyor ----
 const GUEST_KEY = 'halisaha-guest'
 /** misafir save'i yerelde sakla (hesap yokken tek kayıt yeri) */
 export function saveGuest(save: unknown) {

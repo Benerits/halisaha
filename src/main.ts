@@ -435,9 +435,14 @@ function renderOffice() {
     body.querySelectorAll<HTMLElement>('button[data-buy]').forEach(b =>
       b.addEventListener('click', () => doBuy(b.dataset.buy as BuyId)))
   } else if (officeTab === 'ozet') {
+    const seasonRow = `<div class="srow" style="background:#fff8e8"><span class="nm">⭐ ${'Şampiyonluk'}</span>
+      <span class="gn">${game.stars > 0 ? game.stars + ' yıldız · fiyatlar +%' + (game.stars * 5) : t('henüz yıldız yok')}</span>
+      <button class="buy" id="season" ${game.canCloseSeason() ? '' : 'disabled'}>${t('Sezonu Şampiyon Bitir')}</button>
+      <span class="ds">${t('Şart: 30. gün + ₺1M kasa. Her şey sıfırlanır, yıldız KALIR — tüm fiyatlar kalıcı +%5.')}</span></div>`
+
     const occ = Math.round(game.occupancy() * 100)
     const sub = Math.round(game.subRatio() * 100)
-    body.innerHTML = `
+    body.innerHTML = seasonRow + `
       <div class="srow"><span class="nm">Dünkü kâr</span><span class="gn ${game.lastDayProfit < 0 ? 'bad' : ''}">₺${tl(game.lastDayProfit)}</span>
         <span class="ds">Gelir ₺${tl(game.incomeToday)} · Gider ₺${tl(game.expenseToday)}</span></div>
       <div class="srow"><span class="nm">Doluluk</span><span class="gn">%${occ}</span>
@@ -449,6 +454,17 @@ function renderOffice() {
         <span class="ds">Düşerse denetimde ceza riski var.</span></div>
       <div class="srow"><span class="nm">Günlük sabit gider</span><span class="up">-₺${tl(game.dailyUpkeep())}</span>
         <span class="ds">Elektrik, su, temizlik, personel.</span></div>`
+    const se = document.getElementById('season')
+    if (se) se.addEventListener('click', () => {
+      if (!confirm(t('SEZONU KAPATIYORSUN: tüm para/yapılar sıfırlanır, yıldızın kalır. Emin misin?'))) return
+      const r = game.closeSeason()
+      if (r.ok) {
+        audio.cheer(); toast(r.msg, 'g')
+        save(); $('office').classList.remove('show')
+        world.setSignName(game.facilityName)
+        applyLocSwitch()
+      } else { audio.bad(); toast(r.msg, 'b') }
+    })
   } else if (officeTab === 'personel') {
     const p = game.personel
     const row = (nm: string, st: string, act: string, id: string, ds: string, dis = false) => `
