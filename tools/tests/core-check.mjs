@@ -21,9 +21,9 @@ check('klasik segment açık', g.segmentOpen('klasik'))
 // KATI kart bul (esnek kartta 'yanlış gün' geçerli olabilir — o ayrı testte)
 let spawned = null
 for (let i = 0; i < 1500 && !spawned; i++) {
+  if (g.queue.length >= 4) g.queue.length = 0
   const r = g.spawnReservation()
   if (r && !r.flexible) spawned = r
-  if (g.queue.length >= 4) g.queue.length = 0
 }
 check('rezervasyon isteği üretiliyor', !!spawned)
 if (spawned) {
@@ -97,11 +97,11 @@ console.log('\n— ESNEK İSTEK (asıl karar burada doğar) —')
   const g = new Game()
   let flexFound = null, rigidFound = null
   for (let i = 0; i < 900 && (!flexFound || !rigidFound); i++) {
+    if (g.queue.length >= 4) g.queue.length = 0
     const r = g.spawnReservation()
     if (!r) continue
     if (r.flexible && r.hours === 1 && !flexFound) flexFound = r
     if (!r.flexible && !rigidFound) rigidFound = r
-    if (g.queue.length >= 4) g.queue.length = 0
   }
   check('esnek istek üretiliyor', !!flexFound)
   check('katı istek de üretiliyor (ikisi bir arada)', !!rigidFound)
@@ -232,7 +232,7 @@ console.log('\n— ADAPTİF VURGU SAYACI —')
 {
   const g = new Game()
   let r = null
-  for (let i = 0; i < 1500 && !r; i++) { const x = g.spawnReservation(); if (x && !x.flexible) r = x; if (g.queue.length >= 4) g.queue.length = 0 }
+  for (let i = 0; i < 1500 && !r; i++) { if (g.queue.length >= 4) g.queue.length = 0; const x = g.spawnReservation(); if (x && !x.flexible) r = x }
   if (r) {
     const before = g.placedCount
     g.place(r.id, r.day, r.hour)
