@@ -432,6 +432,34 @@ function renderOffice() {
         toast(res.msg, res.ok ? 'g' : 'b')
         save(); renderOffice(); renderAll()
       }))
+  } else if (officeTab === 'subeler') {
+    body.innerHTML = `
+      <div class="srow" style="background:#eefaf0"><span class="ds" style="flex:1">
+        Kasa/gün ortak; takvim, arsalar, sahalar ve personel ŞUBEYE aittir. Yeni şube
+        kurulu 1 saha + arsalarla gelir. Sol üstten şubeler arasında geçiş yaparsın.</span></div>
+      ${LOCATIONS.map(l => {
+        const owned = game.unlockedLocs.includes(l.id)
+        const on = game.activeLoc === l.id
+        const inc = game.locIncome[l.id]
+        return `<div class="srow"><span class="nm">${l.label}</span>
+          <span class="gn">${owned ? (on ? 'ŞU AN BURADASIN' : (inc !== undefined ? `dün ${inc < 0 ? '' : '+'}₺${tl(inc)}` : 'senin')) : `talep x${l.demandMult} · fiyat x${l.priceMult}`}</span>
+          ${owned
+            ? (on ? '' : `<button class="buy" data-locgo="${l.id}">Şubeye Geç</button>`)
+            : `<button class="buy" data-locbuy="${l.id}">₺${tl(l.cost)} — Şube Aç</button>`}
+          <span class="ds">${l.desc}</span></div>`
+      }).join('')}`
+    body.querySelectorAll<HTMLElement>('button[data-locgo]').forEach(b =>
+      b.addEventListener('click', () => {
+        const r = game.switchLoc(b.dataset.locgo as LocId)
+        if (r.ok) { audio.click(); toast(r.msg, 'g'); $('office').classList.remove('show'); applyLocSwitch() }
+      }))
+    body.querySelectorAll<HTMLElement>('button[data-locbuy]').forEach(b =>
+      b.addEventListener('click', () => {
+        const id = b.dataset.locbuy as LocId
+        const r = game.buyLoc(id)
+        if (r.ok) { audio.build(); toast(r.msg, 'g'); game.switchLoc(id); $('office').classList.remove('show'); applyLocSwitch() }
+        else { audio.bad(); toast(r.msg, 'b') }
+      }))
   } else if (officeTab === 'ayarlar') {
     body.innerHTML = `
       <div class="srow"><span class="nm">Ses efektleri</span>
@@ -570,41 +598,35 @@ function renderHud() {
 }
 
 // ---- ŞUBE ÇUBUĞU ----
-let pendingLocBuy: LocId | null = null
 function renderLocs() {
   const bar = $('locbar')
-  bar.innerHTML = '<span class="loclbl">ŞUBELER</span>' + LOCATIONS.map(l => {
-    const owned = game.unlockedLocs.includes(l.id)
-    const on = game.activeLoc === l.id
-    const inc = game.locIncome[l.id]
-    return `<button class="loc ${on ? 'on' : ''} ${owned ? '' : 'locked'}" data-loc="${l.id}"
-      title="${l.desc}">${l.label}${owned ? '' : ` · AÇ ₺${tl(l.cost)}`}${owned && inc !== undefined
+  const anyLocked = LOCATIONS.some(l => !game.unlockedLocs.includes(l.id))
+  bar.innerHTML = '<span class="loclbl">ŞUBELER</span>' + LOCATIONS
+    .filter(l => game.unlockedLocs.includes(l.id))
+    .map(l => {
+      const on = game.activeLoc === l.id
+      const inc = game.locIncome[l.id]
+      return `<button class="loc ${on ? 'on' : ''}" data-loc="${l.id}" title="${l.desc}">${l.label}${inc !== undefined
         ? `<span class="linc ${inc < 0 ? 'neg' : ''}">${inc < 0 ? '' : '+'}₺${tl(inc)}</span>` : ''}</button>`
-  }).join('')
+    }).join('')
+    + (anyLocked ? '<button class="loc plus" id="locplus">+ YENİ ŞUBE</button>' : '')
   bar.querySelectorAll<HTMLElement>('button[data-loc]').forEach(b => {
     b.addEventListener('click', () => {
       const id = b.dataset.loc as LocId
-      if (game.unlockedLocs.includes(id)) {
-        if (id === game.activeLoc) return
-        const r = game.switchLoc(id)
-        if (r.ok) { audio.click(); toast(r.msg, 'g'); applyLocSwitch() }
-        return
-      }
-      // kilitli: iki tıkla onay (yanlışlıkla ₺150k gitmesin)
-      if (pendingLocBuy !== id) {
-        pendingLocBuy = id
-        const def = LOCATIONS.find(l => l.id === id)!
-        toast(`YENİ ŞUBE — ${def.label}: ${def.desc}`)
-        toast(`₺${tl(def.cost)} · kurulu 1 saha + arsalarla gelir. Onay için TEKRAR tıkla.`)
-        setTimeout(() => { if (pendingLocBuy === id) pendingLocBuy = null }, 4000)
-        return
-      }
-      pendingLocBuy = null
-      const r = game.buyLoc(id)
-      if (r.ok) { audio.build(); toast(r.msg, 'g'); game.switchLoc(id); applyLocSwitch() }
-      else { audio.bad(); toast(r.msg, 'b') }
+      if (id === game.activeLoc) return
+      const r = game.switchLoc(id)
+      if (r.ok) { audio.click(); toast(r.msg, 'g'); applyLocSwitch() }
     })
   })
+  const plus = document.getElementById('locplus')
+  if (plus) plus.addEventListener('click', () => openOfficeTab('subeler'))
+}
+
+/** Yazıhane'yi belirli sekmede aç (BenelOil alışkanlığı: şube işleri ofiste) */
+function openOfficeTab(tab: string) {
+  officeTab = tab
+  document.querySelectorAll<HTMLElement>('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === tab))
+  openOffice()
 }
 
 /** şube değişti: UI önbelleklerini sıfırla + sahneyi şube temasıyla yeniden kur */
@@ -688,7 +710,9 @@ function frame() {
   world.syncParcels(game.ownedParcels, game.builds)
 
   uiT -= dt
-  if (uiT <= 0) { uiT = 0.4; renderAll() }
+  if (uiT <= 0) { uiT = 0.4; renderAll()
+    audio.crowd(nowMatch ? 0.35 + world.matchHeat * 0.65 : 0)  // maç uğultusu heyecanla artar
+  }
   const pp = world.project(-14.5, 7.2, 5.1)
   const yp = $('yazpill')
   yp.style.left = `${pp.x}px`; yp.style.top = `${pp.y}px`

@@ -102,6 +102,30 @@ class Audio {
     this.tone(2200, 0.14, 'square', 0.045, 0.32)
   }
 
+  // ---- KALABALIK UĞULTUSU: üretilmiş gürültü (TELİF YOK) — maç heyecanıyla yükselir ----
+  private crowdGain: GainNode | null = null
+  private crowdStart() {
+    if (!this.ctx || !this.master || this.crowdGain) return
+    const len = this.ctx.sampleRate * 2
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate)
+    const d = buf.getChannelData(0)
+    let last = 0
+    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + 0.03 * w) / 1.03; d[i] = last * 3 }
+    const src = this.ctx.createBufferSource(); src.buffer = buf; src.loop = true
+    const f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 430; f.Q.value = 0.7
+    this.crowdGain = this.ctx.createGain(); this.crowdGain.gain.value = 0
+    src.connect(f); f.connect(this.crowdGain); this.crowdGain.connect(this.master)
+    src.start()
+  }
+  /** 0 = sessiz, 1 = coşku — yumuşak geçişle hedefe iner/çıkar */
+  crowd(level: number) {
+    if (!this.ctx) return
+    this.crowdStart()
+    if (!this.crowdGain) return
+    const v = this.on ? Math.min(0.085, Math.max(0, level) * 0.085) : 0
+    this.crowdGain.gain.linearRampToValueAtTime(v, this.ctx.currentTime + 0.45)
+  }
+
   /** şube geçişi — kısa süpürme */
   swoosh() {
     this.ensure()

@@ -242,8 +242,8 @@
   .loc { background:var(--paper); color:var(--ink); font-weight:800; font-size:10px; letter-spacing:.5px;
     padding:5px 11px; border-radius:6px; box-shadow:var(--shadow); border-bottom:3px solid #b9c9ae; }
   .loc.on { background:var(--green); color:#fff; border-bottom-color:var(--green-dark); }
-  .loc.locked { color:var(--muted); }
-  .loc.locked:hover { color:var(--ink); border-bottom-color:var(--sun); }
+  .loc.plus { color:var(--green-dark); border-bottom-color:#9fc9a8; }
+  .loc.plus:hover { background:#eefaf0; }
   .loc .linc { display:block; font-size:8.5px; font-weight:800; color:var(--green-dark); line-height:1.1; }
   .loc.on .linc { color:#dff5e4; }
   .loc .linc.neg { color:var(--clay); }
@@ -352,6 +352,7 @@
       <button class="tab on" data-tab="yatirim">Yatırım</button>
       <button class="tab" data-tab="ozet">Özet</button>
       <button class="tab" data-tab="personel">Personel</button>
+      <button class="tab" data-tab="subeler">Şubeler</button>
       <button class="tab" data-tab="defter">Defter</button>
       <button class="tab" data-tab="ayarlar">Ayarlar</button>
     </div>

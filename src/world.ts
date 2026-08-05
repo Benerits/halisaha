@@ -676,7 +676,7 @@ export class World {
         const gy = side !== 0 ? y : y + (y > 10 ? -6 : 6)
         const G = new THREE.Group()
         const gw = 9.4, gd = 6
-        const lawn = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), lam(0x83a75f))
+        const lawn = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), lam(0x699a4d))  // koyu bakımlı bahçe çimi
         lawn.position.z = 0.016; lawn.receiveShadow = true; G.add(lawn)
         // alçak beyaz çit — dört kenar, kapı boşluğu yolda
         const fenceMat = lam(0xf1ede0)
@@ -684,12 +684,21 @@ export class World {
           const m = new THREE.Mesh(new THREE.BoxGeometry(w, d, 0.3), fenceMat)
           m.position.set(px, py, 0.15); m.castShadow = true; G.add(m)
         }
-        rail(gw, 0.09, 0, gd / 2); rail(gw, 0.09, 0, -gd / 2)
-        rail(0.09, gd, -gw / 2, 0); rail(0.09, gd, gw / 2, 0)
+        // eve bakan kenarda çit YOK — bahçe evin doğal uzantısı olur
+        const skip = side !== 0 ? (side > 0 ? 'L' : 'R') : (y > 10 ? 'T' : 'B')
+        if (skip !== 'T') rail(gw, 0.09, 0, gd / 2)
+        if (skip !== 'B') rail(gw, 0.09, 0, -gd / 2)
+        if (skip !== 'L') rail(0.09, gd, -gw / 2, 0)
+        if (skip !== 'R') rail(0.09, gd, gw / 2, 0)
         for (let fx = -gw / 2; fx <= gw / 2; fx += 1.16) {
-          const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.5), fenceMat)
-          post.position.set(fx, gd / 2, 0.25); G.add(post)
-          const post2 = post.clone(); post2.position.y = -gd / 2; G.add(post2)
+          if (skip !== 'T') {
+            const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.5), fenceMat)
+            post.position.set(fx, gd / 2, 0.25); G.add(post)
+          }
+          if (skip !== 'B') {
+            const post2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.5), fenceMat)
+            post2.position.set(fx, -gd / 2, 0.25); G.add(post2)
+          }
         }
         // eve dik bahçe yolu (kapıdan çite)
         const path = new THREE.Mesh(new THREE.PlaneGeometry(1.3, gd), lam(0xd6cfbe))
@@ -791,8 +800,12 @@ export class World {
   }
 
   /** maç simülasyonu — izometrikten "futbol" gibi okunur */
+  /** 0-1: maçın o anki heyecanı (top hızından) — kalabalık uğultusu bunu izler */
+  matchHeat = 0
+
   updateMatch(dt: number, active: boolean) {
     this.matchGroup.visible = active
+    this.matchHeat = active ? Math.min(1, Math.hypot(this.bvx, this.bvy) / 8) : 0
     for (const c of this.parkedCars) c.visible = true
     if (!active) return
     const b = this.ball.position
