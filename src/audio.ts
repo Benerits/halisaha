@@ -79,23 +79,21 @@ class Audio {
   ring() {
     this.ensure()
     if (!this.ctx || !this.master || !this.on) return
-    const burst = (when: number) => {
-      const t0 = this.ctx!.currentTime + when
-      const o = this.ctx!.createOscillator(); o.type = 'sine'; o.frequency.value = 425
-      const o2 = this.ctx!.createOscillator(); o2.type = 'sine'; o2.frequency.value = 480
-      const trem = this.ctx!.createOscillator(); trem.type = 'square'; trem.frequency.value = 20
-      const tg = this.ctx!.createGain(); tg.gain.value = 0.5
-      const g = this.ctx!.createGain(); g.gain.value = 0
-      g.gain.setValueAtTime(0, t0)
-      g.gain.linearRampToValueAtTime(0.055, t0 + 0.02)
-      g.gain.setValueAtTime(0.055, t0 + 0.32)
-      g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.42)
-      trem.connect(tg); tg.connect(g.gain)   // tremolo: zilin 'trrr' karakteri
-      o.connect(g); o2.connect(g); g.connect(this.master!)
-      o.start(t0); o.stop(t0 + 0.45); o2.start(t0); o2.stop(t0 + 0.45)
-      trem.start(t0); trem.stop(t0 + 0.45)
-    }
-    burst(0); burst(0.6)
+    // TEK yumuşak vuruş: kısık, sine tremolo (sert kare değil), yumuşak giriş-çıkış
+    const t0 = this.ctx.currentTime
+    const o = this.ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 440
+    const o2 = this.ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 480
+    const trem = this.ctx.createOscillator(); trem.type = 'sine'; trem.frequency.value = 16
+    const tg = this.ctx.createGain(); tg.gain.value = 0.3
+    const g = this.ctx.createGain(); g.gain.value = 0
+    g.gain.setValueAtTime(0, t0)
+    g.gain.linearRampToValueAtTime(0.032, t0 + 0.06)
+    g.gain.setValueAtTime(0.032, t0 + 0.26)
+    g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.4)
+    trem.connect(tg); tg.connect(g.gain)
+    o.connect(g); o2.connect(g); g.connect(this.master!)
+    o.start(t0); o.stop(t0 + 0.42); o2.start(t0); o2.stop(t0 + 0.42)
+    trem.start(t0); trem.stop(t0 + 0.42)
   }
 
   /** rezervasyon yerleşti — ahşap 'tak' + kısa onay */

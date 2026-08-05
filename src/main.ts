@@ -768,7 +768,8 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
 
   const prevDay = game.day
-  game.tick(dt)
+  const gateOpen = $('gate').classList.contains('show')
+  if (!gateOpen) game.tick(dt)
   while (game.notices.length) { toast(game.notices.shift()!, 'g'); audio.place() }
   while (game.lostNotices.length) { toast(game.lostNotices.shift()!, 'b'); audio.lost() }
   // anlaşılan kart kaçmaz (süre donuk) — 45 sn sonra bir kez nazikçe hatırlat
@@ -787,7 +788,7 @@ function frame() {
   for (const g of game.claimGoals()) { audio.cash(); toast(`HEDEF TAMAM: ${g.label} · +₺${tl(g.reward)}`, 'g') }
 
   // rezervasyon üretimi
-  spawnT -= dt
+  if (!gateOpen) spawnT -= dt
   if (spawnT <= 0) { spawnT = 8 + Math.random() * 9
     for (let k = 0; k < 6; k++) if (game.spawnReservation()) {
       renderQueue(); audio.ring()
