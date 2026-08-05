@@ -1122,11 +1122,11 @@ async function handleApi(req, res, url) {
       }
 
       const r = await pool.query('SELECT save FROM halisaha_player WHERE email=$1', [email])
-      const save = r.rows[0]?.save || { s: {} }; save.s = save.s || {}
-      if (productId === 'remove_ads') save.s.noAds = true
+      const save = r.rows[0]?.save || {} // HALI SAHA kaydı DÜZ — {s:...} zarfı yok
+      if (productId === 'remove_ads') save.noAds = true
       else save.money = Math.round((Number(save.money) || 0) + COINS[productId])
       await pool.query('UPDATE halisaha_player SET save=$2, updated_at=now() WHERE email=$1', [email, JSON.stringify(save)])
-      return json(res, 200, { ok: true, money: Math.round(Number(save.money) || 0), noAds: !!save.s.noAds })
+      return json(res, 200, { ok: true, money: Math.round(Number(save.money) || 0), noAds: !!save.noAds })
     }
     // App Store 5.1.1(v): kullanıcı kendi hesabını uygulama içinden silebilmeli
     if (url === '/api/account' && req.method === 'DELETE') {
