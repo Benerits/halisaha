@@ -1016,7 +1016,7 @@ async function handleApi(req, res, url) {
           const dup = await pool.query('SELECT 1 FROM halisaha_iap_grant WHERE transaction_id=$1', [String(transactionId)])
           if (dup.rowCount > 0) {
             const cur = await pool.query('SELECT save FROM halisaha_player WHERE email=$1', [email])
-            const s0 = cur.rows[0]?.save?.s || {}
+            const s0 = cur.rows[0]?.save?.s ?? cur.rows[0]?.save ?? {}
             return json(res, 200, { ok: true, already: true, money: Math.round(Number(s0.money) || 0), noAds: !!s0.noAds })
           }
         }
@@ -1097,7 +1097,7 @@ function vsAuth(req, res) {
 }
 
 function userRow(r) {
-  const st = r.save?.s ?? {}
+  const st = r.save?.s ?? r.save ?? {}
   // kayıt kaynağı: google_id/apple_id doluysa sosyal giriş, yoksa e-posta+şifre
   const provider = r.google_id ? 'google' : r.apple_id ? 'apple' : 'password'
   return {
@@ -1176,7 +1176,7 @@ async function handleVs(req, res, url) {
       if (found.rowCount === 0) return json(res, 404, { error: { code: 'not_found', message: 'Kullanıcı yok.' } })
       if (m[2] === 'detail' && req.method === 'GET') {
         // record bloğu için {data:{...}} — şemaya uygun kullanıcı detayı
-        const r = found.rows[0]; const st = r.save?.s ?? {}
+        const r = found.rows[0]; const st = r.save?.s ?? r.save ?? {}
         return json(res, 200, { data: {
           email: r.email,
           source: r.google_id ? 'Gmail (Google ile giriş)' : r.apple_id ? 'Apple ile giriş' : 'E-posta + şifre',
@@ -1215,7 +1215,7 @@ async function handleVs(req, res, url) {
         const kind = b?.kind
         if (kind === 'balance') {
           const amt = Math.max(0, Math.round(Number(b.amount) || 0))
-          const cur = Math.round(Number(found.rows[0].save?.s?.money) || 0)
+          const cur = Math.round(Number(found.rows[0].save?.s?.money ?? found.rows[0].save?.money) || 0)
           const next = b.op === 'set' ? amt : b.op === 'add' ? cur + amt : cur - amt
           if (next < 0 || !['set', 'add', 'subtract'].includes(String(b.op))) return json(res, 400, { error: { code: 'invalid_request', message: 'op: set|add|subtract' } })
           await pool.query(`UPDATE halisaha_player SET save = jsonb_set(coalesce(save, '{}'::jsonb), '{s,money}', to_jsonb($2::int)) WHERE id=$1`, [id, next])
@@ -1273,7 +1273,7 @@ async function handleVs(req, res, url) {
       } else if (m[2] === 'balance' && req.method === 'POST') {
         const { op, amount } = await readBody(req)
         const amt = Math.max(0, Math.round(Number(amount) || 0))
-        const cur = Math.round(Number(found.rows[0].save?.s?.money) || 0)
+        const cur = Math.round(Number(found.rows[0].save?.s?.money ?? found.rows[0].save?.money) || 0)
         const next = op === 'set' ? amt : op === 'add' ? cur + amt : cur - amt
         if (next < 0 || !['set', 'add', 'subtract'].includes(String(op))) {
           return json(res, 400, { error: { code: 'invalid_request', message: 'Geçersiz işlem.' } })
