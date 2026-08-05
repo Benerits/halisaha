@@ -163,10 +163,10 @@ export const LOCATIONS: LocDef[] = [
     desc: 'Zengin muhit — fiyatlar %35 yüksek, müşteri daha seçici.' },
 ]
 /** şube personeli: müdür 0=yok 1=acemi 2=usta */
-export interface Personel { mudur: 0 | 1 | 2; cirak: boolean; kantinci: boolean; auto: boolean }
-export const emptyPersonel = (): Personel => ({ mudur: 0, cirak: false, kantinci: false, auto: false })
-export const MAAS = { mudur1: 600, mudur2: 1_000, cirak: 350, kantinci: 400 }
-export const ISE_ALIM = { mudur1: 25_000, mudur2: 60_000, cirak: 8_000, kantinci: 6_000 }
+export interface Personel { mudur: 0 | 1 | 2; cirak: boolean; kantinci: boolean; sekreter: boolean; auto: boolean }
+export const emptyPersonel = (): Personel => ({ mudur: 0, cirak: false, kantinci: false, sekreter: false, auto: false })
+export const MAAS = { mudur1: 600, mudur2: 1_000, cirak: 350, kantinci: 400, sekreter: 300 }
+export const ISE_ALIM = { mudur1: 25_000, mudur2: 60_000, cirak: 8_000, kantinci: 6_000, sekreter: 5_000 }
 
 /** şubenin taşınabilir durumu */
 interface LocSnap {
@@ -252,6 +252,7 @@ export class Game {
     if (this.personel.mudur === 2) v += MAAS.mudur2
     if (this.personel.cirak) v += MAAS.cirak
     if (this.personel.kantinci) v += MAAS.kantinci
+    if (this.personel.sekreter) v += MAAS.sekreter
     v += (this.pitches - 1) * 200
     return v
   }
@@ -539,7 +540,14 @@ export class Game {
     this.events.push(`${def.label} şubesi açıldı! (₺${def.cost.toLocaleString('tr-TR')})`)
     return { ok: true, msg: `${def.label} şubesi senin — kurulu 1 saha + arsalarla geliyor.` }
   }
-  hire(role: 'mudur' | 'cirak' | 'kantinci'): { ok: boolean; msg: string } {
+  hire(role: 'mudur' | 'cirak' | 'kantinci' | 'sekreter'): { ok: boolean; msg: string } {
+    if (role === 'sekreter') {
+      if (this.personel.sekreter) return { ok: false, msg: 'Sekreter zaten var.' }
+      if (this.money < ISE_ALIM.sekreter) return { ok: false, msg: `₺${(ISE_ALIM.sekreter - this.money).toLocaleString('tr-TR')} eksik.` }
+      this.money -= ISE_ALIM.sekreter; this.personel.sekreter = true
+      this.events.push('Sekreter işe alındı.')
+      return { ok: true, msg: 'Sekreter telefonda — kartların sabrı %25 yavaş erir, sen yokken istekleri not eder.' }
+    }
     const p = this.personel
     if (role === 'mudur') {
       if (p.mudur >= 2) return { ok: false, msg: 'Müdür zaten usta seviyesinde.' }
@@ -563,7 +571,8 @@ export class Game {
     this.events.push('Kantinci işe alındı.')
     return { ok: true, msg: 'Kantinci tezgâhta — kantin gelirleri +%25.' }
   }
-  fire(role: 'mudur' | 'cirak' | 'kantinci'): { ok: boolean; msg: string } {
+  fire(role: 'mudur' | 'cirak' | 'kantinci' | 'sekreter'): { ok: boolean; msg: string } {
+    if (role === 'sekreter') { if (!this.personel.sekreter) return { ok: false, msg: 'Sekreter yok.' }; this.personel.sekreter = false }
     const p = this.personel
     if (role === 'mudur') { if (!p.mudur) return { ok: false, msg: 'Müdür yok.' }; p.mudur = 0; p.auto = false }
     if (role === 'cirak') { if (!p.cirak) return { ok: false, msg: 'Çırak yok.' }; p.cirak = false }
@@ -574,6 +583,46 @@ export class Game {
 
   /** dün her şubenin net katkısı (şube çubuğu rozetleri) */
   locIncome: Record<string, number> = {}
+
+  /** kayıttan gelen son görülme zamanı (offline hesap için) */
+  private loadedLastSeen = 0
+
+  /** SEN YOKKEN: kapalı geçen süreye göre (30 dk = 1 gün, tavan 2 gün) müdür çarpanlı
+   *  gelir öder, kira payını düşer. Sekreter varsa dönüşte hazır istekler bekler. */
+  applyOffline(nowMs: number): string | null {
+    if (!this.loadedLastSeen) return null
+    const mins = (nowMs - this.loadedLastSeen) / 60000
+    this.loadedLastSeen = 0
+    if (mins < 15) return null
+    const days = Math.min(2, Math.floor(mins / 30))
+    if (days < 1) return null
+    this.syncLoc()
+    let gross = 0
+    for (const id of this.unlockedLocs) {
+      const sn = this.locStore[id]
+      if (!sn) continue
+      const pp = sn.personel ?? emptyPersonel()
+      const mult = pp.mudur === 2 ? 0.7 : pp.mudur === 1 ? 0.5 : 0.2
+      const weekly = sn.bookings.reduce((sum, b) => sum + b.price, 0)
+      gross += Math.round((weekly / 7) * days * mult)
+    }
+    const rentShare = Math.round(this.rentAmount() / 7 * days)
+    const net = Math.max(0, gross - rentShare)
+    this.money += net
+    // sekreter: telefonlara bakmış — dönüşte hazır istekler
+    let ready = 0
+    if (this.personel.sekreter) {
+      for (let i = 0; i < 60 && ready < 2; i++) if (this.spawnReservation()) ready++
+    }
+    const mudurVar = Object.values(this.locStore).some(sn => (sn.personel?.mudur ?? 0) > 0)
+    const msg = net > 0
+      ? `Sen yokken tesis çalıştı: +₺${net.toLocaleString('tr-TR')} kasada` +
+        (mudurVar ? '' : ' (müdür olsaydı çok daha fazlaydı)') +
+        (ready > 0 ? ` · sekreter ${ready} istek not etmiş.` : '.')
+      : ready > 0 ? `Sekreter sen yokken ${ready} istek not etmiş — kartlar sırada.` : null
+    if (msg) this.events.push(msg)
+    return msg
+  }
 
   totalPitches(): number {
     let t = 0
@@ -628,7 +677,7 @@ export class Game {
         q.dealWait = (q.dealWait ?? 0) + dt
         continue
       }
-      q.patience -= dt
+      q.patience -= dt * (this.personel.sekreter ? 0.75 : 1)
       if (q.patience <= 0) {
         const lost = this.queue.splice(i, 1)[0]
         this.events.push(`${lost.team} bekledi, başka sahaya gitti.`)
@@ -975,6 +1024,7 @@ export class Game {
   // ---- kayıt ----
   save(): SaveData {
     return {
+      lastSeen: Date.now(),
       money: this.money, rep: this.rep, day: this.day, bookings: this.bookings,
       pitches: this.pitches, hasCanteen: this.hasCanteen, hasFridge: this.hasFridge,
       hasCleats: this.hasCleats, hasKeeper: this.hasKeeper, hasTost: this.hasTost, hasBaklava: this.hasBaklava, hasLights: this.hasLights, hasShower: this.hasShower,
@@ -1003,6 +1053,7 @@ export class Game {
     this.hasPhone2 = d.hasPhone2 === true; this.hasCirak = d.hasCirak === true; this.adDays = n('adDays', 0)
     if (this.hasCirak) this.personel.cirak = true
     this.placedCount = n('placedCount', 0)
+    this.loadedLastSeen = n('lastSeen', 0)
     if (Array.isArray(d.unlockedLocs) && d.unlockedLocs.length) this.unlockedLocs = d.unlockedLocs as LocId[]
     if (typeof d.activeLoc === 'string' && this.unlockedLocs.includes(d.activeLoc as LocId)) this.activeLoc = d.activeLoc as LocId
     if (d.locStore && typeof d.locStore === 'object') {

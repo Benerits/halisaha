@@ -368,5 +368,38 @@ console.log('\n— KISMİ KARŞI-TEKLİF (2 saatlik kart, tek saat boş) —')
     }
   } else check('2 saatlik esnek kart üretildi', false)
 }
+
+console.log('\n— SEKRETER + SEN YOKKEN (offline) —')
+{
+  const g = new Game(); g.money = 50_000
+  check('sekreter işe alınır', g.hire('sekreter').ok)
+  let r = null
+  for (let i = 0; i < 900 && !r; i++) r = g.spawnReservation()
+  if (r) {
+    const p0 = r.patience
+    g.tick(4)
+    const sekreterli = p0 - r.patience
+    const g2 = new Game()
+    let r2 = null
+    for (let i = 0; i < 900 && !r2; i++) r2 = g2.spawnReservation()
+    if (r2) {
+      const q0 = r2.patience
+      g2.tick(4)
+      check('sekreterli kartın sabrı daha yavaş erir', sekreterli < q0 - r2.patience)
+    }
+  }
+  // offline: müdürlü tesis kazanır
+  const a = new Game(); a.money = 100_000; a.hire('mudur')
+  for (let d = 0; d < 7; d++) a.bookings.push({ day: d, hour: 20, team: 'T', segment: 'klasik', price: 7000, sub: true, weeksLeft: 8 })
+  const save = a.save()
+  save.lastSeen = Date.now() - 90 * 60000   // 90 dk önce → 2 gün (tavan)
+  const b = new Game(); b.load(save)
+  const before = b.money
+  const rep = b.applyOffline(Date.now())
+  check('offline rapor döner', typeof rep === 'string' && rep.includes('Sen yokken'))
+  check('kasa artar (müdür çarpanı)', b.money > before)
+  const c = new Game(); c.load(a.save())
+  check('kısa aradan rapor çıkmaz', c.applyOffline(Date.now()) === null)
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

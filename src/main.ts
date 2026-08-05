@@ -15,7 +15,11 @@ const game = new Game()
 // kayıt yükle
 try {
   const raw = localStorage.getItem(SAVE_KEY)
-  if (raw) game.load(JSON.parse(raw))
+  if (raw) {
+    game.load(JSON.parse(raw))
+    const rep = game.applyOffline(Date.now())
+    if (rep) setTimeout(() => { toast(rep, 'g'); audio.cash() }, 1200)
+  }
 } catch { /* bozuk kayıt: sıfırdan */ }
 if (game.pitches >= 2) world.buildPitch(0, 5.2)
 
@@ -370,6 +374,9 @@ function renderOffice() {
       ${row('Çırak', p.cirak ? 'Çalışıyor · ₺' + tl(MAAS.cirak) + '/g' : 'Yok',
         p.cirak ? 'Çıkar' : '₺' + tl(ISE_ALIM.cirak) + ' işe al', 'cirak',
         'Sabrı bitmek üzere olan isteği uygun boş saate yazar. Pazarlık yapmaz.')}
+      ${row('Sekreter', p.sekreter ? 'Telefonda · ₺' + tl(MAAS.sekreter) + '/g' : 'Yok',
+        p.sekreter ? 'Çıkar' : '₺' + tl(ISE_ALIM.sekreter) + ' işe al', 'sekreter',
+        'Kartların sabrı %25 yavaş erir; SEN YOKKEN aramaları not eder (dönüşte hazır istekler).')}
       ${row('Kantinci', p.kantinci ? 'Tezgâhta · ₺' + tl(MAAS.kantinci) + '/g' : 'Yok',
         p.kantinci ? 'Çıkar' : '₺' + tl(ISE_ALIM.kantinci) + ' işe al', 'kantinci',
         'Kantin gelirlerini %25 artırır (kantin gerekli).')}`
@@ -377,8 +384,8 @@ function renderOffice() {
       b.addEventListener('click', () => {
         const id = b.dataset.per!
         if (id === 'auto') { game.personel.auto = !game.personel.auto; audio.click(); renderOffice(); return }
-        const role = id as 'mudur' | 'cirak' | 'kantinci'
-        const already = role === 'mudur' ? false : role === 'cirak' ? game.personel.cirak : game.personel.kantinci
+        const role = id as 'mudur' | 'cirak' | 'kantinci' | 'sekreter'
+        const already = role === 'mudur' ? false : role === 'cirak' ? game.personel.cirak : role === 'sekreter' ? game.personel.sekreter : game.personel.kantinci
         const res = already ? game.fire(role) : game.hire(role)
         if (res.ok) audio.build(); else audio.bad()
         toast(res.msg, res.ok ? 'g' : 'b')
