@@ -596,8 +596,11 @@ function openParcel(c: number, r: number) {
   const box = $('parcel')
   let h = `<div class="phead"><b>ARSA ${c + 1}-${r + 1}</b><button id="pclose">Kapat ✕</button></div><div class="pbody">`
   if (b) {
+    const isCourt = b.kind === 'basket' || b.kind === 'voley'
+    const wearPct = Math.round((b.wear ?? 0) * 100)
     h += `<div class="srow"><span class="nm">${BUILDS[b.kind].label}</span>
-      <span class="gn">${BUILDS[b.kind].gain}</span>
+      <span class="gn">${BUILDS[b.kind].gain}${isCourt ? ` · ${t('yıpranma')} %${wearPct}` : ''}</span>
+      ${isCourt ? `<button class="buy" id="pservice" ${wearPct < 10 ? 'disabled' : ''}>₺6.000</button>` : ''}
       <button class="buy" id="pdemol" style="background:var(--clay)">YIK · %40 iade</button>
       <span class="ds">${BUILDS[b.kind].desc} Yıkarsan arsa boşalır, yerine başka şey kurabilirsin.</span></div>`
   } else if (!owned) {
@@ -616,6 +619,13 @@ function openParcel(c: number, r: number) {
   box.innerHTML = h + '</div>'
   box.classList.add('show')
   $('pclose').addEventListener('click', () => box.classList.remove('show'))
+  const ps = document.getElementById('pservice')
+  if (ps) ps.addEventListener('click', () => {
+    const res = game.serviceBuild(c, r)
+    if (res.ok) audio.build(); else audio.bad()
+    toast(res.msg, res.ok ? 'g' : 'b')
+    if (res.ok) { save(); openParcel(c, r); renderAll() }
+  })
   const pd = document.getElementById('pdemol')
   if (pd) pd.addEventListener('click', () => {
     const res = game.removeBuild(c, r)

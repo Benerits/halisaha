@@ -478,5 +478,45 @@ console.log('\n— ANALİZ RAPORU P0 (K3/K9) —')
     check('K9: müdür N yerleştirmeyi tek bildirimde toplar', mgr.length <= 1)
   }
 }
+
+console.log('\n— ANALİZ RAPORU P1 (K4/K5/K6 sink paketi) —')
+{
+  // K4: kort yıpranır, geliri düşer, bakım sıfırlar
+  const g = new Game(); g.money = 300_000
+  g.buyParcel(0, 1); g.placeBuild(0, 1, 'basket')
+  for (let d = 0; d < 10; d++) { g.day = d + 1; g.endDay() }
+  const b = g.buildAt(0, 1)
+  check('K4: kort yıpranıyor', (b.wear ?? 0) > 0.3)
+  const sv = g.serviceBuild(0, 1)
+  check('K4: bakım sink çalışır (₺6.000, wear=0)', sv.ok && (b.wear ?? 0) === 0)
+
+  // K4: marjinal kira artar
+  const r1 = new Game(); r1.pitches = 2
+  const r2 = new Game(); r2.pitches = 6
+  check('K4: kira saha sayısıyla MARJİNAL artar', (r2.rentAmount() - r2.rentAmount() + r2.rentAmount()) > 0 &&
+    (r2.rentAmount() - 12000) > (r1.rentAmount() - 12000) * 4)
+
+  // K4: abonelik ömrü — 3 yenileme sonrası kesin biter
+  const a = new Game(); a.rep = 5
+  a.bookings.push({ day: 0, hour: 20, team: 'S', segment: 'klasik', price: 500, sub: true, weeksLeft: 1, renews: 3 })
+  a.day = 1; a.endDay()
+  check('K4: 3 yenileme sonrası abonelik sezonu kapatır', !a.bookings.some(x => x.team === 'S'))
+
+  // K5: bina itibar bonusu tür başına TEK sefer
+  const k5 = new Game(); k5.money = 900_000
+  const rep0 = k5.rep
+  k5.buyParcel(0, 1); k5.placeBuild(0, 1, 'parking')
+  const rep1 = k5.rep
+  k5.buyParcel(2, 1); k5.placeBuild(2, 1, 'parking')
+  check('K5: 2. otopark itibar VERMEZ (sömürü kapandı)', k5.rep === rep1 && rep1 > rep0)
+
+  // K6: abone oranı %70 üstünde yeni abonelik kartı gelmez
+  const k6 = new Game()
+  for (let i = 0; i < 80; i++) k6.bookings.push({ day: i % 7, hour: 9 + (i % 15), team: 'X', segment: 'klasik', price: 1, sub: true, weeksLeft: 4 })
+  let sawSub = false
+  for (let i = 0; i < 2000; i++) { if (k6.queue.length >= 4) k6.queue.length = 0
+    const x = k6.spawnReservation(); if (x && x.weeks > 0) { sawSub = true; break } }
+  check('K6: abone oranı tavanında yeni abonelik teklifi gelmez', !sawSub)
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

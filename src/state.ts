@@ -80,6 +80,8 @@ export interface Reservation {
 }
 
 export interface Booking {
+  /** kaç kez yenilendi (abonelik ömrü: en fazla 3) */
+  renews?: number
   /** tam saha kapasitesinden mi yer tutuyor */
   needFull?: boolean
   /** hangi saha şeridinde (0..fullCount-1 tam, sonrası mini) — görsel + atama */
@@ -138,7 +140,7 @@ export function parcelCost(c: number, r: number): number {
 }
 
 export type BuildKind = 'pitch' | 'mini' | 'basket' | 'voley' | 'parking' | 'garden' | 'kantin' | 'dus' | 'wc'
-export interface PlacedBuild { kind: BuildKind; gx?: number; gy?: number; key?: string }
+export interface PlacedBuild { kind: BuildKind; gx?: number; gy?: number; key?: string; wear?: number }
 
 export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: string; desc: string }> = {
   pitch:   { label: 'Halı Saha', cost: 62_000, gain: 'Aynı saate +1 maç', desc: 'Tam boy ikinci saha — prime-time çakışmaları biter.' },
@@ -253,7 +255,12 @@ export class Game {
   rentDueDay = 7
   rentMissed = 0
   rentAmount(): number {
-    return 12_000 + (this.totalPitches() - 1) * 4_000 + (this.unlockedLocs.length - 1) * 8_000
+    // K4: saha başına kira MARJİNAL ARTAR (2. saha +4k, 3. +5.2k, 4. +6.4k...) —
+    // ölçek bedava değil; gider gelirle birlikte büyür
+    let pitchRent = 0
+    const p = this.totalPitches()
+    for (let i = 1; i < p; i++) pitchRent += 4_000 + (i - 1) * 1_200
+    return 12_000 + pitchRent + (this.unlockedLocs.length - 1) * 8_000
   }
   daysToRent(): number { return Math.max(0, this.rentDueDay - this.day + 1) }
 
@@ -380,11 +387,14 @@ export class Game {
       * (this.adDays > 0 ? 1.5 : 1) * this.locDef().demandMult
     if (Math.random() > demand) return null
     if (!this.freeAt(day, hour)) return null
-    const weeks = Math.random() < 0.28 ? (Math.random() < 0.5 ? 4 : 8) : 0
+    const srNow = this.subRatio()
+    // K6: takvim aboneye kilitlenirse çekirdek eylem ölür — tavan mekanikleri
+    const weeks = (srNow > 0.7 || Math.random() >= 0.28) ? 0 : (Math.random() < 0.5 ? 4 : 8)
     // 2 SAATLİK MAÇ (%18, aboneliksiz): '21-23 bizim olsun' — ardışık iki slot
     const twoH = weeks === 0 && Math.random() < 0.18
+    const subPenalty = srNow > 0.6 ? Math.max(0.7, 1 - (srNow - 0.6) * 0.75) : 1  // K6: aboneye boğulan tesiste tek maç ucuzlar
     const raw = this.basePrice() * seg.priceMult * (weeks > 0 ? 0.82 : 1) * this.locDef().priceMult
-      * (twoH ? 1.9 : 1)
+      * (twoH ? 1.9 : 1) * subPenalty
     // ESNEK İSTEK (%60): "hafta içi akşam olsun" → hangi slota koyacağına SEN karar verirsin
     const flexible = Math.random() < 0.6
     const flexDays: number[] = []
@@ -582,6 +592,13 @@ export class Game {
   lostNotices: string[] = []
   /** toplam yerleştirme sayısı — öğretici vurgular buna göre sakinleşir */
   placedCount = 0
+  /** K5: itibar bonusu verilmiş yapı türleri (tür başına TEK sefer) */
+  repGiven: string[] = []
+  private giveRepOnce(kind: string, amt: number) {
+    if (this.repGiven.includes(kind)) return
+    this.repGiven.push(kind)
+    this.rep = Math.min(5, this.rep + amt)
+  }
   /** tesisin adı — tabelada yazar (ilk açılışta oyuncu verir) */
   facilityName = ''
   // ---- ŞUBELER ----
@@ -790,8 +807,14 @@ export class Game {
     const runBonus = bestRun >= 3 ? 1 + Math.min(0.3, (bestRun - 2) * 0.1) : 1
     let income = 0
     // ek sahaların günlük kirası (futbol takviminden bağımsız)
-    const courtRent = this.builds.reduce((sum, b) =>
-      sum + (b.kind === 'basket' ? 800 : b.kind === 'voley' ? 550 : 0), 0)
+    // K4: kort MUSLUK değil — yıpranır (gelir düşer) + günlük bakım gideri;
+    // 'Bakım Yenile' (arsa modalı) yeni tekrarlayan sink
+    const courtRent = this.builds.reduce((sum, b) => {
+      const base = b.kind === 'basket' ? 800 : b.kind === 'voley' ? 550 : 0
+      if (!base) return sum
+      b.wear = Math.min(1, (b.wear ?? 0) + 0.04)
+      return sum + Math.round(base * (1 - (b.wear ?? 0) * 0.7) - 200)
+    }, 0)
     income += courtRent
     for (const b of todays) {
       income += b.price + Math.round(this.extraPerMatch() * runBonus)
@@ -799,12 +822,17 @@ export class Game {
       if (b.sub) {
         b.weeksLeft--
         if (b.weeksLeft <= 0) {
-          const happy = this.rep >= 3.2
-          if (happy) { b.weeksLeft = 4; this.events.push(`${b.team} aboneliğini uzattı.`) }
-          else {
+          // K4/K6: sonsuz abonelik bitti — yenileme OLASILIKLI (%60 + itibar payı),
+          // en fazla 3 yenileme (12 hafta ömür); sonra takım 'sezonu kapatır'
+          b.renews = (b.renews ?? 0) + 1
+          const renewChance = 0.6 + Math.min(0.25, this.rep * 0.05)
+          if (b.renews <= 3 && Math.random() < renewChance) {
+            b.weeksLeft = 4; this.events.push(`${b.team} aboneliğini uzattı.`)
+          } else {
             this.bookings = this.bookings.filter(x => x !== b)
-            this.events.push(`${b.team} memnun kalmadı, aboneliği bıraktı.`)
-            this.rep = Math.max(0, this.rep - 0.1)
+            this.events.push(b.renews > 3
+              ? `${b.team} sezonu kapattı — slot boşaldı.`
+              : `${b.team} aboneliğini yenilemedi.`)
           }
         }
       } else {
@@ -827,8 +855,12 @@ export class Game {
       if (id === this.activeLoc) continue
       const sn = this.locStore[id]
       if (!sn) continue
-      subeIncome += sn.builds.reduce((sum, b) =>
-        sum + (b.kind === 'basket' ? 800 : b.kind === 'voley' ? 550 : 0), 0)
+      subeIncome += sn.builds.reduce((sum, b) => {
+        const base = b.kind === 'basket' ? 800 : b.kind === 'voley' ? 550 : 0
+        if (!base) return sum
+        b.wear = Math.min(1, (b.wear ?? 0) + 0.04)
+        return sum + Math.round(base * (1 - (b.wear ?? 0) * 0.7) - 200)  // bakım gideri + yıpranma
+      }, 0)
       const pp = sn.personel ?? emptyPersonel()
       const mult = pp.mudur === 2 ? 1.1 : pp.mudur === 1 ? 1 : 0.7  // müdürsüz şube gelir kaçırır
       subeIncome -= (pp.mudur === 1 ? MAAS.mudur1 : pp.mudur === 2 ? MAAS.mudur2 : 0)
@@ -1012,12 +1044,24 @@ export class Game {
       if (this.hasWC) return { ok: false, msg: 'Tuvalet zaten var.' }
       this.hasWC = true; this.rep = Math.min(5, this.rep + 0.2)
     }
-    if (kind === 'basket') this.rep = Math.min(5, this.rep + 0.1)
-    if (kind === 'voley') this.rep = Math.min(5, this.rep + 0.2)
-    if (kind === 'parking') this.rep = Math.min(5, this.rep + 0.3)
-    if (kind === 'garden') this.rep = Math.min(5, this.rep + 0.2)
+    if (kind === 'basket') this.giveRepOnce('basket', 0.1)
+    if (kind === 'voley') this.giveRepOnce('voley', 0.2)
+    if (kind === 'parking') this.giveRepOnce('parking', 0.3)
+    if (kind === 'garden') this.giveRepOnce('garden', 0.2)
     this.events.push(`${b.label} kuruldu.`)
     return { ok: true, msg: `${b.label} hazır — ${b.gain}` }
+  }
+
+  /** kort bakımı: ₺6.000 → wear sıfırlanır (tekrarlayan sink) */
+  serviceBuild(c: number, r: number): { ok: boolean; msg: string } {
+    const b = this.buildAt(c, r)
+    if (!b || (b.kind !== 'basket' && b.kind !== 'voley')) return { ok: false, msg: 'Burada bakım gerektiren kort yok.' }
+    const COST = 6_000
+    if (this.money < COST) return { ok: false, msg: `₺${(COST - this.money).toLocaleString('tr-TR')} eksik.` }
+    this.money -= COST
+    b.wear = 0
+    this.events.push(`${BUILDS[b.kind].label} bakımı yapıldı (₺${COST.toLocaleString('tr-TR')}).`)
+    return { ok: true, msg: 'Zemin yenilendi — kort tam kapasite kazandırıyor.' }
   }
 
   /** yapıyı TAŞI (düzenleme modu): bedava, sahipli boş arsaya */
@@ -1163,7 +1207,7 @@ export class Game {
       hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,
       rentDueDay: this.rentDueDay, rentMissed: this.rentMissed, loyalty: this.loyalty,
       hasPhone2: this.hasPhone2, hasCirak: this.hasCirak, adDays: this.adDays,
-      placedCount: this.placedCount, facilityName: this.facilityName,
+      placedCount: this.placedCount, facilityName: this.facilityName, repGiven: this.repGiven,
       goalDay: this.goalDay, gMatches: this.gMatches, gEarned: this.gEarned,
       gSubs: this.gSubs, goalsDone: this.goalsDone,
       events: this.events.slice(-40), incomeToday: this.incomeToday,
@@ -1193,6 +1237,7 @@ export class Game {
     if (this.hasCirak) this.personel.cirak = true
     this.placedCount = n('placedCount', 0)
     if (typeof d.facilityName === 'string') this.facilityName = d.facilityName.slice(0, 16)
+    if (Array.isArray(d.repGiven)) this.repGiven = d.repGiven as string[]
     this.goalDay = n('goalDay', 0); this.gMatches = n('gMatches', 0)
     this.gEarned = n('gEarned', 0); this.gSubs = n('gSubs', 0)
     if (Array.isArray(d.goalsDone)) this.goalsDone = d.goalsDone as string[]
