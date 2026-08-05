@@ -403,7 +403,7 @@ addEventListener('contextmenu', e => { if (pendingBuild) { e.preventDefault(); c
 addEventListener('pointermove', e => {
   if (!pendingBuild) return
   const hit = world.moveGhost(e.clientX, e.clientY)
-  if (hit) world.setGhostOk(game.ownsParcel(hit.c, hit.r) && !game.buildAt(hit.c, hit.r))
+  if (hit) world.setGhostOk(game.ownsParcel(hit.c, hit.r))
 })
 
 function renderOffice() {
@@ -615,7 +615,6 @@ addEventListener('pointerup', e => {
     if (!hit) return
     const k = pendingBuild
     if (!game.ownsParcel(hit.c, hit.r)) { toast('Bu arsa senin değil — önce satın al.', 'b'); audio.bad(); openParcel(hit.c, hit.r); return }
-    if (game.buildAt(hit.c, hit.r)) { toast('Bu arsa dolu — boş arsana taşı.', 'b'); audio.bad(); return }
     const res = game.placeBuild(hit.c, hit.r, k)
     if (res.ok) {
       pendingBuild = null

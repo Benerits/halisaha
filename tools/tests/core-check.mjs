@@ -401,5 +401,23 @@ console.log('\n— SEKRETER + SEN YOKKEN (offline) —')
   const c = new Game(); c.load(a.save())
   check('kısa aradan rapor çıkmaz', c.applyOffline(Date.now()) === null)
 }
+
+console.log('\n— ESNEK İNŞA (üstüne kur) —')
+{
+  const g = new Game(); g.money = 300_000
+  g.buyParcel(0, 1)
+  g.placeBuild(0, 1, 'basket')
+  const before = g.money
+  const r = g.placeBuild(0, 1, 'voley')
+  check('dolu arsaya kurunca eskisi yıkılıp yenisi kurulur', r.ok && g.buildAt(0, 1).kind === 'voley')
+  check('yıkım iadesi kesildi ve yeni maliyet düştü', g.money === before + Math.round(26000 * 0.4 / 100) * 100 - 20000)
+  const t = new Game(); t.money = 300_000
+  t.buyParcel(0, 1); t.placeBuild(0, 1, 'pitch')
+  t.pitches = 2 // ana + bu
+  t.bookings = []
+  // ana sahayı temsil eden pitches=2 iken bu pitch'i garden'a çevirmek OK; pitches=1'e düşer
+  const rr = t.placeBuild(0, 1, 'garden')
+  check('saha → başka yapıya dönüşebilir (kapasite korunuyorsa)', rr.ok && t.pitches === 1)
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

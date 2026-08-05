@@ -943,7 +943,11 @@ export class Game {
   }
   placeBuild(c: number, r: number, kind: BuildKind): { ok: boolean; msg: string } {
     if (!this.ownsParcel(c, r)) return { ok: false, msg: 'Önce arsayı satın al.' }
-    if (this.buildAt(c, r)) return { ok: false, msg: 'Bu arsa dolu.' }
+    // SAHİPLİ ARSADA ESNEK İNŞA: eski yapı otomatik yıkılır (%40 iade), yenisi kurulur
+    if (this.buildAt(c, r)) {
+      const rem = this.removeBuild(c, r)
+      if (!rem.ok) return rem   // 'son sahanı yıkamazsın' gibi korumalar geçerli kalır
+    }
     const b = BUILDS[kind]
     if (this.money < b.cost) return { ok: false, msg: `₺${(b.cost - this.money).toLocaleString('tr-TR')} eksik.` }
     this.money -= b.cost
