@@ -874,7 +874,9 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true })
     }
     if (url === '/api/feedback' && req.method === 'POST') {
-      const email = auth(); if (!email) return
+      // girişli oyuncu hesabıyla; MİSAFİR de IP limitiyle gönderebilir (geri bildirim altın)
+      let email = verifyToken(String(req.headers['x-auth'] || ''))
+      if (!email) email = 'misafir:' + clientIp(req)
       if (!rateLimit('fb:' + email, 5, 3600_000)) return json(res, 429, { error: 'Çok sık bildirim — biraz sonra tekrar dene.' })
       const { message, game } = await readBody(req)
       const msg = String(message || '').trim().slice(0, 1000)

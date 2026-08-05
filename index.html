@@ -310,6 +310,25 @@
   #parcel .pbody { padding:13px 15px 17px; max-height:60vh; overflow:auto; }
 
   /* ===== TOAST ===== */
+  /* ===== BİLDİR ===== */
+  #fbbtn { position:fixed; left:10px; bottom:14px; z-index:13; background:var(--clay); color:#fff;
+    font-weight:800; font-size:10.5px; letter-spacing:.5px; padding:9px 13px; border-radius:99px;
+    box-shadow:0 4px 14px rgba(214,69,69,.4); border-bottom:3px solid #b45c33; }
+  #fbbtn:hover { filter:brightness(1.08); }
+  #fbmodal { position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center;
+    background:rgba(20,40,25,.45); }
+  #fbmodal.show { display:flex; }
+  .fbcard { width:min(380px,92vw); background:var(--paper); border-radius:16px; overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  .fbhead { background:var(--clay); color:#fff; font-weight:800; font-size:12px; letter-spacing:.6px;
+    padding:10px 14px; display:flex; justify-content:space-between; align-items:center; }
+  .fbhead button { background:rgba(255,255,255,.2); color:#fff; border-radius:7px; padding:2px 9px; font-weight:800; }
+  .fbbody { padding:12px 14px 14px; }
+  #fbtext { width:100%; box-sizing:border-box; border:1.5px solid #d7e5d2; border-radius:10px;
+    font-family:var(--font); font-size:13px; padding:10px; resize:vertical; background:#fff; color:var(--ink); }
+  #fbtext:focus { outline:none; border-color:var(--clay); }
+  #fbmsg { font-size:11.5px; font-weight:750; margin-top:6px; min-height:14px; text-align:center; }
+
   /* ===== GİRİŞ KAPISI ===== */
   #gate { position:fixed; inset:0; z-index:80; display:none; align-items:center; justify-content:center;
     background:rgba(20,40,25,.55); backdrop-filter:blur(3px); }
@@ -401,6 +420,18 @@
       <button class="tab" data-tab="ayarlar">Ayarlar</button>
     </div>
     <div class="pbody" id="pbody"></div>
+  </div>
+</div>
+
+<button id="fbbtn" title="Sorun / öneri bildir">! BİLDİR</button>
+<div id="fbmodal">
+  <div class="fbcard">
+    <div class="fbhead">SORUN / ÖNERİ BİLDİR <button id="fbclose">✕</button></div>
+    <div class="fbbody">
+      <textarea id="fbtext" rows="5" placeholder="Ne oldu? Ne güzel olurdu? Yaz gitsin — direkt bize düşüyor."></textarea>
+      <button id="fbsend" class="gprimary" style="margin-top:8px">Gönder</button>
+      <div id="fbmsg"></div>
+    </div>
   </div>
 </div>
 

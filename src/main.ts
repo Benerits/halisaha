@@ -628,7 +628,7 @@ function openParcel(c: number, r: number) {
 let dragging = false, dragMoved = 0, lastX = 0, lastY = 0
 addEventListener('pointerdown', e => {
   if (pendingBuild) return
-  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud')) return
+  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#fbbtn,#fbmodal')) return
   dragging = true; dragMoved = 0; lastX = e.clientX; lastY = e.clientY
 })
 addEventListener('pointermove', e => {
@@ -643,7 +643,7 @@ addEventListener('pointerup', e => {
   document.body.style.cursor = ''
   // ELİNDE YAPI VARKEN: sürükleme kontrolünden ÖNCE yerleştir (pan bu modda kapalı)
   if (pendingBuild) {
-    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar')) return
+    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar,#fbbtn,#fbmodal')) return
     const hit = world.pickParcel(e.clientX, e.clientY)
     if (!hit) return
     const k = pendingBuild
@@ -659,7 +659,7 @@ addEventListener('pointerup', e => {
   }
   // DÜZENLEME MODU: yapı seç → boş arsaya taşı
   if (editMode && !pendingBuild) {
-    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar')) { /* UI */ }
+    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar,#fbbtn,#fbmodal')) { /* UI */ }
     else {
       const hit = world.pickParcel(e.clientX, e.clientY)
       if (hit) {
@@ -687,7 +687,7 @@ addEventListener('pointerup', e => {
   if (!dragging) return
   dragging = false
   if (dragMoved > 6) return                    // sürükleme yaptıysa tıklama sayma
-  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud')) return
+  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#fbbtn,#fbmodal')) return
   if (world.pickYazihane(e.clientX, e.clientY)) { openOffice(); return }
   const hit = world.pickParcel(e.clientX, e.clientY)
   if (hit) { audio.click(); openParcel(hit.c, hit.r) }
@@ -976,6 +976,27 @@ function wireGate() {
   })()
 }
 wireGate()
+// SORUN/ÖNERİ BİLDİR (kırmızı buton — misafir dahil herkese açık)
+$('fbbtn').addEventListener('click', () => { $('fbmodal').classList.add('show'); audio.click() })
+$('fbclose').addEventListener('click', () => $('fbmodal').classList.remove('show'))
+$('fbsend').addEventListener('click', async () => {
+  const txt = ($('fbtext') as HTMLTextAreaElement).value.trim()
+  const msg = $('fbmsg')
+  if (txt.length < 5) { msg.style.color = 'var(--clay)'; msg.textContent = 'Biraz daha detay yaz kral.'; return }
+  msg.style.color = 'var(--muted)'; msg.textContent = 'Gönderiliyor...'
+  try {
+    const res = await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-auth': localStorage.getItem('halisaha-token') ?? '' },
+      body: JSON.stringify({ message: txt, game: { day: game.day, money: game.money, loc: game.activeLoc, pitches: game.pitches } }),
+    })
+    if (!res.ok) throw new Error('Gönderilemedi, sonra tekrar dene.')
+    msg.style.color = 'var(--green-dark)'; msg.textContent = 'Alındı! Teşekkürler — hepsini okuyoruz. ✓'
+    ;($('fbtext') as HTMLTextAreaElement).value = ''
+    setTimeout(() => $('fbmodal').classList.remove('show'), 1400)
+  } catch (e) { msg.style.color = 'var(--clay)'; msg.textContent = (e as Error).message }
+})
+
 // OTURUM NABZI: dakikada bir — sunucu sayaçları oturum süresi/aktiflik ölçer
 setInterval(() => {
   fetch('/api/metric', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ k: 'session_minutes' }) }).catch(() => {})
