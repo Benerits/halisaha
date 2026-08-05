@@ -74,7 +74,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE halisaha_stat_hourly ADD COLUMN IF NOT EXISTS gate_converted int NOT NULL DEFAULT 0`)
   await pool.query(`ALTER TABLE halisaha_stat_hourly ADD COLUMN IF NOT EXISTS ad_views int NOT NULL DEFAULT 0`)
   await pool.query(`ALTER TABLE halisaha_stat_hourly ADD COLUMN IF NOT EXISTS session_minutes int NOT NULL DEFAULT 0`)
-  await pool.query(`CREATE TABLE IF NOT EXISTS beneloil_notification (
+  await pool.query(`CREATE TABLE IF NOT EXISTS halisaha_notification (
     id serial PRIMARY KEY, user_id int, title text, body text, created_at timestamptz NOT NULL DEFAULT now()
   )`)
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS halisaha_player_email_lower ON halisaha_player (lower(email))`)
@@ -1228,7 +1228,7 @@ async function handleVs(req, res, url) {
         if (kind === 'notify') {
           const title = String(b.title || 'HALI SAHA').slice(0, 80)
           const body = String(b.body || '').slice(0, 300)
-          await pool.query('INSERT INTO beneloil_notification(user_id, title, body) VALUES ($1,$2,$3)', [id, title, body]).catch(() => {})
+          await pool.query('INSERT INTO halisaha_notification(user_id, title, body) VALUES ($1,$2,$3)', [id, title, body]).catch(() => {})
           const live = pushToUser(id, { type: 'notify', title, body })
           return json(res, 200, { data: { live } })
         }
@@ -1482,14 +1482,14 @@ async function handleVs(req, res, url) {
       if (b?.kind === 'notify') {
         const title = String(b.title || 'HALI SAHA').slice(0, 80)
         const body = String(b.body || '').slice(0, 300)
-        await pool.query('INSERT INTO beneloil_notification(user_id, title, body) VALUES (NULL,$1,$2)', [title, body]).catch(() => {})
+        await pool.query('INSERT INTO halisaha_notification(user_id, title, body) VALUES (NULL,$1,$2)', [title, body]).catch(() => {})
         return json(res, 200, { data: { live: broadcastAll({ type: 'notify', title, body }) } })
       }
       return json(res, 400, { error: { code: 'invalid_request', message: 'kind: notify|reload' } })
     }
     if (url === '/vs/v1/notifications' && req.method === 'GET') {
       const rows = await pool.query(`SELECT n.id, n.title, n.body, n.created_at, p.email
-        FROM beneloil_notification n LEFT JOIN halisaha_player p ON p.id = n.user_id
+        FROM halisaha_notification n LEFT JOIN halisaha_player p ON p.id = n.user_id
         ORDER BY n.id DESC LIMIT 100`)
       return json(res, 200, { data: rows.rows.map(r => ({
         id: String(r.id), createdAt: r.created_at, kime: r.email || '(herkes)',
