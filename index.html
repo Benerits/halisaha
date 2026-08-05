@@ -47,17 +47,18 @@
   #qlist { padding:8px; display:flex; flex-direction:column; gap:7px; overflow-y:auto; flex:1;
     background:var(--paper-2); }
   /* ORTAK KAYDIRMA DİLİ: bounce/beyazlık yok + ince yeşil scrollbar (Chrome+Safari+Firefox) */
-  #qlist, .panel, #parcel {
+  #parcel .pbody { max-height:68vh; overflow-y:auto; }
+  #qlist, .panel, #parcel .pbody {
     overscroll-behavior:contain;
     scrollbar-width:thin; scrollbar-color:#bcd4bb transparent; }
-  #qlist::-webkit-scrollbar, .panel::-webkit-scrollbar, #parcel::-webkit-scrollbar { width:7px; }
-  #qlist::-webkit-scrollbar-track, .panel::-webkit-scrollbar-track, #parcel::-webkit-scrollbar-track {
+  #qlist::-webkit-scrollbar, .panel::-webkit-scrollbar, #parcel .pbody::-webkit-scrollbar { width:7px; }
+  #qlist::-webkit-scrollbar-track, .panel::-webkit-scrollbar-track, #parcel .pbody::-webkit-scrollbar-track {
     background:transparent; }
-  #qlist::-webkit-scrollbar-thumb, .panel::-webkit-scrollbar-thumb, #parcel::-webkit-scrollbar-thumb {
+  #qlist::-webkit-scrollbar-thumb, .panel::-webkit-scrollbar-thumb, #parcel .pbody::-webkit-scrollbar-thumb {
     background:#bcd4bb; border-radius:99px; border:1.5px solid var(--paper);
     background-clip:padding-box; }
   #qlist::-webkit-scrollbar-thumb:hover, .panel::-webkit-scrollbar-thumb:hover,
-  #parcel::-webkit-scrollbar-thumb:hover { background:var(--green); }
+  #parcel .pbody::-webkit-scrollbar-thumb:hover { background:var(--green); }
   .rcard { background:#fff; border-radius:10px; padding:8px 9px; cursor:pointer;
     border:1.5px solid #e2ece0; transition:border-color .1s; position:relative; flex-shrink:0; }
   .rcard:hover { border-color:var(--green); }
