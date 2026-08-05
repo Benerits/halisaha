@@ -122,6 +122,13 @@ class Audio {
   }
   musicOn = localStorage.getItem('hs-music') !== '0'
 
+  /** her tıkta güvenle çağrılır: motoru kur + duraklamışsa uyandır + müziği başlat */
+  kick(theme: string) {
+    this.ensure()
+    this.setMood(theme)
+    this.startMusic()
+  }
+
   startMusic() {
     if (this.musicT || !this.musicOn) return
     this.ensure()

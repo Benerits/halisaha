@@ -612,10 +612,11 @@ export class World {
         b.position.set(x, y, 0)
         b.rotation.z = (i % 4) * Math.PI / 2
         this.scene.add(b)
-        // BAHÇE: çitli, düzenli — biçilmiş çim + eve dik yol + köşe ağaçları + saksılar
-        const inward = y > 10 ? -1 : y < -10 ? 1 : 0
-        const gx = inward !== 0 ? x : x + (x > 0 ? -6 : 6)
-        const gy = inward !== 0 ? y + inward * 6 : y
+        // BAHÇE: çitli, düzenli. KROKİ kuralı: yan koridor evlerinde (dikey sokaklar
+        // |x|>25) bahçe YOLA DEĞİL, evin arkasına (dışa) bakar — asfalta çit kurulmaz
+        const side = Math.abs(x) > 25 ? Math.sign(x) : 0
+        const gx = side !== 0 ? x + side * 7.5 : x
+        const gy = side !== 0 ? y : y + (y > 10 ? -6 : 6)
         const G = new THREE.Group()
         const gw = 9.4, gd = 6
         const lawn = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), lam(0x83a75f))
@@ -635,7 +636,7 @@ export class World {
         }
         // eve dik bahçe yolu (kapıdan çite)
         const path = new THREE.Mesh(new THREE.PlaneGeometry(1.3, gd), lam(0xd6cfbe))
-        path.rotation.z = inward !== 0 ? 0 : Math.PI / 2
+        path.rotation.z = side !== 0 ? Math.PI / 2 : 0
         path.position.z = 0.02; G.add(path)
         // köşelere 1 ağaç + 2 saksı — ızgara düzeni
         if (k.trees.length) {

@@ -489,7 +489,8 @@ addEventListener('pointerup', e => {
 $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
 $('zout').addEventListener('click', () => { world.zoomBy(1.22); audio.click() })
 addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#queue,#office,#tips,#goals,#parcel')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
-addEventListener('pointerdown', () => { audio.ensure(); audio.setMood(game.activeLoc); audio.startMusic() }, { once: true })
+// HER tıkta idempotent: HMR/duraklatma sonrası bile ses motoru ayakta kalır
+addEventListener('pointerdown', () => audio.kick(game.activeLoc), { capture: true })
 function openOffice() { audio.click(); $('office').classList.add('show'); renderOffice() }
 $('yazpill').addEventListener('click', openOffice)
 $('goalsbtn').addEventListener('click', () => { goalsOpen = !goalsOpen; if (goalsOpen) tipsOpen = false; audio.click(); renderGoals(); renderTips() })
@@ -646,7 +647,8 @@ function frame() {
   world.render()
 }
 
-(window as any).__g = game; (window as any).__w = world
+(window as any).__g = game
+;(window as any).__a = audio; (window as any).__w = world
 renderAll()
 frame()
 

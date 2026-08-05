@@ -72,6 +72,9 @@ Amaç: büyüyünce mikro-yönetim cehennemine dönmesin; personel = otomasyonun
 ✅ Gece: sokak lambaları gece parlıyor (glow); ✅ Maç: 3 kenar izleyicisi +
    sentez tezahürat (kalabalık uğultusu + düdük)
 💡 v2: sahil plaj voleybolu, sanayi depo binaları (industrial kit)
+💡 SAHA KALİTE BASAMAĞI: 'Zemin Yenileme' (₺20k: çim dokusunu tazele → taban fiyat
+   +%8, itibar +0.2; 3 haftada eskir). Büyüme merdivenindeki eksik halka: gelir
+   eklentileri → talep → KALİTE → kapasite → şube
 
 ## SES (✅)
 ✅ Şube geçişinde süpürme sesi; şube geliri raporu toast+ses
