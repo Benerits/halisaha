@@ -563,6 +563,10 @@ function renderOffice() {
         <button class="buy" id="musrow2">${audio.musicOn ? 'AÇIK ✓' : 'KAPALI'}</button>
         <span class="ds">Arka plan melodisi.
           <input type="range" id="musvol" min="0" max="100" value="${Math.round(audio.musicVol * 100)}" style="width:100%; margin-top:6px; accent-color:var(--green)"></span></div>
+      <div class="srow"><span class="nm">${t('Tesis Adı')}</span>
+        <span class="gn">${game.facilityName || '—'}</span>
+        <button class="buy" id="renamebtn">${t('Değiştir')}</button>
+        <span class="ds">${t('Tabeladaki isim — sıralamada da bu görünür.')}</span></div>
       <div class="srow"><span class="nm">Dil / Language</span>
         <span style="display:flex; gap:6px">
           <button class="buy" id="langtr" style="background:${lang === 'tr' ? 'var(--green)' : 'var(--paper-2)'}; color:${lang === 'tr' ? '#fff' : 'var(--ink)'}">Türkçe</button>
@@ -584,6 +588,12 @@ function renderOffice() {
       audio.setSfxVol(Number((e.target as HTMLInputElement).value) / 100))
     ;($('musvol') as HTMLInputElement).addEventListener('input', e =>
       audio.setMusicVol(Number((e.target as HTMLInputElement).value) / 100))
+    $('renamebtn').addEventListener('click', () => {
+      $('office').classList.remove('show')
+      ;($('nameinput') as HTMLInputElement).value = game.facilityName
+      $('namemodal').classList.add('show')
+      setTimeout(() => ($('nameinput') as HTMLInputElement).focus(), 100)
+    })
     $('langtr').addEventListener('click', () => { setLang('tr'); renderOffice(); renderAll(); toast('Dil: Türkçe', 'g') })
     $('langen').addEventListener('click', () => { setLang('en'); renderOffice(); renderAll(); toast('Language: English', 'g') })
     $('camreset').addEventListener('click', () => { world.resetCam(); audio.click() })

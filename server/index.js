@@ -79,6 +79,15 @@ async function initDb() {
   )`)
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS halisaha_player_email_lower ON halisaha_player (lower(email))`)
   // IAP: verilmiş satın alma transaction'ları (replay/çift-verme önleme) — transaction_id PK ile idempotent
+  await pool.query(`CREATE TABLE IF NOT EXISTS halisaha_invite (
+    id bigserial PRIMARY KEY,
+    code text NOT NULL,
+    claimer text NOT NULL,
+    claimer_name text,
+    bonus_paid boolean NOT NULL DEFAULT false,
+    at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(code, claimer)
+  )`)
   await pool.query(`CREATE TABLE IF NOT EXISTS halisaha_visit (
     id bigserial PRIMARY KEY,
     at timestamptz NOT NULL DEFAULT now(),
@@ -889,6 +898,34 @@ async function handleApi(req, res, url) {
       if (!r.rowCount) return json(res, 400, { error: 'Bağlantı geçersiz ya da süresi dolmuş.' })
       await pool.query('UPDATE halisaha_player SET pass=$2, reset_token=NULL, reset_expires=NULL WHERE email=$1', [r.rows[0].email, hashPassword(String(password))])
       return json(res, 200, { ok: true })
+    }
+    // DAVET: yeni oyuncu ?ref=<kod> ile geldiyse bir kez claim eder
+    if (url === '/api/invite-claim' && req.method === 'POST') {
+      if (!rateLimit('invclaim:' + clientIp(req), 3, 3600_000)) return json(res, 429, { error: 'rate' })
+      const b2 = await readBody(req)
+      const code = String(b2.code || '').slice(0, 40)
+      const name = String(b2.name || '').slice(0, 20)
+      if (!code) return json(res, 400, { error: 'kod yok' })
+      const me = verifyToken(String(req.headers['x-auth'] || '')) || ('misafir:' + clientIp(req))
+      // kendi kodunu claim edemez (kod = davet edenin player id'si)
+      const owner = await pool.query('SELECT email FROM halisaha_player WHERE id::text = $1', [code])
+      if (owner.rows[0]?.email === me) return json(res, 400, { error: 'kendi kodun' })
+      if (!owner.rows[0]) return json(res, 404, { error: 'kod geçersiz' })
+      await pool.query(`INSERT INTO halisaha_invite(code, claimer, claimer_name) VALUES ($1,$2,$3)
+        ON CONFLICT (code, claimer) DO NOTHING`, [code, me, name || null])
+      return json(res, 200, { ok: true })
+    }
+    // DAVET: davet edenin arkadaş listesi + ödenmemiş bonus sayısı
+    if (url === '/api/myinvites' && req.method === 'GET') {
+      const email = auth(); if (!email) return
+      const idRow = await pool.query('SELECT id FROM halisaha_player WHERE email = $1', [email])
+      const myCode = String(idRow.rows[0]?.id ?? '')
+      if (!myCode) return json(res, 200, { code: '', names: [], newBonus: 0 })
+      const rows = await pool.query('SELECT id, claimer_name, bonus_paid FROM halisaha_invite WHERE code = $1 ORDER BY id', [myCode])
+      const names = rows.rows.map(r => r.claimer_name).filter(Boolean).slice(0, 20)
+      const unpaid = rows.rows.filter(r => !r.bonus_paid)
+      if (unpaid.length) await pool.query('UPDATE halisaha_invite SET bonus_paid = true WHERE id = ANY($1)', [unpaid.map(r => r.id)])
+      return json(res, 200, { code: myCode, names, newBonus: unpaid.length })
     }
     if (url === '/api/feedback' && req.method === 'POST') {
       // girişli oyuncu hesabıyla; MİSAFİR de IP limitiyle gönderebilir (geri bildirim altın)
