@@ -7,10 +7,12 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx tools/tests/core-check.mjs"
+    "test": "tsx tools/tests/core-check.mjs",
+    "start": "node server/index.js"
   },
   "dependencies": {
-    "three": "^0.178.0"
+    "three": "^0.178.0",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
     "@types/three": "^0.178.0",

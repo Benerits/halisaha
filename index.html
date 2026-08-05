@@ -308,6 +308,33 @@
   #parcel .pbody { padding:13px 15px 17px; max-height:60vh; overflow:auto; }
 
   /* ===== TOAST ===== */
+  /* ===== GİRİŞ KAPISI ===== */
+  #gate { position:fixed; inset:0; z-index:80; display:none; align-items:center; justify-content:center;
+    background:rgba(20,40,25,.55); backdrop-filter:blur(3px); }
+  #gate.show { display:flex; }
+  .gcard { width:min(400px, 92vw); background:var(--paper); border-radius:18px; overflow:hidden;
+    box-shadow:0 24px 70px rgba(0,0,0,.45); }
+  .ghead { background:var(--green-deep); color:#eaf6ec; font-weight:800; font-size:21px; letter-spacing:1px;
+    text-align:center; padding:16px; }
+  .gbody { padding:16px 18px 18px; }
+  .gsub { font-size:12.5px; color:var(--muted); font-weight:700; text-align:center; margin-bottom:10px; line-height:1.4; }
+  #livecount { margin:2px 0 8px; padding:8px 12px; background:#fff4e8; border:1.5px solid var(--sun);
+    border-radius:10px; font-weight:800; font-size:12px; color:#8a5a00; text-align:center; }
+  .gprimary { width:100%; background:var(--green); color:#fff; font-weight:800; font-size:15px;
+    padding:13px; border-radius:11px; border-bottom:3px solid var(--green-dark); }
+  .gprimary:hover { filter:brightness(1.06); }
+  .gnote { text-align:center; font-size:10.5px; color:var(--muted); margin-top:6px; }
+  .gdiv { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:11px; margin:12px 0 10px; }
+  .gdiv span { flex:1; height:1px; background:var(--line); }
+  .ginput { width:100%; box-sizing:border-box; padding:10px 12px; border-radius:9px; border:1.5px solid #d7e5d2;
+    font-family:var(--font); font-size:13.5px; margin-bottom:7px; background:#fff; color:var(--ink); }
+  .ginput:focus { outline:none; border-color:var(--green); }
+  .gbtn { flex:1; background:var(--paper-2); color:var(--ink); font-weight:800; font-size:13px;
+    padding:10px; border-radius:9px; border-bottom:3px solid #c8d6bd; }
+  .gbtn.good { background:var(--green); color:#fff; border-bottom-color:var(--green-dark); }
+  #gerr { color:var(--clay); font-size:12px; font-weight:750; min-height:16px; margin-top:6px; text-align:center; }
+  .glink { background:none; border:0; color:var(--sky); font-size:11.5px; cursor:pointer; text-decoration:underline; }
+
   #toasts { position:fixed; left:50%; transform:translateX(-50%); top:76px; z-index:50;
     display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none; }
   .toast { background:var(--paper); color:var(--ink); font-weight:750; font-size:12.5px; padding:9px 16px;
@@ -372,6 +399,30 @@
       <button class="tab" data-tab="ayarlar">Ayarlar</button>
     </div>
     <div class="pbody" id="pbody"></div>
+  </div>
+</div>
+
+<div id="gate">
+  <div class="gcard">
+    <div class="ghead">HALI SAHA</div>
+    <div class="gbody">
+      <div class="gsub">Sahanı kur, mahallenin efsanesi ol. İlerlemen hesabında güvende.</div>
+      <div id="livecount" style="display:none"></div>
+      <button id="gguest" class="gprimary">Misafir olarak oyna</button>
+      <div class="gnote">Kayıt yok, kurulum yok — 3 saniyede sahadasın.</div>
+      <div class="gdiv"><span></span>veya hesabınla devam et<span></span></div>
+      <input id="gemail" type="email" placeholder="e-posta" class="ginput" />
+      <input id="gpass" type="password" placeholder="şifre" class="ginput" />
+      <div style="display:flex; gap:8px">
+        <button id="glogin" class="gbtn good">Giriş Yap</button>
+        <button id="gregister" class="gbtn">Kayıt Ol</button>
+      </div>
+      <div id="gerr"></div>
+      <div id="gbtn-google" style="display:flex; justify-content:center; min-height:0; margin-top:10px"></div>
+      <div style="text-align:center; margin-top:8px">
+        <button id="gforgot" class="glink">Şifremi unuttum</button>
+      </div>
+    </div>
   </div>
 </div>
 
