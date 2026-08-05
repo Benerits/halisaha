@@ -204,12 +204,6 @@ export class World {
       post.rotation.x = Math.PI / 2
       post.position.set(bx, py, Hb / 2)
       post.castShadow = true; g.add(post)
-      const len = Math.hypot(depth, H - Hb)
-      const link = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, len, 6), rodMat)
-      link.rotation.x = Math.PI / 2
-      link.rotation.y = Math.atan2(sg * depth, H - Hb)
-      link.position.set(gx + sg * depth / 2, py, (H + Hb) / 2)
-      g.add(link)
     }
     const backBar = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, W * 2, 6), rodMat)
     backBar.position.set(bx, 0, Hb)
@@ -862,7 +856,7 @@ export class World {
         p.g.position.x += (dx / d) * step
         p.g.position.y += (dy / d) * step
         // dönüş YUMUŞAK: hedef açıya kısa yoldan kayarak dön (anlık zıplama yok)
-        const want = Math.atan2(dy, dx) - Math.PI / 2
+        const want = Math.atan2(dy, dx) + Math.PI / 2  // model önü -Y: yüz gittiği yöne
         let diff = want - p.ang
         while (diff > Math.PI) diff -= Math.PI * 2
         while (diff < -Math.PI) diff += Math.PI * 2
@@ -902,7 +896,7 @@ export class World {
       w.g.position.lerpVectors(w.from, w.to, w.t)
       w.g.position.z = 0
       const d = new THREE.Vector3().subVectors(w.to, w.from)
-      w.g.rotation.z = Math.atan2(d.y, d.x) - Math.PI / 2
+      w.g.rotation.z = Math.atan2(d.y, d.x) + Math.PI / 2
     }
   }
 
