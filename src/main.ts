@@ -519,7 +519,17 @@ function renderOffice() {
         else { audio.bad(); toast(r.msg, 'b') }
       }))
   } else if (officeTab === 'ayarlar') {
+    const em = auth.currentEmail()
     body.innerHTML = `
+      <div class="srow"><span class="nm">Hesap</span>
+        <span class="gn">${em ? em : 'Misafir'}</span>
+        ${em ? '<button class="buy" id="alogout" style="background:var(--paper-2);color:var(--ink)">Çıkış Yap</button>'
+             : '<button class="buy" id="alogin">Giriş / Kayıt</button>'}
+        <span class="ds">${em ? 'İlerlemen hesabında güvende — her cihazdan devam edebilirsin.'
+             : 'Misafir ilerlemen bu cihazda. Hesap açarsan buluta taşınır.'}</span></div>
+      ${em ? `<div class="srow"><span class="nm">Hesabı Sil</span>
+        <button class="buy" id="adelete" style="background:var(--clay)">Kalıcı Sil</button>
+        <span class="ds">Hesap + kayıt kalıcı silinir (geri alınamaz). App Store gereği.</span></div>` : ''}` + `
       <div class="srow"><span class="nm">Ses efektleri</span>
         <button class="buy" id="sfxrow">${audio.on ? 'AÇIK ✓' : 'KAPALI'}</button>
         <span class="ds">Telefon, para, yerleştirme sesleri.</span></div>
@@ -538,6 +548,17 @@ function renderOffice() {
       ;($('musrow') as HTMLElement).textContent = on ? 'AÇIK ✓' : 'KAPALI'
     })
     $('camreset').addEventListener('click', () => { world.resetCam(); audio.click() })
+    const lo = document.getElementById('alogout')
+    if (lo) lo.addEventListener('click', () => { auth.logout(); location.reload() })
+    const li = document.getElementById('alogin')
+    if (li) li.addEventListener('click', () => { $('office').classList.remove('show'); $('gate').classList.add('show') })
+    const del = document.getElementById('adelete')
+    if (del) del.addEventListener('click', async () => {
+      if (!confirm('Hesabın ve TÜM ilerlemen kalıcı olarak silinecek. Emin misin?')) return
+      if (!confirm('Son kez: bu işlem GERİ ALINAMAZ. Silinsin mi?')) return
+      try { await auth.deleteAccount(); localStorage.clear(); location.reload() }
+      catch (e) { toast((e as Error).message, 'b') }
+    })
   } else {
     body.innerHTML = game.events.slice(-14).reverse()
       .map(e => `<div class="srow"><span class="ds" style="flex:1">${e}</span></div>`).join('')
