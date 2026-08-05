@@ -5,6 +5,9 @@
 class Audio {
   private ctx: AudioContext | null = null
   private master: GainNode | null = null
+  private musicBus: GainNode | null = null
+  sfxVol = Number(localStorage.getItem('hs-sfxvol') ?? 1)
+  musicVol = Number(localStorage.getItem('hs-musvol') ?? 1)
   on = localStorage.getItem('hs-sfx') !== '0'
 
   ensure() {
@@ -13,8 +16,11 @@ class Audio {
     if (!AC) return
     this.ctx = new AC()
     this.master = this.ctx.createGain()
-    this.master.gain.value = 0.55
+    this.master.gain.value = 0.55 * this.sfxVol
     this.master.connect(this.ctx.destination)
+    this.musicBus = this.ctx.createGain()
+    this.musicBus.gain.value = this.musicVol
+    this.musicBus.connect(this.ctx.destination)
     // sekmeye dönünce devam
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && this.ctx?.state !== 'running') this.ctx?.resume().catch(() => {})
@@ -61,7 +67,10 @@ class Audio {
     o.start(t0); o.stop(t0 + dur + 0.04)
   }
 
-  private tone(freq: number, dur: number, type: OscillatorType, vol: number, when = 0) {
+  setSfxVol(v: number) { this.sfxVol = v; localStorage.setItem('hs-sfxvol', String(v)); if (this.master) this.master.gain.value = 0.55 * v }
+  setMusicVol(v: number) { this.musicVol = v; localStorage.setItem('hs-musvol', String(v)); if (this.musicBus) this.musicBus.gain.value = v }
+
+  private tone(freq: number, dur: number, type: OscillatorType, vol: number, when = 0, toMusic = false) {
     if (!this.ctx || !this.master || !this.on) return
     const t0 = this.ctx.currentTime + when
     const osc = this.ctx.createOscillator()
@@ -71,7 +80,7 @@ class Audio {
     g.gain.setValueAtTime(0, t0)
     g.gain.linearRampToValueAtTime(vol, t0 + 0.012)
     g.gain.exponentialRampToValueAtTime(0.0008, t0 + dur)
-    osc.connect(g); g.connect(this.master)
+    osc.connect(g); g.connect(toMusic && this.musicBus ? this.musicBus : this.master)
     osc.start(t0); osc.stop(t0 + dur + 0.04)
   }
 
@@ -260,12 +269,12 @@ class Audio {
     if (!this.ctx || !this.on || !this.musicOn || document.hidden) return
     const r = this.roots[this.step++ % 4]
     for (const [m, v] of [[1, 0.030], [1.5, 0.020], [2, 0.015]] as [number, number][])
-      this.tone(r * m, 2.3, 'sine', v)
+      this.tone(r * m, 2.3, 'sine', v, 0, true)
     const pent = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3]
     const n = 2 + Math.floor(Math.random() * 2)
     for (let i = 0; i < n; i++)
       this.tone(r * 2 * pent[Math.floor(Math.random() * pent.length)], 0.55, 'triangle', 0.020,
-        0.35 + i * 0.65 + Math.random() * 0.25)
+        0.35 + i * 0.65 + Math.random() * 0.25, true)
   }
 
   toggleMusic(): boolean {
