@@ -67,6 +67,8 @@ export interface Reservation {
   haggled: boolean
   /** maç uzunluğu: 1 ya da 2 saat (2 saat = ardışık iki slot kaplar) */
   hours: number
+  /** TAM SAHA şart mı (kurumsal 8v8 miniye sığmaz) */
+  needFull: boolean
   /** anlaşma sonrası geçen süre (nazik hatırlatma için) */
   dealWait?: number
   weeks: number
@@ -75,6 +77,8 @@ export interface Reservation {
 }
 
 export interface Booking {
+  /** tam saha kapasitesinden mi yer tutuyor */
+  needFull?: boolean
   day: number
   hour: number
   team: string
@@ -156,10 +160,17 @@ export const LOCATIONS: LocDef[] = [
   { id: 'sahil', label: 'SAHİL', cost: 400_000, priceMult: 1.35, demandMult: 0.85,
     desc: 'Zengin muhit — fiyatlar %35 yüksek, müşteri daha seçici.' },
 ]
+/** şube personeli: müdür 0=yok 1=acemi 2=usta */
+export interface Personel { mudur: 0 | 1 | 2; cirak: boolean; kantinci: boolean; auto: boolean }
+export const emptyPersonel = (): Personel => ({ mudur: 0, cirak: false, kantinci: false, auto: false })
+export const MAAS = { mudur1: 600, mudur2: 1_000, cirak: 350, kantinci: 400 }
+export const ISE_ALIM = { mudur1: 25_000, mudur2: 60_000, cirak: 8_000, kantinci: 6_000 }
+
 /** şubenin taşınabilir durumu */
 interface LocSnap {
   bookings: Booking[]; queue: Reservation[]; pitches: number
   ownedParcels: string[]; builds: PlacedBuild[]
+  personel?: Personel
 }
 
 export interface SaveData { [k: string]: unknown }
@@ -216,13 +227,15 @@ export class Game {
   basePrice() { return 700 + this.pitches * 40 + Math.round(this.rep * 60) }
   /** kantin + ekipman geliri (maç başına) */
   extraPerMatch() {
-    let v = 0
-    if (this.hasCanteen) v += 120
-    if (this.hasFridge) v += 60
+    let kantin = 0
+    if (this.hasCanteen) kantin += 120
+    if (this.hasFridge) kantin += 60
+    if (this.hasTost) kantin += 45
+    if (this.hasBaklava) kantin += 55
+    if (this.personel.kantinci) kantin = Math.round(kantin * 1.25)  // kantinci tezgâhı büyütür
+    let v = kantin
     if (this.hasCleats) v += 45
     if (this.hasKeeper) v += 70
-    if (this.hasTost) v += 45
-    if (this.hasBaklava) v += 55
     if (this.hasBillboard) v += 90   // pano kirası maç başına yansır
     return v
   }
@@ -233,6 +246,10 @@ export class Game {
     if (this.hasShower) v += 70
     v += this.staff * 400
     if (this.docService) v += 250
+    if (this.personel.mudur === 1) v += MAAS.mudur1
+    if (this.personel.mudur === 2) v += MAAS.mudur2
+    if (this.personel.cirak) v += MAAS.cirak
+    if (this.personel.kantinci) v += MAAS.kantinci
     v += (this.pitches - 1) * 200
     return v
   }
@@ -251,6 +268,15 @@ export class Game {
   usedAt(day: number, hour: number): number { return this.bookingsAt(day, hour).length }
   /** bu saatte hâlâ boş saha var mı */
   freeAt(day: number, hour: number): boolean { return this.usedAt(day, hour) < this.pitches }
+  /** tam boy saha sayısı (ana saha + parsel halı sahaları; mini hariç) */
+  fullPitchCount(): number { return this.pitches - this.builds.filter(b => b.kind === 'mini').length }
+  fullUsedAt(day: number, hour: number): number {
+    return this.bookingsAt(day, hour).filter(b => b.needFull).length
+  }
+  /** tam saha isteyen için bu saatte yer var mı */
+  fullFreeAt(day: number, hour: number): boolean {
+    return this.fullUsedAt(day, hour) < this.fullPitchCount()
+  }
   /** doluluk yüzdesi */
   occupancy(): number {
     const usable = 7 * HOURS.length
@@ -309,6 +335,7 @@ export class Game {
       maxPay: Math.round(raw * lever / 10) * 10,
       haggled: false,
       hours: twoH && baseHour + 1 < CLOSE_HOUR ? 2 : 1,
+      needFull: seg.id === 'kurumsal' ? Math.random() < 0.7 : Math.random() < 0.1,
       weeks,
       patience: 34, maxPatience: 34,
     }
@@ -332,18 +359,21 @@ export class Game {
         ? { ok: false, msg: `${r.team} bu saati kabul etmiyor — yanıp sönen slotlardan birini seç.` }
         : { ok: false, msg: `${r.team} sadece ${DAY_NAMES[r.day]} ${r.hour}:00 istiyor.` }
     }
+    if (r.needFull && !this.fullFreeAt(day, hour)) {
+      return { ok: false, msg: `${r.team} TAM SAHA istiyor — bu saatte tam sahalar dolu (mini boş ama onlara küçük).` }
+    }
     if (r.hours === 2 && !this.freeAt(day, hour + 1)) {
       return { ok: false, msg: `${r.team} 2 saat istiyor — ${hour + 1}:00 da boş olmalı.` }
     }
     this.queue.splice(i, 1)
     if (r.hours === 2) {
       const half = Math.round(r.price / 2 / 10) * 10
-      this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0 })
-      this.bookings.push({ day, hour: hour + 1, team: r.team, segment: r.segment, price: r.price - half, sub: false, weeksLeft: 0 })
+      this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0, needFull: r.needFull })
+      this.bookings.push({ day, hour: hour + 1, team: r.team, segment: r.segment, price: r.price - half, sub: false, weeksLeft: 0, needFull: r.needFull })
     } else {
       this.bookings.push({
         day, hour, team: r.team, segment: r.segment, price: r.price,
-        sub: r.weeks > 0, weeksLeft: r.weeks,
+        sub: r.weeks > 0, weeksLeft: r.weeks, needFull: r.needFull,
       })
     }
     if (r.weeks > 0) { if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] } this.gSubs++ }
@@ -378,7 +408,9 @@ export class Game {
   canPlaceAt(r: Reservation, day: number, hour: number): boolean {
     if (!this.slotOk(r, day, hour)) return false
     if (!this.freeAt(day, hour)) return false
-    return r.hours < 2 || this.freeAt(day, hour + 1)
+    if (r.needFull && !this.fullFreeAt(day, hour)) return false
+    if (r.hours < 2) return true
+    return this.freeAt(day, hour + 1) && (!r.needFull || this.fullFreeAt(day, hour + 1))
   }
 
   /** İsteği kibarca GERİ ÇEVİR — takılı kart kalmasın (dolu takvim supabı) */
@@ -423,8 +455,10 @@ export class Game {
   loyalty: Record<string, number> = {}
   /** 2. telefon hattı: sırada 6 istek bekleyebilir (4 yerine) */
   hasPhone2 = false
-  /** ÇIRAK: sabrı bitmek üzere olan istekleri kendisi yerleştirir (kayıp istek = kayıp para bitiyor) */
+  /** eski kayıt uyumu — artık personel.cirak kullanılır */
   hasCirak = false
+  /** AKTİF şubenin personeli (şube değişince locStore ile taşınır) */
+  personel: Personel = emptyPersonel()
   /** sosyal medya reklamı: kalan gün — sürerken talep +%50 */
   adDays = 0
   /** oyun-içi otomatik olaylar için bildirim kuyruğu (UI toast'a çevirir) */
@@ -442,7 +476,7 @@ export class Game {
   syncLoc() {
     this.locStore[this.activeLoc] = {
       bookings: this.bookings, queue: this.queue, pitches: this.pitches,
-      ownedParcels: this.ownedParcels, builds: this.builds,
+      ownedParcels: this.ownedParcels, builds: this.builds, personel: this.personel,
     }
   }
   private loadLocFields(id: LocId) {
@@ -450,6 +484,7 @@ export class Game {
     if (!sn) return
     this.bookings = sn.bookings; this.queue = sn.queue; this.pitches = sn.pitches
     this.ownedParcels = sn.ownedParcels; this.builds = sn.builds
+    this.personel = sn.personel ?? emptyPersonel()
   }
   switchLoc(id: LocId): { ok: boolean; msg: string } {
     if (!this.unlockedLocs.includes(id)) return { ok: false, msg: 'Bu şube henüz senin değil.' }
@@ -468,11 +503,47 @@ export class Game {
     this.unlockedLocs.push(id)
     this.locStore[id] = {
       bookings: [], queue: [], pitches: 1,
-      ownedParcels: [...STARTER_PARCELS], builds: [],
+      ownedParcels: [...STARTER_PARCELS], builds: [], personel: emptyPersonel(),
     }
     this.events.push(`${def.label} şubesi açıldı! (₺${def.cost.toLocaleString('tr-TR')})`)
     return { ok: true, msg: `${def.label} şubesi senin — kurulu 1 saha + arsalarla geliyor.` }
   }
+  hire(role: 'mudur' | 'cirak' | 'kantinci'): { ok: boolean; msg: string } {
+    const p = this.personel
+    if (role === 'mudur') {
+      if (p.mudur >= 2) return { ok: false, msg: 'Müdür zaten usta seviyesinde.' }
+      const cost = p.mudur === 0 ? ISE_ALIM.mudur1 : ISE_ALIM.mudur2
+      if (this.money < cost) return { ok: false, msg: `₺${(cost - this.money).toLocaleString('tr-TR')} eksik.` }
+      this.money -= cost; p.mudur++
+      this.events.push(p.mudur === 1 ? 'Şube müdürü işe alındı.' : 'Müdür USTA seviyesine terfi etti.')
+      return { ok: true, msg: p.mudur === 1 ? 'Müdür hazır — "müdüre bırak"ı açabilirsin.' : 'Usta müdür: yerleştirirken ufak zam da koparır.' }
+    }
+    if (role === 'cirak') {
+      if (p.cirak) return { ok: false, msg: 'Bu şubede çırak zaten var.' }
+      if (this.money < ISE_ALIM.cirak) return { ok: false, msg: `₺${(ISE_ALIM.cirak - this.money).toLocaleString('tr-TR')} eksik.` }
+      this.money -= ISE_ALIM.cirak; p.cirak = true
+      this.events.push('Çırak işe alındı.')
+      return { ok: true, msg: 'Çırak telefonun başında — sabrı bitenleri o koyar.' }
+    }
+    if (p.kantinci) return { ok: false, msg: 'Kantinci zaten var.' }
+    if (!this.hasCanteen) return { ok: false, msg: 'Önce kantin gerekli.' }
+    if (this.money < ISE_ALIM.kantinci) return { ok: false, msg: `₺${(ISE_ALIM.kantinci - this.money).toLocaleString('tr-TR')} eksik.` }
+    this.money -= ISE_ALIM.kantinci; p.kantinci = true
+    this.events.push('Kantinci işe alındı.')
+    return { ok: true, msg: 'Kantinci tezgâhta — kantin gelirleri +%25.' }
+  }
+  fire(role: 'mudur' | 'cirak' | 'kantinci'): { ok: boolean; msg: string } {
+    const p = this.personel
+    if (role === 'mudur') { if (!p.mudur) return { ok: false, msg: 'Müdür yok.' }; p.mudur = 0; p.auto = false }
+    if (role === 'cirak') { if (!p.cirak) return { ok: false, msg: 'Çırak yok.' }; p.cirak = false }
+    if (role === 'kantinci') { if (!p.kantinci) return { ok: false, msg: 'Kantinci yok.' }; p.kantinci = false }
+    this.events.push('Personel işten çıkarıldı.')
+    return { ok: true, msg: 'İşten çıkarıldı — maaşı kesildi.' }
+  }
+
+  /** dün her şubenin net katkısı (şube çubuğu rozetleri) */
+  locIncome: Record<string, number> = {}
+
   totalPitches(): number {
     let t = 0
     for (const id of this.unlockedLocs)
@@ -493,7 +564,7 @@ export class Game {
       this.endDay()
     }
     // ÇIRAK: sabrı azalan isteği oyuncu adına yerleştirir
-    if (this.hasCirak) {
+    if (this.personel.cirak) {
       for (const r of [...this.queue]) {
         if (r.patience > r.maxPatience * 0.25) continue
         const days = r.flexible ? r.flexDays : [r.day]
@@ -504,6 +575,19 @@ export class Game {
             break outer
           }
         }
+      }
+    }
+    // MÜDÜRE BIRAK: müdür telefona bakar, gelen kartı en iyi slota kendisi koyar
+    if (this.personel.auto && this.personel.mudur > 0) {
+      for (const r of [...this.queue]) {
+        const slot = this.bestSlot(r)
+        if (!slot) continue
+        if (this.personel.mudur === 2 && !r.haggled && Math.random() < 0.5) {
+          const bump = Math.round(r.price * 0.1 / 10) * 10
+          if (r.price + bump <= r.maxPay) r.price += bump  // usta müdür ufak zam koparır
+        }
+        if (this.place(r.id, slot.day, slot.hour).ok)
+          this.notices.push(`Müdür yerleştirdi: ${r.team} → ${DAY_NAMES[slot.day]} ${slot.hour}:00`)
       }
     }
     // kart sabrı — EL SIKIŞILAN (pazarlığı biten) kart KAÇMAZ, süresi donar
@@ -560,6 +644,7 @@ export class Game {
     const upkeep = this.dailyUpkeep()
     this.money += income - upkeep
     this.lastDayProfit = income - upkeep
+    this.locIncome[this.activeLoc] = income - upkeep
     this.incomeToday = income
     this.expenseToday = upkeep
     // DİĞER ŞUBELER: müdür işletir — maçlar oynanır, abonelikler işler, kort kirası gelir
@@ -571,9 +656,13 @@ export class Game {
       if (!sn) continue
       subeIncome += sn.builds.reduce((sum, b) =>
         sum + (b.kind === 'basket' ? 800 : b.kind === 'voley' ? 550 : 0), 0)
+      const pp = sn.personel ?? emptyPersonel()
+      const mult = pp.mudur === 2 ? 1.1 : pp.mudur === 1 ? 1 : 0.7  // müdürsüz şube gelir kaçırır
+      subeIncome -= (pp.mudur === 1 ? MAAS.mudur1 : pp.mudur === 2 ? MAAS.mudur2 : 0)
+        + (pp.cirak ? MAAS.cirak : 0) + (pp.kantinci ? MAAS.kantinci : 0)
       const played = sn.bookings.filter(b => b.day === dayIdx)
       for (const b of played) {
-        subeIncome += b.price + this.extraPerMatch()
+        subeIncome += Math.round((b.price + this.extraPerMatch()) * mult)
         if (b.sub) {
           b.weeksLeft--
           if (b.weeksLeft <= 0) {
@@ -583,6 +672,7 @@ export class Game {
         } else sn.bookings = sn.bookings.filter(x => x !== b)
       }
       this.gMatches += played.length
+      this.locIncome[id] = subeIncome
     }
     if (subeIncome > 0) {
       this.money += subeIncome
@@ -590,6 +680,7 @@ export class Game {
       this.lastDayProfit += subeIncome
       this.gEarned += subeIncome
       this.events.push(`Şubelerden gelir: ₺${subeIncome.toLocaleString('tr-TR')}`)
+      this.notices.push(`Şube müdürlerinden rapor: +₺${subeIncome.toLocaleString('tr-TR')}`)
     }
     if (this.adDays > 0) {
       this.adDays--
@@ -660,8 +751,6 @@ export class Game {
         desc: 'Ana caddeden görünen büyük tabela — yoldan geçen daha çok kişi arar.', owned: this.hasRoadSign, locked: null },
       { id: 'phone2', label: '2. Telefon Hattı', gain: 'Sırada 6 istek bekler (4 yerine)', cost: 5_500, upkeep: 40,
         desc: 'Hat meşgulken arayan müşteri kaçıyordu — ikinci hat kuyruk kapasitesini artırır.', owned: this.hasPhone2, locked: null },
-      { id: 'cirak', label: 'Çırak', gain: 'Sabrı biten istekleri o yerleştirir', cost: 8_000, upkeep: 350,
-        desc: 'Telefona bakar: sen yetişemezsen bekleyen isteği uygun boş saate kendisi yazar. Pazarlık yapmaz.', owned: this.hasCirak, locked: null },
       { id: 'ads', label: 'Sosyal Medya Reklamı', gain: '2 gün talep +%50', cost: 2_500, upkeep: 0,
         desc: 'Mahalle gruplarında sponsorlu ilan. Bitince tekrar verebilirsin.', owned: false,
         locked: this.adDays > 0 ? `Reklam yayında (${this.adDays} gün kaldı)` : null },
@@ -697,7 +786,7 @@ export class Game {
       case 'billboard': this.hasBillboard = true; break
       case 'roadsign': this.hasRoadSign = true; break
       case 'phone2': this.hasPhone2 = true; break
-      case 'cirak': this.hasCirak = true; break
+      case 'cirak': this.personel.cirak = true; break
       case 'ads': this.adDays = 2; break
     }
     this.events.push(`${it.label} alındı.`)
@@ -881,6 +970,7 @@ export class Game {
     if (Array.isArray(d.bookings)) this.bookings = d.bookings as Booking[]
     this.rentDueDay = n('rentDueDay', 7); this.rentMissed = n('rentMissed', 0)
     this.hasPhone2 = d.hasPhone2 === true; this.hasCirak = d.hasCirak === true; this.adDays = n('adDays', 0)
+    if (this.hasCirak) this.personel.cirak = true
     this.placedCount = n('placedCount', 0)
     if (Array.isArray(d.unlockedLocs) && d.unlockedLocs.length) this.unlockedLocs = d.unlockedLocs as LocId[]
     if (typeof d.activeLoc === 'string' && this.unlockedLocs.includes(d.activeLoc as LocId)) this.activeLoc = d.activeLoc as LocId

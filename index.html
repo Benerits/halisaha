@@ -194,6 +194,9 @@
   .loc.on { background:var(--green); color:#fff; border-bottom-color:var(--green-dark); }
   .loc.locked { color:var(--muted); }
   .loc.locked:hover { color:var(--ink); border-bottom-color:var(--sun); }
+  .loc .linc { display:block; font-size:8.5px; font-weight:800; color:var(--green-dark); line-height:1.1; }
+  .loc.on .linc { color:#dff5e4; }
+  .loc .linc.neg { color:var(--clay); }
   #yazpill { position:fixed; z-index:9; transform:translate(-50%,-100%); cursor:pointer;
     background:var(--head); color:var(--head-ink); font-weight:800; font-size:10px;
     letter-spacing:.8px; padding:5px 12px; border-radius:99px; box-shadow:0 4px 12px rgba(20,35,25,.3);
@@ -292,6 +295,7 @@
     <div class="tabs">
       <button class="tab on" data-tab="yatirim">Yatırım</button>
       <button class="tab" data-tab="ozet">Özet</button>
+      <button class="tab" data-tab="personel">Personel</button>
       <button class="tab" data-tab="defter">Defter</button>
       <button class="tab" data-tab="ayarlar">Ayarlar</button>
     </div>

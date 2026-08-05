@@ -184,7 +184,7 @@ console.log('\n— ÇIRAK / TELEFON HATTI / REKLAM —')
   check('bitince tekrar verilebilir', g.buy('ads').ok)
 
   const c = new Game(); c.money = 50_000
-  check('çırak alınır', c.buy('cirak').ok)
+  check('çırak işe alınır (personel sistemi)', c.hire('cirak').ok)
   let r = null
   for (let i = 0; i < 900 && !r; i++) r = c.spawnReservation()
   if (r) {
@@ -302,6 +302,35 @@ console.log('\n— KALECİ + 2 SAATLİK MAÇ —')
       check('fiyat iki slota bölünür, toplam korunur', toplam === r2.price)
     }
   } else check('2 saatlik kart üretiliyor', false)
+}
+
+console.log('\n— PERSONEL + TAM SAHA —')
+{
+  const g = new Game(); g.money = 200_000
+  check('müdür işe alınır', g.hire('mudur').ok)
+  check('müdür ustaya terfi eder', g.hire('mudur').ok && g.personel.mudur === 2)
+  check('üçüncü terfi yok', !g.hire('mudur').ok)
+  g.buy('canteen')
+  check('kantinci alınır (kantin şartlı)', g.hire('kantinci').ok)
+  const kantinsiz = new Game(); kantinsiz.money = 50_000
+  check('kantinsiz kantinci alınamaz', !kantinsiz.hire('kantinci').ok)
+  const before = g.extraPerMatch()
+  g.fire('kantinci')
+  check('kantinci çıkınca kantin geliri düşer', g.extraPerMatch() < before)
+  check('maaşlar gidere yansır', g.dailyUpkeep() > new Game().dailyUpkeep())
+
+  const t = new Game()
+  let rf = null
+  for (let i = 0; i < 5000 && !rf; i++) { if (t.queue.length >= 4) t.queue.length = 0; const x = t.spawnReservation(); if (x && x.needFull) rf = x }
+  if (rf) {
+    check('TAM SAHA isteği üretilir', rf.needFull === true)
+    check('tam saha sayısı: ana saha = 1', t.fullPitchCount() === 1)
+    const slot = t.bestSlot(rf)
+    if (slot) {
+      t.place(rf.id, slot.day, slot.hour)
+      check('tam saha maçı tam kapasiteden düşer', t.fullUsedAt(slot.day, slot.hour) === 1)
+    }
+  }
 }
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { World, type LocTheme } from './world'
 import { audio } from './audio'
-import { Game, LOCATIONS, type LocId, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, BUILDS, parcelCost, type BuyId, type BuildKind } from './state'
+import { Game, LOCATIONS, type LocId, MAAS, ISE_ALIM, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, BUILDS, parcelCost, type BuyId, type BuildKind } from './state'
 
 const SAVE_KEY = 'halisaha-save-v1'
 const canvas = document.getElementById('c') as HTMLCanvasElement
@@ -187,7 +187,7 @@ function renderQueue() {
       : pat < 0.4 ? 'acelesi var, üstüne gitme' : ''
     return `<div class="rcard ${selected === r.id ? 'sel' : ''} ${seenCards.has(r.id) ? '' : 'new'}" data-id="${r.id}">
       <div class="team">${r.team}</div>${r.weeks ? `<span class="tagsub">${r.weeks} HAFTA</span>` : ''}
-      <div class="when">${when}${r.flexible ? '<span class="flex">ESNEK</span>' : ''}${r.hours === 2 ? '<span class="flex" style="background:var(--clay)">2 SAAT</span>' : ''}</div>
+      <div class="when">${when}${r.flexible ? '<span class="flex">ESNEK</span>' : ''}${r.hours === 2 ? '<span class="flex" style="background:var(--clay)">2 SAAT</span>' : ''}${r.needFull ? '<span class="flex" style="background:var(--green-deep)">TAM SAHA</span>' : ''}</div>
       <div class="meta">${seg.label}</div>
       <div class="price"><span class="plab">teklifi</span> ₺${tl(r.price)}${r.weeks ? ' <span class="pw">/hafta</span>' : ''}</div>
       ${r.haggled ? '<div class="hdone">pazarlık yapıldı</div>' : `<div class="hgl">
@@ -324,6 +324,37 @@ function renderOffice() {
         <span class="ds">Düşerse denetimde ceza riski var.</span></div>
       <div class="srow"><span class="nm">Günlük sabit gider</span><span class="up">-₺${tl(game.dailyUpkeep())}</span>
         <span class="ds">Elektrik, su, temizlik, personel.</span></div>`
+  } else if (officeTab === 'personel') {
+    const p = game.personel
+    const row = (nm: string, st: string, act: string, id: string, ds: string, dis = false) => `
+      <div class="srow"><span class="nm">${nm}</span><span class="gn">${st}</span>
+        <button class="buy" data-per="${id}" ${dis ? 'disabled' : ''}>${act}</button>
+        <span class="ds">${ds}</span></div>`
+    body.innerHTML = `
+      <div class="srow" style="background:#eefaf0"><span class="ds" style="flex:1">
+        Personel ŞUBEYE aittir (şu an: ${game.locDef().label}). Maaşlar her gün kasadan düşer.</span></div>
+      ${row('Şube Müdürü', p.mudur === 2 ? 'USTA · ₺' + tl(MAAS.mudur2) + '/g' : p.mudur === 1 ? 'Acemi · ₺' + tl(MAAS.mudur1) + '/g' : 'Yok',
+        p.mudur === 0 ? '₺' + tl(ISE_ALIM.mudur1) + ' işe al' : p.mudur === 1 ? '₺' + tl(ISE_ALIM.mudur2) + ' terfi' : 'USTA ✓', 'mudur',
+        'Pasif şubede geliri tam toplar (müdürsüz %70 kalır). Usta: yerleştirirken ufak zam koparır.', p.mudur === 2)}
+      ${p.mudur > 0 ? row('Müdüre bırak', p.auto ? 'AÇIK' : 'KAPALI', p.auto ? 'Kapat' : 'Aç', 'auto',
+        'Açıkken bu şubede gelen istekleri müdür anında en iyi slota yerleştirir — sen izlersin.') : ''}
+      ${row('Çırak', p.cirak ? 'Çalışıyor · ₺' + tl(MAAS.cirak) + '/g' : 'Yok',
+        p.cirak ? 'Çıkar' : '₺' + tl(ISE_ALIM.cirak) + ' işe al', 'cirak',
+        'Sabrı bitmek üzere olan isteği uygun boş saate yazar. Pazarlık yapmaz.')}
+      ${row('Kantinci', p.kantinci ? 'Tezgâhta · ₺' + tl(MAAS.kantinci) + '/g' : 'Yok',
+        p.kantinci ? 'Çıkar' : '₺' + tl(ISE_ALIM.kantinci) + ' işe al', 'kantinci',
+        'Kantin gelirlerini %25 artırır (kantin gerekli).')}`
+    body.querySelectorAll<HTMLElement>('button[data-per]').forEach(b =>
+      b.addEventListener('click', () => {
+        const id = b.dataset.per!
+        if (id === 'auto') { game.personel.auto = !game.personel.auto; audio.click(); renderOffice(); return }
+        const role = id as 'mudur' | 'cirak' | 'kantinci'
+        const already = role === 'mudur' ? false : role === 'cirak' ? game.personel.cirak : game.personel.kantinci
+        const res = already ? game.fire(role) : game.hire(role)
+        if (res.ok) audio.build(); else audio.bad()
+        toast(res.msg, res.ok ? 'g' : 'b')
+        save(); renderOffice(); renderAll()
+      }))
   } else if (officeTab === 'ayarlar') {
     body.innerHTML = `
       <div class="srow"><span class="nm">Ses efektleri</span>
@@ -429,7 +460,7 @@ addEventListener('pointerup', e => {
 $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
 $('zout').addEventListener('click', () => { world.zoomBy(1.22); audio.click() })
 addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#queue,#office,#tips,#goals,#parcel')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
-addEventListener('pointerdown', () => { audio.ensure(); audio.startMusic() }, { once: true })
+addEventListener('pointerdown', () => { audio.ensure(); audio.setMood(game.activeLoc); audio.startMusic() }, { once: true })
 function openOffice() { audio.click(); $('office').classList.add('show'); renderOffice() }
 $('yazpill').addEventListener('click', openOffice)
 $('closeoffice').addEventListener('click', () => $('office').classList.remove('show'))
@@ -462,8 +493,10 @@ function renderLocs() {
   bar.innerHTML = LOCATIONS.map(l => {
     const owned = game.unlockedLocs.includes(l.id)
     const on = game.activeLoc === l.id
+    const inc = game.locIncome[l.id]
     return `<button class="loc ${on ? 'on' : ''} ${owned ? '' : 'locked'}" data-loc="${l.id}"
-      title="${l.desc}">${l.label}${owned ? '' : ` · ₺${tl(l.cost)}`}</button>`
+      title="${l.desc}">${l.label}${owned ? '' : ` · ₺${tl(l.cost)}`}${owned && inc !== undefined
+        ? `<span class="linc ${inc < 0 ? 'neg' : ''}">${inc < 0 ? '' : '+'}₺${tl(inc)}</span>` : ''}</button>`
   }).join('')
   bar.querySelectorAll<HTMLElement>('button[data-loc]').forEach(b => {
     b.addEventListener('click', () => {
@@ -491,6 +524,8 @@ function renderLocs() {
 
 /** şube değişti: UI önbelleklerini sıfırla + sahneyi şube temasıyla yeniden kur */
 function applyLocSwitch() {
+  audio.swoosh()
+  audio.setMood(game.activeLoc)
   selected = null; viewDay = -1
   qCache = ''; tabsCache = ''; calCache = ''; pickCache = ''
   const old = document.getElementById('c') as HTMLCanvasElement
@@ -559,7 +594,7 @@ function frame() {
   const hour = OPEN_HOUR + Math.floor(frac * HOURS.length)
   const nowDay = (game.day - 1) % 7
   const nowMatch = !!game.bookingAt(nowDay, hour)
-  if (nowMatch && !matchWasOn) world.sendArrivals(4)   // maç başladı → oyuncular otoparktan yürüsün
+  if (nowMatch && !matchWasOn) { world.sendArrivals(4); audio.cheer() }   // maç başladı → yürüyüş + tezahürat
   matchWasOn = nowMatch
   world.updateMatch(dt, nowMatch)
   world.updateAmbient(dt)

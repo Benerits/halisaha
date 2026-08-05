@@ -35,6 +35,7 @@ export class World {
   private ball!: THREE.Mesh
   private bvx = 0; private bvy = 0
   private lightMats: THREE.MeshBasicMaterial[] = []
+  private lampGlows: THREE.MeshBasicMaterial[] = []
   private beams: THREE.Mesh[] = []
   private zoom = 27
   private target = new THREE.Vector3(-1, 2.5, 0)
@@ -258,7 +259,7 @@ export class World {
     ctx.fillStyle = '#0e3d22'; ctx.beginPath(); ctx.roundRect(0, 0, 640, 200, 26); ctx.fill()
     ctx.strokeStyle = '#f2b53c'; ctx.lineWidth = 12; ctx.beginPath(); ctx.roundRect(10, 10, 620, 180, 20); ctx.stroke()
     ctx.fillStyle = '#ffffff'; ctx.font = '800 80px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText('HALI SAHA', 320, 76)
+    ctx.fillText(this.theme === 'sanayi' ? 'SANAYİ SAHA' : this.theme === 'sahil' ? 'SAHİL SAHA' : 'HALI SAHA', 320, 76)
     ctx.font = '800 42px sans-serif'; ctx.fillStyle = '#f2b53c'
     ctx.fillText('SALI 21:00 SENİNDİR', 320, 150)
     const btex = new THREE.CanvasTexture(cvs); btex.colorSpace = THREE.SRGBColorSpace
@@ -611,24 +612,43 @@ export class World {
         b.position.set(x, y, 0)
         b.rotation.z = (i % 4) * Math.PI / 2
         this.scene.add(b)
-        // ÇEVRE DÜZENLEMESİ: bahçe çimi + kaldırım + ağaç/çalı
+        // BAHÇE: çitli, düzenli — biçilmiş çim + eve dik yol + köşe ağaçları + saksılar
         const inward = y > 10 ? -1 : y < -10 ? 1 : 0
-        const gx = inward !== 0 ? x : x + (x > 0 ? -5.5 : 5.5)
-        const gy = inward !== 0 ? y + inward * 5.5 : y
-        const lawn = new THREE.Mesh(new THREE.PlaneGeometry(8.5, 5), lam(0x6f9a55))
-        lawn.position.set(gx, gy, 0.015); lawn.receiveShadow = true; this.scene.add(lawn)
-        const path = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 5), lam(0xc4bdae))
-        path.position.set(gx, gy, 0.02); this.scene.add(path)
+        const gx = inward !== 0 ? x : x + (x > 0 ? -6 : 6)
+        const gy = inward !== 0 ? y + inward * 6 : y
+        const G = new THREE.Group()
+        const gw = 9.4, gd = 6
+        const lawn = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), lam(0x83a75f))
+        lawn.position.z = 0.016; lawn.receiveShadow = true; G.add(lawn)
+        // alçak beyaz çit — dört kenar, kapı boşluğu yolda
+        const fenceMat = lam(0xf1ede0)
+        const rail = (w: number, d: number, px: number, py: number) => {
+          const m = new THREE.Mesh(new THREE.BoxGeometry(w, d, 0.3), fenceMat)
+          m.position.set(px, py, 0.15); m.castShadow = true; G.add(m)
+        }
+        rail(gw, 0.09, 0, gd / 2); rail(gw, 0.09, 0, -gd / 2)
+        rail(0.09, gd, -gw / 2, 0); rail(0.09, gd, gw / 2, 0)
+        for (let fx = -gw / 2; fx <= gw / 2; fx += 1.16) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.5), fenceMat)
+          post.position.set(fx, gd / 2, 0.25); G.add(post)
+          const post2 = post.clone(); post2.position.y = -gd / 2; G.add(post2)
+        }
+        // eve dik bahçe yolu (kapıdan çite)
+        const path = new THREE.Mesh(new THREE.PlaneGeometry(1.3, gd), lam(0xd6cfbe))
+        path.rotation.z = inward !== 0 ? 0 : Math.PI / 2
+        path.position.z = 0.02; G.add(path)
+        // köşelere 1 ağaç + 2 saksı — ızgara düzeni
         if (k.trees.length) {
-          for (const ox of [-3.1, 3.1]) {
-            const t = fitModel(k.trees[(i + 1) % k.trees.length], 2.0 + (i % 2) * 0.5)
-            t.position.set(gx + ox, gy + (i % 2 ? 0.8 : -0.8), 0); this.scene.add(t)
-          }
+          const t = fitModel(k.trees[(i + 1) % k.trees.length], 2.1)
+          t.position.set(-gw / 2 + 1.1, gd / 2 - 1.1, 0); G.add(t)
         }
         if (k.planter) {
-          const pl = fitModel(k.planter, 0.65)
-          pl.position.set(gx + 1.4, gy - 1.9, 0); this.scene.add(pl)
+          for (const [px2, py2] of [[gw / 2 - 1, -gd / 2 + 0.9], [gw / 2 - 1, gd / 2 - 0.9]] as [number, number][]) {
+            const pl = fitModel(k.planter, 0.6); pl.position.set(px2, py2, 0); G.add(pl)
+          }
         }
+        G.position.set(gx, gy, 0)
+        this.scene.add(G)
       })
     }
     // ARABALAR — otoparkta
@@ -662,6 +682,46 @@ export class World {
         car.rotation.z = dir > 0 ? Math.PI : 0
         this.scene.add(car)
         this.traffic.push({ g: car, sp: 3 + Math.random() * 2, dir, axis: 'y' })
+      }
+    }
+    // MAÇ İZLEYİCİLERİ: saha kenarında 3 kişi — sadece maç sırasında görünür
+    if (k.chars.length) {
+      for (let i = 0; i < 3; i++) {
+        const fig = fitCharacter(k.chars[(i + 2) % k.chars.length], 0.74)
+        fig.position.set(-4 + i * 3.6, PITCH_Y - PITCH_D / 2 - 0.9, 0)
+        fig.rotation.z = Math.PI  // yüzü sahaya dönük
+        this.matchGroup.add(fig)
+      }
+    }
+    // ŞUBE DEKORLARI
+    if (this.theme === 'sahil') {
+      for (let i = 0; i < 5; i++) {
+        const bx = -26 + i * 13, by = -25.5 - (i % 2) * 2
+        // şezlong: yatay + eğik parça
+        const g2 = new THREE.Group()
+        box(1.6, 0.6, 0.12, 0xffffff, 0, 0, 0.3, g2)
+        const back = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.1), lam(i % 2 ? 0xe4633f : 0x3f8fe4))
+        back.position.set(-0.65, 0, 0.5); back.rotation.y = -0.7; back.castShadow = true; g2.add(back)
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.56, 0.06), lam(i % 2 ? 0xe4633f : 0x3f8fe4))
+        seat.position.set(0.15, 0, 0.37); g2.add(seat)
+        g2.position.set(bx, by, 0); this.scene.add(g2)
+        // şemsiye
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2, 8), lam(0xf1ede0))
+        pole.rotation.x = Math.PI / 2; pole.position.set(bx + 1.2, by - 0.6, 1); this.scene.add(pole)
+        const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.1, 0.5, 10), lam(i % 2 ? 0xe4b23f : 0x3fb2e4))
+        canopy.rotation.x = Math.PI / 2; canopy.position.set(bx + 1.2, by - 0.6, 2.1)
+        canopy.castShadow = true; this.scene.add(canopy)
+      }
+    }
+    if (this.theme === 'sanayi') {
+      const cols = [0xc4552f, 0x3f6fb5, 0x5f8f4a, 0x8f5fa0]
+      for (let i = 0; i < 6; i++) {
+        const cx2 = i < 3 ? -34 - (i % 2) * 2 : 36 + (i % 2) * 2
+        const cy2 = -14 + (i % 3) * 4.2
+        const cont = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.4, 1.5), lam(cols[i % cols.length]))
+        cont.position.set(cx2, cy2, 0.75); cont.castShadow = true; cont.receiveShadow = true
+        cont.rotation.z = (i % 2) * 0.12
+        this.scene.add(cont)
       }
     }
     // SAKSILAR — giriş süsü
@@ -829,6 +889,7 @@ export class World {
     const on = lightsOn && n > 0.22
     for (const m of this.lightMats) m.color.setHex(on ? 0xfff6d2 : 0x3a4148)
     for (const bm of this.beams) (bm.material as THREE.MeshBasicMaterial).opacity = on ? 0.07 * n : 0
+    for (const gm of this.lampGlows) gm.opacity = n > 0.25 ? 0.85 * n : 0  // sokak lambaları gece yanar
     if (on) { this.hemi.intensity += 0.30; this.sun.intensity += 0.12 }
   }
 

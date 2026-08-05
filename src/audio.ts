@@ -92,9 +92,34 @@ class Audio {
   /** hafif tık */
   click() { this.ensure(); this.tone(700, 0.05, 'triangle', 0.07) }
 
+  /** MAÇ TEZAHÜRATI: kısa kalabalık uğultusu + düdük — tamamen sentez */
+  cheer() {
+    this.ensure()
+    if (!this.ctx || !this.on) return
+    for (let i = 0; i < 10; i++)
+      this.tone(180 + Math.random() * 320, 0.22 + Math.random() * 0.2, 'sawtooth', 0.014, Math.random() * 0.5)
+    this.tone(2200, 0.09, 'square', 0.05, 0.15)
+    this.tone(2200, 0.14, 'square', 0.045, 0.32)
+  }
+
+  /** şube geçişi — kısa süpürme */
+  swoosh() {
+    this.ensure()
+    this.tone(520, 0.1, 'sine', 0.08)
+    this.tone(720, 0.1, 'sine', 0.07, 0.07)
+    this.tone(980, 0.16, 'sine', 0.06, 0.14)
+  }
+
   // ---- ARKA PLAN MÜZİĞİ: tamamen sentez, telif YOK ----
   private musicT: number | null = null
   private step = 0
+  /** şube ruhu: kök diziler (mahalle sakin, sahil açık majör, sanayi ritmik minör) */
+  private roots = [196.0, 146.8, 164.8, 220.0]
+  setMood(theme: string) {
+    this.roots = theme === 'sahil' ? [220.0, 164.8, 196.0, 246.9]
+      : theme === 'sanayi' ? [146.8, 130.8, 146.8, 174.6]
+      : [196.0, 146.8, 164.8, 220.0]
+  }
   musicOn = localStorage.getItem('hs-music') !== '0'
 
   startMusic() {
@@ -108,8 +133,7 @@ class Audio {
   /** 2.4 sn'lik ölçü: kısık pad akoru + pentatonik tınılar — sakin dükkân ambiyansı */
   private musicBar() {
     if (!this.ctx || !this.on || !this.musicOn || document.hidden) return
-    const roots = [196.0, 146.8, 164.8, 220.0]        // G-D-E-A döngüsü
-    const r = roots[this.step++ % 4]
+    const r = this.roots[this.step++ % 4]
     for (const [m, v] of [[1, 0.030], [1.5, 0.020], [2, 0.015]] as [number, number][])
       this.tone(r * m, 2.3, 'sine', v)
     const pent = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3]

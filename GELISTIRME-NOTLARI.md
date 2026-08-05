@@ -49,44 +49,39 @@
 - Retention: günlük hedefler, milestone, haftalık kira baskısı, kesintisiz saat primi
 - Çırak (telefona bakar), 2. hat, sosyal medya reklamı, sentez müzik (telifsiz)
 
-## BİRDEN FAZLA SAHA — nasıl çalışıyor (✅ / 💡 sıradaki katman)
+## BİRDEN FAZLA SAHA — nasıl çalışıyor (✅ TAMAMLANDI)
 ✅ Şu an: saha sayısı = saat başına kapasite. Müşteri saat ister, saha atamasını
    tesis yapar (gerçek hayat da böyle). Yarı dolu slot çapraz yeşil, tam dolu "+1".
-💡 Sıradaki: SAHA TİPLERİ ayrışsın — kurumsal "tam saha şart" der (miniye konamaz),
-   gençlik miniye razı. Karar: "tam sahayı şirkete mi saklayayım?" Uygunluk etiketi
-   kartta görünür; saha SEÇTİRME yok (kırtasiye değil karar).
+✅ SAHA TİPLERİ ayrıştı: kurumsalın %70'i "TAM SAHA" rozetiyle gelir — mini
+   sahalara konamaz, tam saha kapasitesinden düşer. Karar: "tam sahayı şirkete mi
+   saklayayım?" Saha seçtirme yok; canPlaceAt her şeyi bilir.
 
-## PERSONEL SİSTEMİ (🔨 majör — bir sonraki büyük iş)
+## PERSONEL SİSTEMİ (✅ TAMAMLANDI)
 Amaç: büyüyünce mikro-yönetim cehennemine dönmesin; personel = otomasyonun fiziği.
-- **Şube Müdürü** (şube başına 1, maaş ₺X/gün):
-  - Pasif şubede zaten var (gelir işletiyor) → görünür karaktere dönüşecek
-  - Seviyesi: acemi müdür geliri %80 toplar, usta %100 + hafif pazarlık yapar
-  - Aktif şubede: "müdüre bırak" modu — istekleri bestSlot'a otomatik koyar
-- **Çırak** ✅ → her şubeye ayrı çırak gereksin (şube başına istihdam)
-- **Kantinci**: kantin gelirini +%25 (yoksa akşam yoğunluğunda kantin geliri yarım)
-- **Bakımcı** ✅ (tesis görevlisi) → şube başına; bakımsız saha itibar kanatır
-- UI: Yazıhane > PERSONEL sekmesi — kart görünümü: isim, maaş, etki, işe al/çıkar
-- Ekonomi kuralı: toplam maaş, pasif gelirin %60'ını geçmesin (idle'a kaymasın)
+✅ Şube Müdürü: ₺25k işe alım (₺600/g), ₺60k usta terfisi (₺1.000/g).
+   Müdürsüz pasif şube gelirin %70'ini toplar; acemi %100, usta %110 + aktif
+   şubede yerleştirirken %50 şansla +%10 zam koparır.
+✅ "Müdüre bırak" modu: açıkken gelen istekleri müdür anında en iyi slota koyar.
+✅ Çırak şube başına (₺8k + ₺350/g); Kantinci ₺6k + ₺400/g → kantin gelirleri +%25.
+✅ Yazıhane > PERSONEL sekmesi: durum/maaş/etki + işe al-çıkar; personel şubeyle taşınır.
+💡 v2: bakımcı şube başına; maaş/pasif oran uyarısı.
 
 ## ÇEVRE / GÖRSEL (🔨)
-- **Ev bahçeleri yeniden**: mevcut lawn+path yamalık duruyor. Plan: ev başına
-  çit (fence-low), düzgün bahçe yolu (eve dik), 1 ağaç + 2 çalı köşelere,
-  bahçeye rastgele değil ızgara yerleşim; evle yol arasına kaldırım bağlantısı
-- Sahil şubesi: plaj voleybolu görseli, şezlong/şemsiye, deniz kenarı yolu
-- Sanayi şubesi: depo/fabrika binaları (kenney industrial kiti indirilebilir),
-  tel örgü estetiği, konteyner dekorları
-- Gece: sokak lambaları gece ışık halkası versin
-- Maç kalabalığı: kenar izleyici karakterleri (2-3), tezahürat sesi (sentez)
+✅ Ev bahçeleri: beyaz kazıklı çit + eve dik yol + köşe ağacı + saksılar (düzenli)
+✅ Sahil: kumsal + deniz + 5 şezlong + şemsiyeler; ✅ Sanayi: renkli konteynerler
+✅ Gece: sokak lambaları gece parlıyor (glow); ✅ Maç: 3 kenar izleyicisi +
+   sentez tezahürat (kalabalık uğultusu + düdük)
+💡 v2: sahil plaj voleybolu, sanayi depo binaları (industrial kit)
 
-## SES (💡)
-- Şube geçişinde kısa "vınn" geçiş sesi; müdür raporu "cha-ching"
-- Müzik: şube başına ton varyasyonu (sahil: daha açık majör; sanayi: ritmik)
+## SES (✅)
+✅ Şube geçişinde süpürme sesi; şube geliri raporu toast+ses
+✅ Müzik şube ruhuna göre: mahalle sakin, sahil açık majör, sanayi koyu ritmik
 
-## KISA VADELİ PÜRÜZLER
-- [ ] Ev bahçeleri redesign (yukarıda)
-- [ ] Sahil/sanayi şubelerinde tabela metni şubeye göre değişsin
-- [ ] Şube çubuğunda her şubenin günlük geliri mini rozet olarak görünsün
-- [ ] bestSlot çırak ile aynı mantığı kullansın (şu an ayrı tarama)
+## KISA VADELİ PÜRÜZLER (✅ hepsi kapandı)
+- [x] Ev bahçeleri redesign
+- [x] Tabela şubeye göre: HALI/SANAYİ/SAHİL SAHA
+- [x] Şube çubuğunda dünkü net gelir rozeti (+/− renkli)
+- [x] bestSlot/çırak/vurgular tek doğruluk kaynağında (canPlaceAt)
 
 ## TASARIM İLKELERİ (değişmez)
 1. Sıfır sürtünme: oyuncu asla "şimdi ne yapacağım?" demez
