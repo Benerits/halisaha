@@ -521,12 +521,12 @@ function renderHud() {
 let pendingLocBuy: LocId | null = null
 function renderLocs() {
   const bar = $('locbar')
-  bar.innerHTML = LOCATIONS.map(l => {
+  bar.innerHTML = '<span class="loclbl">ŞUBELER</span>' + LOCATIONS.map(l => {
     const owned = game.unlockedLocs.includes(l.id)
     const on = game.activeLoc === l.id
     const inc = game.locIncome[l.id]
     return `<button class="loc ${on ? 'on' : ''} ${owned ? '' : 'locked'}" data-loc="${l.id}"
-      title="${l.desc}">${l.label}${owned ? '' : ` · ₺${tl(l.cost)}`}${owned && inc !== undefined
+      title="${l.desc}">${l.label}${owned ? '' : ` · AÇ ₺${tl(l.cost)}`}${owned && inc !== undefined
         ? `<span class="linc ${inc < 0 ? 'neg' : ''}">${inc < 0 ? '' : '+'}₺${tl(inc)}</span>` : ''}</button>`
   }).join('')
   bar.querySelectorAll<HTMLElement>('button[data-loc]').forEach(b => {
@@ -541,7 +541,9 @@ function renderLocs() {
       // kilitli: iki tıkla onay (yanlışlıkla ₺150k gitmesin)
       if (pendingLocBuy !== id) {
         pendingLocBuy = id
-        toast(`${LOCATIONS.find(l => l.id === id)!.label}: ₺${tl(LOCATIONS.find(l => l.id === id)!.cost)} — onaylamak için TEKRAR tıkla.`)
+        const def = LOCATIONS.find(l => l.id === id)!
+        toast(`YENİ ŞUBE — ${def.label}: ${def.desc}`)
+        toast(`₺${tl(def.cost)} · kurulu 1 saha + arsalarla gelir. Onay için TEKRAR tıkla.`)
         setTimeout(() => { if (pendingLocBuy === id) pendingLocBuy = null }, 4000)
         return
       }
