@@ -137,7 +137,7 @@ export function parcelCost(c: number, r: number): number {
 }
 
 export type BuildKind = 'pitch' | 'mini' | 'basket' | 'voley' | 'parking' | 'garden' | 'kantin' | 'dus' | 'wc'
-export interface PlacedBuild { key: string; kind: BuildKind }
+export interface PlacedBuild { kind: BuildKind; gx?: number; gy?: number; key?: string }
 
 export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: string; desc: string }> = {
   pitch:   { label: 'Halı Saha', cost: 62_000, gain: 'Aynı saate +1 maç', desc: 'Tam boy ikinci saha — prime-time çakışmaları biter.' },
@@ -152,6 +152,30 @@ export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: stri
 }
 /** tek kurulabilen işletme binaları (tesiste bir tane) */
 export const SINGLETON_BUILDS: BuildKind[] = ['kantin', 'dus', 'wc']
+
+// ---- SERBEST YERLEŞTİRME IZGARASI (BenelOil sistemi): küçük karecikler ----
+export const CELL = 1.6
+export const GRID_OX = -22.4
+export const GRID_OY = -19.2
+export const GRID_W = 28
+export const GRID_H = 20
+/** yapı ayak izleri (hücre cinsinden genişlik x derinlik) */
+export const FOOT: Record<BuildKind, [number, number]> = {
+  pitch: [9, 6], mini: [6, 4], basket: [7, 5], voley: [6, 4],
+  parking: [6, 4], garden: [3, 3], kantin: [4, 3], dus: [3, 3], wc: [2, 2],
+}
+/** başlangıç tesislerinin kapladığı dünya alanları (çakışma yasak) */
+export const FIXED_WORLD: { x: number; y: number; w: number; h: number }[] = [
+  { x: -14.5, y: 7.2, w: 8.6, h: 5.4 },   // kulüp binası
+  { x: 14.5, y: 7.0, w: 11.8, h: 8.8 },   // otopark
+  { x: 0, y: -3.2, w: 14.3, h: 9.9 },     // ana saha
+  { x: 5.8, y: 11.6, w: 5.2, h: 1.6 },    // ayaklı tabela
+]
+/** hücre sol-alt köşesinden yapının dünya merkezi */
+export function buildCenter(b: { kind: BuildKind; gx: number; gy: number }): [number, number] {
+  const [w, h] = FOOT[b.kind]
+  return [GRID_OX + (b.gx + w / 2) * CELL, GRID_OY + (b.gy + h / 2) * CELL]
+}
 
 // ---- LOKASYONLAR (şubeler): kasa/gün ortak; takvim, kuyruk, arsa, saha ŞUBEYE AİT ----
 export type LocId = 'mahalle' | 'sanayi' | 'sahil'

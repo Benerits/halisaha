@@ -5,6 +5,7 @@
 import * as THREE from 'three'
 import { World, type LocTheme } from './world'
 import { audio } from './audio'
+import * as auth from './auth'
 import { Game, LOCATIONS, type LocId, MAAS, ISE_ALIM, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, BUILDS, parcelCost, type BuyId, type BuildKind } from './state'
 
 const SAVE_KEY = 'halisaha-save-v1'
@@ -718,8 +719,16 @@ function applyLocSwitch() {
 
 function renderAll() { renderHud(); renderQueue(); renderCal(); renderGoals(); renderTips(); renderLocs() }
 
+let lastPush = 0
 function save() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())) } catch { /* kota */ }
+  // BULUT KAYIT: girişliyse 10 sn'de bir sunucuya (çakışmada sunucu kazanır)
+  if (auth.loggedIn() && Date.now() - lastPush > 10_000) {
+    lastPush = Date.now()
+    auth.pushSave(game.save()).then(r => {
+      if (r.conflict && r.save) { game.load(r.save as never); applyLocSwitch(); toast('Diğer cihazdaki güncel kayıt yüklendi.') }
+    }).catch(() => {})
+  }
 }
 
 // ---------- döngü ----------
@@ -802,3 +811,103 @@ frame()
 if (game.day === 1 && game.bookings.length === 0) {
   setTimeout(() => toast('Sağdan bir rezervasyon isteği seç, takvimde yerine tıkla.'), 900)
 }
+
+// ---------- GİRİŞ KAPISI + BULUT OTURUM (BenelOil akışının birebiri) ----------
+const GUEST_OK = 'halisaha-guest-ok'
+auth.onKicked(() => toast('Bu hesap başka cihazda açıldı — ilerleme oradan devam ediyor.', 'b'))
+
+async function afterAuth(mode: 'register' | 'login' | 'oauth') {
+  try {
+    const local = game.save()
+    if (mode === 'register') {
+      await auth.pushSave(local)                 // yeni hesap → yerel ilerleme hesaba taşınır
+    } else if (mode === 'oauth') {
+      const acc = await auth.pullSave() as { day?: number } | null
+      if (!acc || (acc.day ?? 1) <= 1) await auth.pushSave(local)  // boş hesap → taşı
+    }
+    // login: push YOK — hesaptan devam
+  } catch { /* ağ hatası: yerel durur */ }
+  localStorage.setItem(GUEST_OK, '1')
+  location.reload()
+}
+
+function wireGate() {
+  const gEmail = document.getElementById('gemail') as HTMLInputElement
+  const gPass = document.getElementById('gpass') as HTMLInputElement
+  const gErr = document.getElementById('gerr') as HTMLDivElement
+  const wire = (id: string, fn: () => Promise<void>) =>
+    (document.getElementById(id) as HTMLButtonElement).addEventListener('click', async () => {
+      gErr.textContent = ''
+      try { await fn() } catch (e) { gErr.textContent = (e as Error).message }
+    })
+  wire('glogin', async () => { await auth.login(gEmail.value, gPass.value); await afterAuth('login') })
+  wire('gregister', async () => { await auth.register(gEmail.value, gPass.value); await afterAuth('register') })
+  wire('gforgot', async () => {
+    const em = gEmail.value.trim().toLowerCase()
+    if (!/^\S+@\S+\.\S+$/.test(em)) { gErr.textContent = 'Önce e-postanı yaz.'; return }
+    await auth.requestReset(em)
+    gErr.style.color = '#2b8a4a'; gErr.textContent = 'Sıfırlama bağlantısı gönderildi (kayıtlıysa).'
+  })
+  ;(document.getElementById('gguest') as HTMLButtonElement).addEventListener('click', () => {
+    localStorage.setItem(GUEST_OK, '1')
+    $('gate').classList.remove('show')
+    audio.click()
+    fetch('/api/visit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ guest: true }) }).catch(() => {})
+  })
+  gPass.addEventListener('keydown', e => { if (e.key === 'Enter') (document.getElementById('glogin') as HTMLButtonElement).click() })
+  // sosyal kanıt + Google GIS
+  fetch('/api/stats').then(r => r.json()).then(st => {
+    if (st && typeof st.players === 'number' && st.players > 0) {
+      const lc = document.getElementById('livecount')!
+      lc.textContent = `${st.players.toLocaleString('tr-TR')} işletmeci sahasını kurdu` + (st.online > 1 ? ` · ${st.online} şu an oyunda` : '')
+      lc.style.display = 'block'
+    }
+  }).catch(() => {})
+  ;(async () => {
+    try {
+      const cfg = await (await fetch('/api/config')).json() as { googleClientId?: string }
+      if (!cfg.googleClientId) return
+      await new Promise<void>((res, rej) => {
+        const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true
+        sc.onload = () => res(); sc.onerror = () => rej(new Error('gis')); document.head.appendChild(sc)
+      })
+      const g = (window as unknown as { google: { accounts: { id: { initialize: (o: unknown) => void; renderButton: (el: HTMLElement, o: unknown) => void } } } }).google
+      g.accounts.id.initialize({
+        client_id: cfg.googleClientId,
+        callback: async (resp: { credential: string }) => {
+          gErr.textContent = ''
+          try {
+            const res = await fetch('/api/auth/google', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ idToken: resp.credential }),
+            })
+            const d = await res.json()
+            if (!res.ok) throw new Error(d.error ?? 'Google girişi başarısız.')
+            localStorage.setItem('halisaha-token', d.token)
+            localStorage.setItem('halisaha-email', d.email)
+            await afterAuth('oauth')
+          } catch (e) { gErr.textContent = (e as Error).message }
+        },
+      })
+      g.accounts.id.renderButton(document.getElementById('gbtn-google')!, {
+        theme: 'outline', size: 'large', text: 'continue_with', shape: 'pill', width: 320,
+      })
+    } catch { /* GIS yok — e-posta yolu açık */ }
+  })()
+}
+wireGate()
+
+;(async () => {
+  fetch('/api/visit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) }).catch(() => {})
+  if (auth.loggedIn()) {
+    try {
+      const sv = await auth.pullSave()
+      if (sv) { game.load(sv as never); applyLocSwitch() }
+      else auth.pushSave(game.save()).catch(() => {})
+    } catch { /* çevrimdışı: yerel kayıtla devam */ }
+  } else if (!localStorage.getItem(GUEST_OK)) {
+    $('gate').classList.add('show')
+  } else if (game.activeLoc !== 'mahalle') {
+    applyLocSwitch()  // yenilemede doğru şube teması
+  }
+})()

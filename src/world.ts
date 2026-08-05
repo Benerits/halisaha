@@ -476,7 +476,7 @@ export class World {
   }
 
   /** arsa durumlarını güncelle: sahipli = biçilmiş çim + köşe kazıkları; boş = dümdüz çimen */
-  syncParcels(owned: string[], builds: { key: string; kind: BuildKind }[]) {
+  syncParcels(owned: string[], builds: { key?: string; kind: BuildKind }[]) {
     for (const [key, tile] of this.parcelTiles) {
       const mat = tile.material as THREE.MeshLambertMaterial
       if (owned.includes(key)) {
@@ -488,14 +488,14 @@ export class World {
     }
     // yıkılan yapıların görseli kalksın
     for (const [key, g] of this.parcelBuilds) {
-      if (!builds.some(b => b.key === key)) { this.scene.remove(g); this.parcelBuilds.delete(key) }
+      if (!builds.some(b => (b.key ?? '') === key)) { this.scene.remove(g); this.parcelBuilds.delete(key) }
     }
     for (const b of builds) {
-      if (this.parcelBuilds.has(b.key)) continue
-      const tile = this.parcelTiles.get(b.key)
+      if (this.parcelBuilds.has(b.key ?? '')) continue
+      const tile = this.parcelTiles.get(b.key ?? '')
       if (!tile) continue
       const g = this.makeBuild(b.kind, tile.position.x, tile.position.y)
-      this.parcelBuilds.set(b.key, g)
+      this.parcelBuilds.set(b.key ?? '', g)
     }
   }
 
