@@ -588,7 +588,7 @@ async function handleApi(req, res, url) {
         const r = await pool.query(`
           SELECT email,
                  COALESCE((COALESCE(save->'s'->>'money', save->>'money'))::numeric, 0) AS money,
-                 COALESCE((save->'s'->>'day')::int, 1) AS day,
+                 COALESCE(COALESCE(save->'s'->>'day', save->>'day')::int, 1) AS day,
                  COALESCE((COALESCE(save->'s'->>'brandStars', '0'))::int, 0) AS stars
           FROM halisaha_player
           WHERE save IS NOT NULL AND banned_at IS NULL
@@ -1328,7 +1328,7 @@ async function handleVs(req, res, url) {
     // yıldız/devir geçmişi (admin Star Log sayfası çeker)
     if (url === '/vs/v1/starlog' && req.method === 'GET') {
       const r = await pool.query(`SELECT l.id, l.email, l.prev, l.next, l.kind, l.at,
-          p.id AS player_id, (p.save->'s'->>'day')::int AS day
+          p.id AS player_id, COALESCE(p.save->'s'->>'day', p.save->>'day')::int AS day
         FROM halisaha_starlog l LEFT JOIN halisaha_player p ON p.email = l.email
         ORDER BY l.at DESC LIMIT 500`)
       return json(res, 200, { data: r.rows })
@@ -1337,7 +1337,7 @@ async function handleVs(req, res, url) {
     if (url === '/vs/v1/appeals' && req.method === 'GET') {
       const r = await pool.query(`SELECT a.id, a.email, a.message, a.created_at,
           p.id AS player_id, p.banned_at, p.ban_reason,
-          (p.COALESCE(save->'s'->>'money', save->>'money'))::numeric::bigint AS money, (p.save->'s'->>'day')::int AS day
+          (COALESCE(p.save->'s'->>'money', p.save->>'money'))::numeric::bigint AS money, COALESCE(p.save->'s'->>'day', p.save->>'day')::int AS day
         FROM halisaha_appeal a LEFT JOIN halisaha_player p ON p.email = a.email
         ORDER BY a.created_at DESC LIMIT 500`)
       return json(res, 200, { data: r.rows })
@@ -1400,8 +1400,8 @@ async function handleVs(req, res, url) {
           coalesce(sum((save->'s'->'stats'->>'served')::int), 0)::int AS served,
           coalesce(sum((save->'s'->'stats'->>'kwh')::int), 0)::int AS kwh,
           coalesce(sum((save->'s'->'stats'->>'revenue')::numeric), 0)::bigint AS revenue,
-          coalesce(round(avg((save->'s'->>'day')::int)), 0)::int AS avg_day,
-          coalesce(max((save->'s'->>'day')::int), 0)::int AS max_day,
+          coalesce(round(avg(COALESCE(save->'s'->>'day', save->>'day')::int)), 0)::int AS avg_day,
+          coalesce(max(COALESCE(save->'s'->>'day', save->>'day')::int), 0)::int AS max_day,
           coalesce(sum((save->'s'->'stats'->'liters'->>'benzin')::numeric), 0)::bigint AS l_benzin,
           coalesce(sum((save->'s'->'stats'->'liters'->>'dizel')::numeric), 0)::bigint AS l_dizel,
           coalesce(sum((save->'s'->'stats'->'liters'->>'lpg')::numeric), 0)::bigint AS l_lpg,
@@ -1463,9 +1463,9 @@ async function handleVs(req, res, url) {
         FROM halisaha_visit ORDER BY id DESC LIMIT 200`)
       return json(res, 200, { data: r2.rows.map(v => ({
         id: String(v.id), createdAt: v.at, ip: v.ip,
-        cihaz: /mobile|android|iphone|ipad/i.test(v.ua || '') ? 'Mobil' : 'Masaüstü',
-        kaynak: v.utm || (v.ref ? new URL(v.ref).hostname : 'direkt'),
-        dil: v.lang || '-', ekran: v.screen || '-', tip: v.guest ? 'misafir' : 'hesaplı',
+        cihaz: /mobile|android|iphone|ipad/i.test(v.ua || '') ? 'Mobile' : 'Desktop',
+        kaynak: v.utm || (v.ref ? new URL(v.ref).hostname : 'direct'),
+        dil: v.lang || '-', ekran: v.screen || '-', tip: v.guest ? 'guest' : 'account',
       })), nextCursor: null })
     }
     if (url === '/vs/v1/audience' && req.method === 'GET') {
@@ -1477,15 +1477,15 @@ async function handleVs(req, res, url) {
         count(*) FILTER (WHERE utm <> '')::int AS kampanyali
         FROM halisaha_visit WHERE at > now() - interval '30 days'`)
       const t2 = r2.rows[0] || {}
-      const kaynak = await pool.query(`SELECT COALESCE(NULLIF(utm,''), 'organik/direkt') AS k, count(*)::int AS n
+      const kaynak = await pool.query(`SELECT COALESCE(NULLIF(utm,''), 'organic/direct') AS k, count(*)::int AS n
         FROM halisaha_visit WHERE at > now() - interval '30 days' GROUP BY 1 ORDER BY n DESC LIMIT 12`)
       return json(res, 200, { data: [
-        { metric: 'Ziyaret (30g)', value: t2.toplam || 0 },
-        { metric: 'Mobil %', value: t2.toplam ? Math.round(100 * t2.mobil / t2.toplam) : 0 },
-        { metric: 'Misafir %', value: t2.toplam ? Math.round(100 * t2.misafir / t2.toplam) : 0 },
-        { metric: 'İngilizce UI %', value: t2.toplam ? Math.round(100 * t2.ingilizce / t2.toplam) : 0 },
-        { metric: 'Kampanyadan gelen %', value: t2.toplam ? Math.round(100 * t2.kampanyali / t2.toplam) : 0 },
-        ...kaynak.rows.map(k => ({ metric: 'Kaynak: ' + k.k, value: k.n })),
+        { metric: 'Visits (30d)', value: t2.toplam || 0 },
+        { metric: 'Mobile %', value: t2.toplam ? Math.round(100 * t2.mobil / t2.toplam) : 0 },
+        { metric: 'Guests %', value: t2.toplam ? Math.round(100 * t2.misafir / t2.toplam) : 0 },
+        { metric: 'English UI %', value: t2.toplam ? Math.round(100 * t2.ingilizce / t2.toplam) : 0 },
+        { metric: 'From campaigns %', value: t2.toplam ? Math.round(100 * t2.kampanyali / t2.toplam) : 0 },
+        ...kaynak.rows.map(k => ({ metric: 'Source: ' + k.k, value: k.n })),
       ] })
     }
     if (url === '/vs/v1/kpi' && req.method === 'GET') {

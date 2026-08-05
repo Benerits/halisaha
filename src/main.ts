@@ -5,7 +5,7 @@
 import * as THREE from 'three'
 import { World, type LocTheme } from './world'
 import { audio } from './audio'
-import { t, lang, setLang } from './i18n'
+import { t, lang, setLang, dayName, dayFull } from './i18n'
 import * as auth from './auth'
 import { Game, LOCATIONS, type LocId, MAAS, ISE_ALIM, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, BUILDS, parcelCost, type BuyId, type BuildKind } from './state'
 
@@ -57,7 +57,7 @@ function confirmFlash(d: number, h: number, span = 1) {
   flashUntil = performance.now() + 1700
   pickCache = '__flash__'
   pickbar.className = 'show confirm'
-  pickbar.innerHTML = span === 2 ? `${DAY_FULL[d]} ${h}:00-${h + 2}:00 seçildi ✓` : `${DAY_FULL[d]} ${h}:00 seçildi ✓`
+  pickbar.innerHTML = span === 2 ? `${dayFull(d)} ${h}:00-${h + 2}:00 ${t('seçildi ✓')}` : `${dayFull(d)} ${h}:00 ${t('seçildi ✓')}`
   setTimeout(() => { flashUntil = 0; pickbar.className = ''; renderCal() }, 1700)
 }
 
@@ -68,14 +68,14 @@ function renderCal() {
   if (viewDay < 0) viewDay = nowDay
   const sel = selected !== null ? game.queue.find(r => r.id === selected) : null
   if (head) {
-    if (sel) head.textContent = `${sel.team} için saat seç — yanan kutuya tıkla`
+    if (sel) head.textContent = `${sel.team} ${t('için saat seç — yanan kutuya tıkla')}`
     else {
       const todayMatches = game.bookings.filter(b => b.day === nowDay)
       const next = todayMatches.filter(b => b.hour >= nowHour).sort((a, b) => a.hour - b.hour)[0]
       head.textContent = todayMatches.length === 0
-        ? `Bugün ${DAY_FULL[nowDay]} — maç yok, telefonu bekle`
-        : `Bugün ${DAY_FULL[nowDay]} · ${todayMatches.length} maç` +
-          (next ? ` · sıradaki ${next.hour}:00 ${next.team}` : ' · bugünkü maçlar bitti')
+        ? `${t('Bugün')} ${dayFull(nowDay)} — ${t('maç yok, telefonu bekle')}`
+        : `${t('Bugün')} ${dayFull(nowDay)} · ${todayMatches.length} ${t('maç')}` +
+          (next ? ` · ${t('sıradaki')} ${next.hour}:00 ${next.team}` : ' · ' + t('bugünkü maçlar bitti'))
     }
   }
   const desk = document.getElementById('desk')!
@@ -89,7 +89,7 @@ function renderCal() {
     const ph = !sel ? ''
       : noSlot && anyPartial ? `${sel.hours} saatlik yer yok — KESİKLİ saate tıkla, 1 saat öner (kabul etmeyebilir)`
       : noSlot ? `${sel.team} için UYGUN BOŞ SAAT YOK — kartı geri çevir ya da yeni saha aç`
-      : `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''} — yanan saate tıkla<span class="arr">⬇</span>`
+      : `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''} — ${t('yanan saate tıkla')}<span class="arr">⬇</span>`
     if (ph !== pickCache) {
       pickCache = ph
       pickbar.className = sel ? 'show' : ''
@@ -110,7 +110,7 @@ function renderCal() {
       ${hasValid ? `<span class="dot ${game.placedCount < 12 ? '' : 'calm'}"></span>` : ''}
       <b>${nm}</b>
       <div class="obar"><i style="width:${Math.round(occ * 100)}%"></i></div>
-      ${d === nowDay ? '<span class="bugun">bugün</span>' : ''}
+      ${d === nowDay ? `<span class="bugun">${t('bugün')}</span>` : ''}
     </div>`
   }).join('')
   if (tabsHtml !== tabsCache) {
@@ -234,7 +234,7 @@ let qCache = ''
 function renderQueue() {
   const list = $('qlist')
   if (game.queue.length === 0) {
-    const h = `<div class="empty">Şu an istek yok.<br>Birazdan telefon çalar…</div>`
+    const h = `<div class="empty">${t('Şu an istek yok.')}<br>${t('Birazdan telefon çalar…')}</div>`
     if (h !== qCache) { qCache = h; list.innerHTML = h }
     return
   }
@@ -243,26 +243,26 @@ function renderQueue() {
   const html = game.queue.map(r => {
     const seg = SEGMENTS[r.segment]
     const when = r.flexible
-      ? `${r.flexDays.length > 5 ? 'Her gün' : r.flexDays[0] >= 5 ? 'Hafta sonu' : 'Hafta içi'} ${r.flexHours[0]}-${r.flexHours[r.flexHours.length - 1] + 1}`
-      : `${DAY_NAMES[r.day]} ${r.hour}:00`
+      ? `${r.flexDays.length > 5 ? t('Her gün') : r.flexDays[0] >= 5 ? t('Hafta sonu') : t('Hafta içi')} ${r.flexHours[0]}-${r.flexHours[r.flexHours.length - 1] + 1}`
+      : `${dayName(r.day)} ${r.hour}:00`
     const pat = r.patience / r.maxPatience
     const lever = pat > 0.55 && (r.hour >= 20 || r.segment === 'kurumsal')
-    const tip = r.haggled ? 'pazarlık bitti'
-      : lever ? 'sıkı müşteri — pazarlık şansı yüksek'
-      : pat < 0.4 ? 'acelesi var, üstüne gitme' : ''
+    const tip = r.haggled ? t('pazarlık bitti')
+      : lever ? t('sıkı müşteri — pazarlık şansı yüksek')
+      : pat < 0.4 ? t('acelesi var, üstüne gitme') : ''
     return `<div class="rcard ${selected === r.id ? 'sel' : ''} ${seenCards.has(r.id) ? '' : 'new'}" data-id="${r.id}">
-      <div class="team">${r.team}</div>${r.weeks ? `<span class="tagsub">${r.weeks} HAFTA</span>` : ''}
-      <div class="when">${when}${r.flexible ? '<span class="flex">ESNEK</span>' : ''}${r.hours === 2 ? '<span class="flex" style="background:var(--clay)">2 SAAT</span>' : ''}${r.needFull ? '<span class="flex" style="background:var(--green-deep)">TAM SAHA</span>' : ''}</div>
+      <div class="team">${r.team}</div>${r.weeks ? `<span class="tagsub">${r.weeks} ${t('HAFTA')}</span>` : ''}
+      <div class="when">${when}${r.flexible ? `<span class="flex">${t('ESNEK')}</span>` : ''}${r.hours === 2 ? `<span class="flex" style="background:var(--clay)">${t('2 SAAT')}</span>` : ''}${r.needFull ? `<span class="flex" style="background:var(--green-deep)">${t('TAM SAHA')}</span>` : ''}</div>
       <div class="meta">${seg.label}</div>
-      <div class="price"><span class="plab">teklifi</span> ₺${tl(r.price)}${r.weeks ? ' <span class="pw">/hafta</span>' : ''}</div>
-      ${r.haggled ? '<div class="hdone">pazarlık yapıldı</div>' : `<div class="hgl">
+      <div class="price"><span class="plab">${t('teklifi')}</span> ₺${tl(r.price)}${r.weeks ? ` <span class="pw">${t('/hafta')}</span>` : ''}</div>
+      ${r.haggled ? `<div class="hdone">${t('pazarlık yapıldı')}</div>` : `<div class="hgl">
         <button data-hg="1" data-id="${r.id}" title="Ölçülü zam — genelde kabul eder">
-          <b>₺${tl(Math.round(r.price * 1.25 / 10) * 10)}</b><i>iste · güvenli</i></button>
+          <b>₺${tl(Math.round(r.price * 1.25 / 10) * 10)}</b><i>${t('iste · güvenli')}</i></button>
         <button data-hg="2" data-id="${r.id}" title="Sert pazarlık — kalkıp gidebilir">
-          <b>₺${tl(Math.round(r.price * 1.5 / 10) * 10)}</b><i>iste · riskli</i></button>
+          <b>₺${tl(Math.round(r.price * 1.5 / 10) * 10)}</b><i>${t('iste · riskli')}</i></button>
       </div>`}
       ${tip ? `<div class="hint2 ${lever ? 'up' : 'dn'}">${tip}</div>` : ''}
-      <button class="rej" data-rej="${r.id}">geri çevir ✕</button>
+      <button class="rej" data-rej="${r.id}">${t('geri çevir ✕')}</button>
       <div class="bar"><i></i></div>
     </div>`
   }).join('')
@@ -322,7 +322,7 @@ function renderGoals() {
   }
   const ms = game.nextMilestone()
   const done = gs.filter(g => g.done).length
-  let h = `<div class="gh"><span>Günün Hedefleri</span><span>${done}/${gs.length}</span></div><div class="gb">`
+  let h = `<div class="gh"><span>${t('Günün Hedefleri')}</span><span>${done}/${gs.length}</span></div><div class="gb">`
   for (const g of gs) {
     const pct = Math.min(100, Math.round((g.now / g.need) * 100))
     h += `<div class="goal ${g.done ? 'ok' : ''}">
@@ -332,9 +332,9 @@ function renderGoals() {
   }
   if (ms) {
     const pct = Math.min(100, Math.round((ms.have / ms.need) * 100))
-    h += `<div class="mstone"><div class="ml">Sıradaki: ${ms.label}</div>
+    h += `<div class="mstone"><div class="ml">${t('Sıradaki:')} ${ms.label}</div>
       <div class="gbar"><i style="width:${pct}%"></i></div>
-      <div class="mv">₺${tl(Math.max(0, ms.need - ms.have))} kaldı</div></div>`
+      <div class="mv">₺${tl(Math.max(0, ms.need - ms.have))} ${t('kaldı')}</div></div>`
   }
   $('goals').innerHTML = h + '</div>'
 }
@@ -351,7 +351,7 @@ function renderTips() {
   $('tipsbtn').classList.toggle('open', tipsOpen)
   box.innerHTML = sugs.map((s, i) => `
     <div class="tip ${s.urgent ? 'urgent' : ''}">
-      <div class="th">${s.urgent ? 'ACİL' : 'ÖNERİ'}</div>
+      <div class="th">${s.urgent ? t('ACİL') : t('ÖNERİ')}</div>
       <div class="tb">
         <div class="tt">${s.title}</div>
         <div class="tw">${s.why}</div>
@@ -428,7 +428,7 @@ function renderOffice() {
         <span class="gn">${it.gain}</span>
         ${it.upkeep ? `<span class="up">-₺${tl(it.upkeep)}/gün</span>` : ''}
         <button class="buy ${it.owned ? 'have' : ''}" data-buy="${it.id}" ${it.owned || it.locked ? 'disabled' : ''}>
-          ${it.owned ? 'VAR ✓' : it.locked ? it.locked : '₺' + tl(it.cost)}
+          ${it.owned ? t('VAR ✓') : it.locked ? t(it.locked) : '₺' + tl(it.cost)}
         </button>
         <span class="ds">${it.desc}</span>
       </div>`).join('')
@@ -494,7 +494,7 @@ function renderOffice() {
           <div class="bi"><div class="bn">${b.label}</div>
             <div class="bg2">${b.gain}</div>
             <div class="bd">${b.desc}</div></div>
-          <button data-place="${k}" ${done ? 'disabled' : ''}>${done ? 'VAR ✓' : '₺' + tl(b.cost)}</button>
+          <button data-place="${k}" ${done ? 'disabled' : ''}>${done ? t('VAR ✓') : '₺' + tl(b.cost)}</button>
         </div>`
       }).join('')}</div>`
     body.querySelectorAll<HTMLElement>('button[data-place]').forEach(b =>
@@ -867,7 +867,7 @@ function frame() {
     audio.day()
     toast(`Gün ${game.day} · dün ₺${tl(game.lastDayProfit)} kâr`, game.lastDayProfit >= 0 ? 'g' : 'b'); save()
   }
-  for (const g of game.claimGoals()) { audio.cash(); toast(`HEDEF TAMAM: ${g.label} · +₺${tl(g.reward)}`, 'g') }
+  for (const g of game.claimGoals()) { audio.cash(); toast(`${t('HEDEF TAMAM:')} ${g.label} · +₺${tl(g.reward)}`, 'g') }
 
   // rezervasyon üretimi
   if (!gateOpen) spawnT -= dt

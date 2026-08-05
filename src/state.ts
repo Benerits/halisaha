@@ -1,3 +1,4 @@
+import { t, dayName } from './i18n'
 /**
  * HALI SAHA — oyun durumu ve ekonomi çekirdeği.
  * Three.js BİLMEZ → tamamı test edilebilir (BenelOil state.ts kalıbı).
@@ -462,7 +463,7 @@ export class Game {
     if (r.weeks > 0) { if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] } this.gSubs++ }
     this.placedCount++
     return { ok: true, msg: r.hours === 2 ? `${r.team} 2 saatlik maç aldı (${hour}:00-${hour + 2}:00)!`
-      : r.weeks > 0 ? `${r.team} ${r.weeks} hafta abone oldu!` : `${r.team} rezervasyonu alındı.` }
+      : r.weeks > 0 ? `${r.team} ${r.weeks}` + t(' hafta abone oldu!') : r.team + t(' rezervasyonu alındı.') }
   }
 
   /** ÖNERİLEN SLOT: bitişik saat primi kuran slot öncelikli, yoksa ilk boş geçerli slot */
@@ -533,7 +534,7 @@ export class Game {
     const r = this.queue.splice(i, 1)[0]
     this.loyalty[r.team] = (this.loyalty[r.team] ?? 0) - 0.3
     this.events.push(`${r.team} kibarca geri çevrildi.`)
-    return { ok: true, msg: `${r.team} geri çevrildi — küsmedi ama not etti.` }
+    return { ok: true, msg: r.team + t(' geri çevrildi — küsmedi ama not etti.') }
   }
 
   /** PAZARLIK — bir kez. level 1 = ölçülü, 2 = sert. */
@@ -548,7 +549,7 @@ export class Game {
     if (ask <= r.maxPay) {
       r.price = ask
       if (r.weeks > 0 || loyal > 0) this.loyalty[r.team] = loyal - (level === 1 ? 0.5 : 1.2) // müdavimi sıkmanın bedeli
-      return { ok: true, msg: `${r.team} kabul etti — ₺${ask.toLocaleString('tr-TR')}` }
+      return { ok: true, msg: r.team + t(' kabul etti — ') + '₺' + ask.toLocaleString('tr-TR') }
     }
     // tavanı aştın: ölçülüyse ortayı bulur, sertse çeker gider
     const midChance = level === 1 ? 0.72 : 0.25
@@ -556,12 +557,12 @@ export class Game {
       const mid = Math.round((r.price + r.maxPay) / 2 / 10) * 10
       r.price = mid
       this.loyalty[r.team] = loyal - 0.4
-      return { ok: true, msg: `${r.team} ortada buluştu — ₺${mid.toLocaleString('tr-TR')}` }
+      return { ok: true, msg: r.team + t(' ortada buluştu — ') + '₺' + mid.toLocaleString('tr-TR') }
     }
     this.queue.splice(i, 1)
     this.rep = Math.max(0, this.rep - 0.06)
     this.loyalty[r.team] = loyal - 2
-    return { ok: false, walked: true, msg: `${r.team} "çok oldu abi" deyip kapattı.` }
+    return { ok: false, walked: true, msg: r.team + t(' "çok oldu abi" deyip kapattı.') }
   }
 
   /** müdavim sadakati — sıkıştırdıkça düşer, aboneliği yenilemeyi belirler */
@@ -735,7 +736,7 @@ export class Game {
         const hours = r.flexible ? r.flexHours : [r.hour]
         outer: for (const d of days) for (const h of hours) {
           if (this.place(r.id, d, h).ok) {
-            this.notices.push(`Çırak telefona baktı: ${r.team} → ${DAY_NAMES[d]} ${h}:00`)
+            this.notices.push(t('Çırak telefona baktı: ') + `${r.team} → ${dayName(d)} ${h}:00`)
             break outer
           }
         }
@@ -751,7 +752,7 @@ export class Game {
           if (r.price + bump <= r.maxPay) r.price += bump  // usta müdür ufak zam koparır
         }
         if (this.place(r.id, slot.day, slot.hour).ok)
-          this.notices.push(`Müdür yerleştirdi: ${r.team} → ${DAY_NAMES[slot.day]} ${slot.hour}:00`)
+          this.notices.push(t('Müdür yerleştirdi: ') + `${r.team} → ${dayName(slot.day)} ${slot.hour}:00`)
       }
     }
     // kart sabrı — EL SIKIŞILAN (pazarlığı biten) kart KAÇMAZ, süresi donar
@@ -764,8 +765,8 @@ export class Game {
       q.patience -= dt * (this.personel.sekreter ? 0.75 : 1)
       if (q.patience <= 0) {
         const lost = this.queue.splice(i, 1)[0]
-        this.events.push(`${lost.team} bekledi, başka sahaya gitti.`)
-        this.lostNotices.push(`${lost.team} beklemekten sıkıldı, başka sahaya gitti.`)
+        this.events.push(lost.team + t(' bekledi, başka sahaya gitti.'))
+        this.lostNotices.push(lost.team + t(' beklemekten sıkıldı, başka sahaya gitti.'))
         this.rep = Math.max(0, this.rep - 0.008)
       }
     }
