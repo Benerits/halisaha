@@ -15,11 +15,14 @@ const game = new Game()
 // kayıt yükle
 try {
   const raw = localStorage.getItem(SAVE_KEY)
+  // TEST KOLAYLIĞI: ?para=1000000 → kasayı doldurur (yerel geliştirme hilesi)
   if (raw) {
     game.load(JSON.parse(raw))
     const rep = game.applyOffline(Date.now())
     if (rep) setTimeout(() => { toast(rep, 'g'); audio.cash() }, 1200)
   }
+  const cheat = new URLSearchParams(location.search).get('para')
+  if (cheat) game.money = Math.max(game.money, Number(cheat) || 0)
 } catch { /* bozuk kayıt: sıfırdan */ }
 if (game.pitches >= 2) world.buildPitch(0, 5.2)
 
