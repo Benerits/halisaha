@@ -266,6 +266,7 @@ export class Game {
     if (this.hasFridge) kantin += 60
     if (this.hasTost) kantin += 45
     if (this.hasBaklava) kantin += 55
+    if (!this.hasCanteen) kantin = 0  // kantin yoksa tezgâh gelirleri de yok (yıkım sızıntısı fixi)
     if (this.personel.kantinci) kantin = Math.round(kantin * 1.25)  // kantinci tezgâhı büyütür
     let v = kantin
     if (this.hasCleats) v += 45
@@ -441,6 +442,9 @@ export class Game {
     }
     if (r.hours === 2 && !this.freeAt(day, hour + 1)) {
       return { ok: false, msg: `${r.team} 2 saat istiyor — ${hour + 1}:00 da boş olmalı.` }
+    }
+    if (r.hours === 2 && r.needFull && !this.fullFreeAt(day, hour + 1)) {
+      return { ok: false, msg: `${r.team} TAM SAHA istiyor — ${hour + 1}:00'da tam sahalar dolu.` }
     }
     const lane = this.resolveLane(r, day, hour, wantedLane)
     if (lane === null) return { ok: false, msg: 'Uygun saha şeridi yok — şeritler dolu.' }
@@ -696,7 +700,8 @@ export class Game {
       ? `Sen yokken tesis çalıştı: +₺${net.toLocaleString('tr-TR')} kasada` +
         (mudurVar ? '' : ' (müdür olsaydı çok daha fazlaydı)') +
         (ready > 0 ? ` · sekreter ${ready} istek not etmiş.` : '.')
-      : ready > 0 ? `Sekreter sen yokken ${ready} istek not etmiş — kartlar sırada.` : null
+      : ready > 0 ? `Sekreter sen yokken ${ready} istek not etmiş — kartlar sırada.`
+      : gross > 0 ? 'Sen yokken gelir kirayı ancak karşıladı — müdür olsaydı kâr kalırdı.' : null
     if (msg) this.events.push(msg)
     return msg
   }
@@ -967,6 +972,12 @@ export class Game {
   }
   placeBuild(c: number, r: number, kind: BuildKind): { ok: boolean; msg: string } {
     if (!this.ownsParcel(c, r)) return { ok: false, msg: 'Önce arsayı satın al.' }
+    // TEKİL İŞLETMELER: para kesilmeden ÖNCE kontrol (geç kontrol para yutuyordu — denetim bulgusu)
+    if ((kind === 'kantin' && this.hasCanteen && this.buildAt(c, r)?.kind !== 'kantin') ||
+        (kind === 'dus' && this.hasShower && this.buildAt(c, r)?.kind !== 'dus') ||
+        (kind === 'wc' && this.hasWC && this.buildAt(c, r)?.kind !== 'wc')) {
+      return { ok: false, msg: 'Bundan zaten var.' }
+    }
     // SAHİPLİ ARSADA ESNEK İNŞA: eski yapı otomatik yıkılır (%40 iade), yenisi kurulur
     if (this.buildAt(c, r)) {
       const rem = this.removeBuild(c, r)

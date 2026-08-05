@@ -419,5 +419,40 @@ console.log('\n— ESNEK İNŞA (üstüne kur) —')
   const rr = t.placeBuild(0, 1, 'garden')
   check('saha → başka yapıya dönüşebilir (kapasite korunuyorsa)', rr.ok && t.pitches === 1)
 }
+
+console.log('\n— DENETİM REGRESYONLARI (kenar-durum avı bulguları) —')
+{
+  // KRİTİK 1: singleton çakışmasında para YUTULMAZ
+  const g = new Game(); g.money = 100_000
+  g.buy('canteen')
+  g.buyParcel(0, 1)
+  const before = g.money
+  const r = g.placeBuild(0, 1, 'kantin')
+  check('mağaza kantini varken kantin binası reddedilir', !r.ok)
+  check('reddedilen inşaatta para YUTULMAZ', g.money === before)
+  check('hayalet bina kalmaz', !g.buildAt(0, 1))
+
+  // KRİTİK 2: 2 saatlik TAM SAHA ikinci saatte kapasite aşamaz
+  const t = new Game(); t.money = 900_000
+  t.buyParcel(0, 1); t.placeBuild(0, 1, 'mini')   // pitches=2, fullN=1
+  t.bookings.push({ day: 0, hour: 21, team: 'X', segment: 'kurumsal', price: 1, sub: false, weeksLeft: 0, needFull: true, lane: 1 })
+  let rf = null
+  for (let i = 0; i < 6000 && !rf; i++) { if (t.queue.length >= 4) t.queue.length = 0
+    const x = t.spawnReservation(); if (x && x.hours === 2 && x.needFull && !x.flexible) rf = x }
+  if (rf) {
+    rf.day = 0; rf.hour = 20
+    const res = t.place(rf.id, 0, 20)
+    check('2 saatlik TAM SAHA ikinci saatte tam kapasiteyi AŞAMAZ', !res.ok || t.fullUsedAt(0, 21) <= t.fullPitchCount())
+  }
+
+  // ÖNEMLİ: kantin yıkılınca tezgâh gelirleri durur
+  const k = new Game(); k.money = 100_000
+  k.buy('canteen'); k.buy('fridge'); k.buy('tost'); k.buy('baklava')
+  const withC = k.extraPerMatch()
+  k.buyParcel(0, 1); k.placeBuild(0, 1, 'basket')
+  // kantini binasız (mağaza) aldık; yıkım senaryosu: bina kur-yık yerine bayrağı düşürüp ölç
+  k.hasCanteen = false
+  check('kantinsiz tezgâh gelirleri sıfırlanır', k.extraPerMatch() < withC - 150)
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)
