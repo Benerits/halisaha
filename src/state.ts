@@ -1064,6 +1064,7 @@ export class Game {
         this.bookings = sn.bookings; this.queue = sn.queue; this.pitches = sn.pitches
         this.ownedParcels = [...new Set([...STARTER_PARCELS, ...sn.ownedParcels])]
         this.builds = sn.builds
+        this.personel = sn.personel ?? this.personel  // yoksa eski kayıt göçü (hasCirak) korunur
       }
     }
     if (d.loyalty && typeof d.loyalty === 'object') this.loyalty = d.loyalty as Record<string, number>

@@ -496,8 +496,11 @@ addEventListener('pointerup', e => {
 $('zin').addEventListener('click', () => { world.zoomBy(0.82); audio.click() })
 $('zout').addEventListener('click', () => { world.zoomBy(1.22); audio.click() })
 addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#queue,#office,#tips,#goals,#parcel')) return; world.zoomBy(e.deltaY > 0 ? 1.08 : 0.93) }, { passive: true })
-// HER tıkta idempotent: HMR/duraklatma sonrası bile ses motoru ayakta kalır
-addEventListener('pointerdown', () => audio.kick(game.activeLoc), { capture: true })
+// HER jestte idempotent: sayfa yenilenmesi/HMR sonrası ilk dokunuşta ses geri gelir
+for (const ev of ['pointerdown', 'keydown', 'wheel'] as const)
+  addEventListener(ev, () => audio.kick(game.activeLoc), { capture: true })
+// sekme geri gelince de uyandır (tarayıcı arka planda bağlamı askıya alabiliyor)
+document.addEventListener('visibilitychange', () => { if (!document.hidden) audio.kick(game.activeLoc) })
 function openOffice() { audio.click(); $('office').classList.add('show'); renderOffice() }
 $('yazpill').addEventListener('click', openOffice)
 $('goalsbtn').addEventListener('click', () => { goalsOpen = !goalsOpen; if (goalsOpen) tipsOpen = false; audio.click(); renderGoals(); renderTips() })
