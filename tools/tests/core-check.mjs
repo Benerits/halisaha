@@ -190,7 +190,7 @@ console.log('\n— ÇIRAK / TELEFON HATTI / REKLAM —')
   if (r) {
     r.patience = r.maxPatience * 0.1        // sabrı bitmek üzere
     c.tick(0.1)
-    check('çırak sabrı biten isteği YERLEŞTİRİR', c.bookings.length === 1 && c.queue.length === 0)
+    check('çırak sabrı biten isteği YERLEŞTİRİR', c.bookings.length >= 1 && c.queue.length === 0) // 2 saatlik kart 2 kayıt yazar
     check('çırak yerleştirmesi bildirim üretir', c.notices.some(n => n.includes('Çırak')))
   }
   const noC = new Game()
