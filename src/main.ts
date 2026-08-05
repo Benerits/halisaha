@@ -112,38 +112,74 @@ function renderCal() {
     })
   }
 
-  // SEÇİLİ GÜNÜN ŞERİDİ (önbellekli)
+  // SEÇİLİ GÜNÜN ŞERİDİ (önbellekli) — çok sahada saha satırlı ızgara
   const cal = $('cal')
-  const calHtml = HOURS.map(hour => {
-    const bs = game.bookingsAt(viewDay, hour)
-    const b = bs[0]
-    const free = game.freeAt(viewDay, hour)
-    const hint = sel && game.canPlaceAt(sel, viewDay, hour)
-    const part = sel && !hint && game.canPlacePartial(sel, viewDay, hour)
-    const cls = ['dslot']
-    if (b) cls.push(free ? 'half' : b.sub ? 'sub' : 'full')
-    if (hint) cls.push(game.placedCount < 12 ? 'hint' : 'hint calm')
-    if (part) cls.push('part')
-    if (viewDay === nowDay && hour === nowHour) cls.push('now')
-    if (viewDay === nowDay && hour < nowHour) cls.push('past')
-    if (!b && hour >= 20 && hour <= 22) cls.push('prime')
-    const label = !b ? '' : bs.length > 1 ? `${b.team.slice(0, 4)} +${bs.length - 1}` : b.team.slice(0, 6)
-    const cap = game.pitches > 1 && b ? ` (${bs.length}/${game.pitches} saha)` : ''
-    return `<div class="${cls.join(' ')}" data-h="${hour}"
-      title="${b ? bs.map(x => x.team + ' ₺' + tl(x.price)).join(' · ') + cap : DAY_NAMES[viewDay] + ' ' + hour + ':00 — boş'}">
-      <span class="h">${hour}:00</span><span class="t">${label}</span>
-    </div>`
-  }).join('')
+  const N = game.pitches
+  const fullN = game.fullPitchCount()
+  const laneLbl = (l: number) => l < fullN ? `S${l + 1}` : `M${l - fullN + 1}`
+  const cellHint = (r: typeof sel, hour: number, lane: number): boolean => {
+    if (!r) return false
+    if (!game.canPlaceAt(r, viewDay, hour)) return false
+    if (r.needFull && lane >= fullN) return false
+    if (game.laneTakenBy(viewDay, hour, lane)) return false
+    if (r.hours === 2 && game.laneTakenBy(viewDay, hour + 1, lane)) return false
+    return true
+  }
+  const hintCls = game.placedCount < 12 ? 'hint' : 'hint calm'
+  let calHtml = ''
+  if (N === 1) {
+    calHtml = HOURS.map(hour => {
+      const bs = game.bookingsAt(viewDay, hour)
+      const b = bs[0]
+      const free = game.freeAt(viewDay, hour)
+      const hint = sel && free && game.canPlaceAt(sel, viewDay, hour)
+      const part = sel && !hint && game.canPlacePartial(sel, viewDay, hour)
+      const cls = ['dslot']
+      if (b) cls.push(b.sub ? 'sub' : 'full')
+      if (hint) cls.push(hintCls)
+      if (part) cls.push('part')
+      if (viewDay === nowDay && hour === nowHour) cls.push('now')
+      if (viewDay === nowDay && hour < nowHour) cls.push('past')
+      if (!b && hour >= 20 && hour <= 22) cls.push('prime')
+      return `<div class="${cls.join(' ')}" data-h="${hour}" data-l="0"
+        title="${b ? b.team + ' · ₺' + tl(b.price) : DAY_NAMES[viewDay] + ' ' + hour + ':00 — boş'}">
+        <span class="h">${hour}:00</span><span class="t">${b ? b.team.slice(0, 6) : ''}</span>
+      </div>`
+    }).join('')
+  } else {
+    // sol şerit etiketleri + saat sütunları (satır = saha)
+    calHtml = `<div class="lanecol"><div class="lh"></div>` +
+      Array.from({ length: N }, (_, l) =>
+        `<div class="ll ${l < fullN ? '' : 'mini'}">${laneLbl(l)}</div>`).join('') + '</div>'
+    calHtml += HOURS.map(hour => {
+      const isPast = viewDay === nowDay && hour < nowHour
+      let col = `<div class="dcol"><div class="lh ${viewDay === nowDay && hour === nowHour ? 'nowh' : ''}">${hour}</div>`
+      for (let l = 0; l < N; l++) {
+        const b = game.laneTakenBy(viewDay, hour, l)
+        const hint = cellHint(sel, hour, l)
+        const part = sel && !hint && !b && game.canPlacePartial(sel, viewDay, hour) && (!sel.needFull || l < fullN)
+        const cls = ['dcell']
+        if (b) cls.push(b.sub ? 'sub' : 'full')
+        if (hint) cls.push(hintCls)
+        if (part) cls.push('part')
+        if (isPast) cls.push('past')
+        if (!b && hour >= 20 && hour <= 22) cls.push('prime')
+        col += `<div class="${cls.join(' ')}" data-h="${hour}" data-l="${l}"
+          title="${b ? b.team + ' · ₺' + tl(b.price) : laneLbl(l) + ' · ' + hour + ':00 — boş'}">${b ? b.team.slice(0, 5) : ''}</div>`
+      }
+      return col + '</div>'
+    }).join('')
+  }
   if (calHtml !== calCache) {
     calCache = calHtml
     cal.innerHTML = calHtml
-    cal.querySelectorAll<HTMLElement>('.dslot').forEach(el => {
+    cal.classList.toggle('multi', N > 1)
+    cal.querySelectorAll<HTMLElement>('.dslot, .dcell').forEach(el => {
       el.addEventListener('click', () => {
         if (selected === null) { toast('Önce soldan bir istek seç.'); return }
-        const day = viewDay, hour = Number(el.dataset.h)
+        const day = viewDay, hour = Number(el.dataset.h), lane = Number(el.dataset.l)
         const selR = game.queue.find(x => x.id === selected)
         const span = selR?.hours ?? 1
-        // tam yer yoksa ama tek saat açıksa: kısmi karşı-teklif dene
         if (selR && !game.canPlaceAt(selR, day, hour) && game.canPlacePartial(selR, day, hour)) {
           const pr = game.placePartial(selected, day, hour)
           if (pr.ok) { audio.place(); selected = null; save(); confirmFlash(day, hour, 1) }
@@ -152,7 +188,7 @@ function renderCal() {
           renderAll()
           return
         }
-        const r = game.place(selected, day, hour)
+        const r = game.place(selected, day, hour, lane)
         if (r.ok) audio.place(); else audio.bad()
         if (r.ok) { selected = null; save(); confirmFlash(day, hour, span) }
         else {
@@ -165,6 +201,8 @@ function renderCal() {
     })
   }
 }
+
+// ---------- rezervasyon kuyruğu ----------
 
 // ---------- rezervasyon kuyruğu ----------
 /** kartı seç + geçerli slotu olan ilk güne atla (yerleştirme akışının tek girişi) */

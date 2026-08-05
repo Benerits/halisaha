@@ -81,6 +81,8 @@ export interface Reservation {
 export interface Booking {
   /** tam saha kapasitesinden mi yer tutuyor */
   needFull?: boolean
+  /** hangi saha şeridinde (0..fullCount-1 tam, sonrası mini) — görsel + atama */
+  lane?: number
   day: number
   hour: number
   team: string
@@ -280,6 +282,48 @@ export class Game {
   fullFreeAt(day: number, hour: number): boolean {
     return this.fullUsedAt(day, hour) < this.fullPitchCount()
   }
+  laneTakenBy(day: number, hour: number, lane: number): Booking | undefined {
+    return this.bookingsAt(day, hour).find(b => this.laneOf(b, day, hour) === lane)
+  }
+  /** kayıtlı şerit; eski kayıtların şeritsiz maçlarına deterministik şerit ver */
+  laneOf(b: Booking, day: number, hour: number): number {
+    if (b.lane !== undefined) return b.lane
+    const peers = this.bookingsAt(day, hour)
+    let i = 0
+    for (const x of peers) {
+      if (x === b) break
+      if (x.lane === undefined) i++
+    }
+    const used = new Set(peers.filter(x => x.lane !== undefined).map(x => x.lane))
+    let lane = 0, skipped = 0
+    for (; lane < this.pitches; lane++) {
+      if (used.has(lane)) continue
+      if (skipped === i) break
+      skipped++
+    }
+    return lane
+  }
+  /** İSTENEN şerit uygun mu; değilse AKILLI atama: tam saha isteyen tam şeride,
+   *  normal maç MİNİ şeritlere öncelikli (tam sahalar kurumsala boş kalsın) */
+  resolveLane(r: Reservation, day: number, hour: number, wanted?: number): number | null {
+    const fullN = this.fullPitchCount()
+    const okLane = (l: number) => {
+      if (l < 0 || l >= this.pitches) return false
+      if (r.needFull && l >= fullN) return false
+      if (this.laneTakenBy(day, hour, l)) return false
+      if (r.hours === 2 && this.laneTakenBy(day, hour + 1, l)) return false
+      return true
+    }
+    if (wanted !== undefined && okLane(wanted)) return wanted
+    const order: number[] = []
+    if (r.needFull) { for (let l = 0; l < fullN; l++) order.push(l) }
+    else {
+      for (let l = this.pitches - 1; l >= fullN; l--) order.push(l)  // önce miniler
+      for (let l = fullN - 1; l >= 0; l--) order.push(l)
+    }
+    for (const l of order) if (okLane(l)) return l
+    return null
+  }
   /** doluluk yüzdesi */
   occupancy(): number {
     const usable = 7 * HOURS.length
@@ -347,7 +391,7 @@ export class Game {
   }
 
   /** kartı takvime yerleştir */
-  place(resId: number, day: number, hour: number): { ok: boolean; msg: string } {
+  place(resId: number, day: number, hour: number, wantedLane?: number): { ok: boolean; msg: string } {
     const i = this.queue.findIndex(r => r.id === resId)
     if (i < 0) return { ok: false, msg: 'Bu istek artık geçerli değil.' }
     const r = this.queue[i]
@@ -368,15 +412,17 @@ export class Game {
     if (r.hours === 2 && !this.freeAt(day, hour + 1)) {
       return { ok: false, msg: `${r.team} 2 saat istiyor — ${hour + 1}:00 da boş olmalı.` }
     }
+    const lane = this.resolveLane(r, day, hour, wantedLane)
+    if (lane === null) return { ok: false, msg: 'Uygun saha şeridi yok — şeritler dolu.' }
     this.queue.splice(i, 1)
     if (r.hours === 2) {
       const half = Math.round(r.price / 2 / 10) * 10
-      this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0, needFull: r.needFull })
-      this.bookings.push({ day, hour: hour + 1, team: r.team, segment: r.segment, price: r.price - half, sub: false, weeksLeft: 0, needFull: r.needFull })
+      this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0, needFull: r.needFull, lane })
+      this.bookings.push({ day, hour: hour + 1, team: r.team, segment: r.segment, price: r.price - half, sub: false, weeksLeft: 0, needFull: r.needFull, lane })
     } else {
       this.bookings.push({
         day, hour, team: r.team, segment: r.segment, price: r.price,
-        sub: r.weeks > 0, weeksLeft: r.weeks, needFull: r.needFull,
+        sub: r.weeks > 0, weeksLeft: r.weeks, needFull: r.needFull, lane,
       })
     }
     if (r.weeks > 0) { if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] } this.gSubs++ }
@@ -431,7 +477,8 @@ export class Game {
     }
     const half = Math.round(r.price / r.hours / 10) * 10
     this.queue.splice(i, 1)
-    this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0, needFull: r.needFull })
+    this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0,
+      needFull: r.needFull, lane: this.resolveLane(r, day, hour) ?? 0 })
     this.placedCount++
     this.events.push(`${r.team} 1 saatle idare etti (₺${half.toLocaleString('tr-TR')}).`)
     return { ok: true, msg: `${r.team} 1 saati kabul etti — ₺${half.toLocaleString('tr-TR')}.` }
