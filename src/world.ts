@@ -157,6 +157,60 @@ export class World {
     return t
   }
 
+  /** kale filesi ağ dokusu — kare örgü, transparan */
+  private netTexture(): THREE.CanvasTexture {
+    const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64
+    const x = cv.getContext('2d')!
+    x.clearRect(0, 0, 64, 64)
+    x.strokeStyle = 'rgba(252,252,248,0.95)'; x.lineWidth = 3
+    for (let i = 0; i <= 64; i += 8) {
+      x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 64); x.stroke()
+      x.beginPath(); x.moveTo(0, i); x.lineTo(64, i); x.stroke()
+    }
+    const t = new THREE.CanvasTexture(cv)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.repeat.set(5, 3)
+    return t
+  }
+
+  /** kale filesi: arkaya eğimli ağ paneli + yan üçgenler + destek çubukları */
+  private buildGoalNet(g: THREE.Group, gx: number, sg: number) {
+    const depth = 0.8, H = 1.58, W = 1.3
+    const bx = gx + sg * depth
+    const mat = new THREE.MeshBasicMaterial({
+      map: this.netTexture(), transparent: true, opacity: 0.9,
+      side: THREE.DoubleSide, depthWrite: false,
+    })
+    // arka eğimli panel (üstü üst direkte, altı geride yerde)
+    const back = new THREE.BufferGeometry()
+    back.setAttribute('position', new THREE.Float32BufferAttribute([
+      gx, -W, H,  gx, W, H,  bx, W, 0.03,
+      gx, -W, H,  bx, W, 0.03,  bx, -W, 0.03,
+    ], 3))
+    back.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0], 2))
+    g.add(new THREE.Mesh(back, mat))
+    // yan üçgen paneller
+    for (const py of [-W, W]) {
+      const side = new THREE.BufferGeometry()
+      side.setAttribute('position', new THREE.Float32BufferAttribute([
+        gx, py, H,  bx, py, 0.03,  gx, py, 0.03,
+      ], 3))
+      side.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 0, 0, 0], 2))
+      g.add(new THREE.Mesh(side, mat))
+    }
+    // arka destek çubukları (üst köşeden geriye)
+    const len = Math.hypot(depth, H)
+    const ang = Math.atan2(sg * depth, H)
+    for (const py of [-W, W]) {
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, len, 6), lam(0xdedad0))
+      rod.rotation.x = Math.PI / 2
+      rod.rotation.y = ang
+      rod.position.set(gx + sg * depth / 2, py, H / 2)
+      rod.castShadow = true
+      g.add(rod)
+    }
+  }
+
   buildPitch(cx: number, cy: number) {
     const g = new THREE.Group()
     // kenar bandı (koyu çim)
@@ -175,9 +229,7 @@ export class World {
       }
       const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.6, 8), lam(0xfaf9f6))
       bar.position.set(gx, 0, 1.6); bar.castShadow = true; g.add(bar)
-      const net = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.6),
-        new THREE.MeshLambertMaterial({ color: 0xeaf0f2, transparent: true, opacity: 0.3, side: THREE.DoubleSide }))
-      net.rotation.y = Math.PI / 2; net.position.set(gx + sg * 0.55, 0, 0.8); g.add(net)
+      this.buildGoalNet(g, gx, sg)
     }
     g.position.set(cx, cy, 0)
     this.scene.add(g)
