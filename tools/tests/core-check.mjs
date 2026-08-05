@@ -332,5 +332,41 @@ console.log('\n— PERSONEL + TAM SAHA —')
     }
   }
 }
+
+console.log('\n— KISMİ KARŞI-TEKLİF (2 saatlik kart, tek saat boş) —')
+{
+  const t = new Game()
+  let rf = null
+  for (let i = 0; i < 5000 && !rf; i++) { if (t.queue.length >= 4) t.queue.length = 0
+    const x = t.spawnReservation(); if (x && x.hours === 2 && x.flexible) rf = x }
+  if (rf) {
+    const d = rf.flexDays[0]
+    // aralığın ikinci saatini doldur → tam yerleşim imkânsız, ilk saat kısmi olur
+    for (const h of rf.flexHours.slice(1)) t.bookings.push({ day: d, hour: h, team: 'X', segment: 'klasik', price: 1, sub: false, weeksLeft: 0 })
+    for (let dd = 0; dd < 7; dd++) if (dd !== d) for (const h of rf.flexHours)
+      t.bookings.push({ day: dd, hour: h, team: 'X', segment: 'klasik', price: 1, sub: false, weeksLeft: 0 })
+    const h0 = rf.flexHours[0]
+    check('tam yerleşim imkânsız', !t.canPlaceAt(rf, d, h0))
+    check('kısmi teklif MÜMKÜN görünür', t.canPlacePartial(rf, d, h0))
+    const oldRnd = Math.random
+    Math.random = () => 0.1  // kesin kabul
+    const res = t.placePartial(rf.id, d, h0)
+    check('kabul edince 1 saat yerleşir, fiyat oransal', res.ok && t.bookingsAt(d, h0).some(b => b.team === rf.team))
+    Math.random = oldRnd
+
+    const t2 = new Game()
+    let r2 = null
+    for (let i = 0; i < 5000 && !r2; i++) { if (t2.queue.length >= 4) t2.queue.length = 0
+      const x = t2.spawnReservation(); if (x && x.hours === 2 && x.flexible) r2 = x }
+    if (r2) {
+      const d2 = r2.flexDays[0]
+      for (const h of r2.flexHours.slice(1)) t2.bookings.push({ day: d2, hour: h, team: 'X', segment: 'klasik', price: 1, sub: false, weeksLeft: 0 })
+      Math.random = () => 0.99  // kesin red
+      const rr = t2.placePartial(r2.id, d2, r2.flexHours[0])
+      Math.random = oldRnd
+      check('reddedince kart kalır ama bir daha kısmi denenmez', !rr.ok && t2.queue.includes(r2) && !t2.canPlacePartial(r2, d2, r2.flexHours[0]))
+    }
+  } else check('2 saatlik esnek kart üretildi', false)
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

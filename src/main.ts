@@ -72,8 +72,10 @@ function renderCal() {
   // YÖNERGE ŞERİDİ — nereye koyacağını söylemez, sadece kimin için seçtiğini söyler
   const pickbar = $('pickbar')
   if (performance.now() > flashUntil) {
+    const anyPartial = sel ? DAY_NAMES.some((_, d) => HOURS.some(h => game.canPlacePartial(sel, d, h))) : false
     const noSlot = sel && !game.bestSlot(sel)
     const ph = !sel ? ''
+      : noSlot && anyPartial ? `${sel.hours} saatlik yer yok — KESİKLİ saate tıkla, 1 saat öner (kabul etmeyebilir)`
       : noSlot ? `${sel.team} için UYGUN BOŞ SAAT YOK — kartı geri çevir ya da yeni saha aç`
       : `${sel.team} · ₺${tl(sel.price)}${sel.weeks ? '/hf' : ''} — yanan saate tıkla<span class="arr">⬇</span>`
     if (ph !== pickCache) {
@@ -113,9 +115,11 @@ function renderCal() {
     const b = bs[0]
     const free = game.freeAt(viewDay, hour)
     const hint = sel && game.canPlaceAt(sel, viewDay, hour)
+    const part = sel && !hint && game.canPlacePartial(sel, viewDay, hour)
     const cls = ['dslot']
     if (b) cls.push(free ? 'half' : b.sub ? 'sub' : 'full')
     if (hint) cls.push(game.placedCount < 12 ? 'hint' : 'hint calm')
+    if (part) cls.push('part')
     if (viewDay === nowDay && hour === nowHour) cls.push('now')
     if (viewDay === nowDay && hour < nowHour) cls.push('past')
     if (!b && hour >= 20 && hour <= 22) cls.push('prime')
@@ -133,7 +137,17 @@ function renderCal() {
       el.addEventListener('click', () => {
         if (selected === null) { toast('Önce soldan bir istek seç.'); return }
         const day = viewDay, hour = Number(el.dataset.h)
-        const span = game.queue.find(x => x.id === selected)?.hours ?? 1
+        const selR = game.queue.find(x => x.id === selected)
+        const span = selR?.hours ?? 1
+        // tam yer yoksa ama tek saat açıksa: kısmi karşı-teklif dene
+        if (selR && !game.canPlaceAt(selR, day, hour) && game.canPlacePartial(selR, day, hour)) {
+          const pr = game.placePartial(selected, day, hour)
+          if (pr.ok) { audio.place(); selected = null; save(); confirmFlash(day, hour, 1) }
+          else { audio.bad() }
+          toast(pr.msg, pr.ok ? 'g' : 'b')
+          renderAll()
+          return
+        }
         const r = game.place(selected, day, hour)
         if (r.ok) audio.place(); else audio.bad()
         if (r.ok) { selected = null; save(); confirmFlash(day, hour, span) }
@@ -247,6 +261,14 @@ function renderQueue() {
 // ---------- hedefler (oyunda tutan kısa döngü) ----------
 function renderGoals() {
   const gs = game.goals()
+  {
+    const done = gs.filter(g => g.done).length
+    const gb = $('goalsbadge')
+    gb.textContent = `${done}/${gs.length}`
+    gb.className = 'rbadge' + (done === gs.length && gs.length > 0 ? ' done' : '')
+    $('goals').classList.toggle('open', goalsOpen)
+    $('goalsbtn').classList.toggle('open', goalsOpen)
+  }
   const ms = game.nextMilestone()
   const done = gs.filter(g => g.done).length
   let h = `<div class="gh"><span>Günün Hedefleri</span><span>${done}/${gs.length}</span></div><div class="gb">`
@@ -267,9 +289,16 @@ function renderGoals() {
 }
 
 // ---------- öneri kartları (sıfır sürtünme çekirdeği) ----------
+let goalsOpen = false, tipsOpen = false
 function renderTips() {
   const box = $('tips')
-  box.innerHTML = game.suggestions().map((s, i) => `
+  const sugs = game.suggestions()
+  const tb = $('tipsbadge')
+  tb.textContent = String(sugs.length)
+  tb.className = 'rbadge' + (sugs.some(x => x.urgent) ? ' urgent' : '')
+  box.classList.toggle('open', tipsOpen)
+  $('tipsbtn').classList.toggle('open', tipsOpen)
+  box.innerHTML = sugs.map((s, i) => `
     <div class="tip ${s.urgent ? 'urgent' : ''}">
       <div class="th">${s.urgent ? 'ACİL' : 'ÖNERİ'}</div>
       <div class="tb">
@@ -463,6 +492,8 @@ addEventListener('wheel', e => { if ((e.target as HTMLElement).closest('#desk,#q
 addEventListener('pointerdown', () => { audio.ensure(); audio.setMood(game.activeLoc); audio.startMusic() }, { once: true })
 function openOffice() { audio.click(); $('office').classList.add('show'); renderOffice() }
 $('yazpill').addEventListener('click', openOffice)
+$('goalsbtn').addEventListener('click', () => { goalsOpen = !goalsOpen; if (goalsOpen) tipsOpen = false; audio.click(); renderGoals(); renderTips() })
+$('tipsbtn').addEventListener('click', () => { tipsOpen = !tipsOpen; if (tipsOpen) goalsOpen = false; audio.click(); renderGoals(); renderTips() })
 $('closeoffice').addEventListener('click', () => $('office').classList.remove('show'))
 document.querySelectorAll<HTMLElement>('.tab').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'))

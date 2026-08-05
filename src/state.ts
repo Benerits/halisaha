@@ -69,6 +69,8 @@ export interface Reservation {
   hours: number
   /** TAM SAHA şart mı (kurumsal 8v8 miniye sığmaz) */
   needFull: boolean
+  /** kısmi (tek saat) teklifi reddetti mi */
+  partialRefused?: boolean
   /** anlaşma sonrası geçen süre (nazik hatırlatma için) */
   dealWait?: number
   weeks: number
@@ -405,6 +407,35 @@ export class Game {
   }
 
   /** YERLEŞTİRİLEBİLİR Mİ: kural + kapasite (UI vurgusu ve bestSlot bunu kullanır) */
+  /** 2 saatlik kart TEK saate sığar mı (tam yer yokken kısmi karşı-teklif) */
+  canPlacePartial(r: Reservation, day: number, hour: number): boolean {
+    if (r.hours < 2 || r.partialRefused) return false
+    if (this.canPlaceAt(r, day, hour)) return false // tam yer varsa kısmiye gerek yok
+    if (!r.flexible) { if (r.day !== day || r.hour !== hour) return false }
+    else if (!r.flexDays.includes(day) || !r.flexHours.includes(hour)) return false
+    if (!this.freeAt(day, hour)) return false
+    return !r.needFull || this.fullFreeAt(day, hour)
+  }
+
+  /** KISMİ KARŞI-TEKLİF: "2 saat yok, 1 saat vereyim?" — esnek %70, katı %50 kabul eder */
+  placePartial(resId: number, day: number, hour: number): { ok: boolean; msg: string } {
+    const i = this.queue.findIndex(x => x.id === resId)
+    if (i < 0) return { ok: false, msg: 'Bu istek artık geçerli değil.' }
+    const r = this.queue[i]
+    if (!this.canPlacePartial(r, day, hour)) return { ok: false, msg: 'Bu saat kısmi teklife uygun değil.' }
+    if (Math.random() > (r.flexible ? 0.7 : 0.5)) {
+      r.partialRefused = true
+      this.loyalty[r.team] = (this.loyalty[r.team] ?? 0) - 0.2
+      return { ok: false, msg: `${r.team}: "${r.hours} saat olmazsa gelmeyiz abi." — kısmi teklifi reddetti.` }
+    }
+    const half = Math.round(r.price / r.hours / 10) * 10
+    this.queue.splice(i, 1)
+    this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0, needFull: r.needFull })
+    this.placedCount++
+    this.events.push(`${r.team} 1 saatle idare etti (₺${half.toLocaleString('tr-TR')}).`)
+    return { ok: true, msg: `${r.team} 1 saati kabul etti — ₺${half.toLocaleString('tr-TR')}.` }
+  }
+
   canPlaceAt(r: Reservation, day: number, hour: number): boolean {
     if (!this.slotOk(r, day, hour)) return false
     if (!this.freeAt(day, hour)) return false
