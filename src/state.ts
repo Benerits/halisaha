@@ -580,6 +580,8 @@ export class Game {
   lostNotices: string[] = []
   /** toplam yerleştirme sayısı — öğretici vurgular buna göre sakinleşir */
   placedCount = 0
+  /** tesisin adı — tabelada yazar (ilk açılışta oyuncu verir) */
+  facilityName = ''
   // ---- ŞUBELER ----
   activeLoc: LocId = 'mahalle'
   unlockedLocs: LocId[] = ['mahalle']
@@ -1152,7 +1154,7 @@ export class Game {
       hasBillboard: this.hasBillboard, hasRoadSign: this.hasRoadSign,
       rentDueDay: this.rentDueDay, rentMissed: this.rentMissed, loyalty: this.loyalty,
       hasPhone2: this.hasPhone2, hasCirak: this.hasCirak, adDays: this.adDays,
-      placedCount: this.placedCount,
+      placedCount: this.placedCount, facilityName: this.facilityName,
       goalDay: this.goalDay, gMatches: this.gMatches, gEarned: this.gEarned,
       gSubs: this.gSubs, goalsDone: this.goalsDone,
       events: this.events.slice(-40), incomeToday: this.incomeToday,
@@ -1181,6 +1183,7 @@ export class Game {
     this.hasPhone2 = d.hasPhone2 === true; this.hasCirak = d.hasCirak === true; this.adDays = n('adDays', 0)
     if (this.hasCirak) this.personel.cirak = true
     this.placedCount = n('placedCount', 0)
+    if (typeof d.facilityName === 'string') this.facilityName = d.facilityName.slice(0, 16)
     this.goalDay = n('goalDay', 0); this.gMatches = n('gMatches', 0)
     this.gEarned = n('gEarned', 0); this.gSubs = n('gSubs', 0)
     if (Array.isArray(d.goalsDone)) this.goalsDone = d.goalsDone as string[]

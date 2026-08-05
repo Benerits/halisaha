@@ -293,6 +293,32 @@ export class World {
     this.clubhouse = g
   }
 
+  private signMat: THREE.MeshBasicMaterial | null = null
+  private signName = ''
+  private signTexture(name: string): THREE.CanvasTexture {
+    const cvs = document.createElement('canvas'); cvs.width = 640; cvs.height = 200
+    const ctx = cvs.getContext('2d')!
+    ctx.fillStyle = '#0e3d22'; ctx.beginPath(); ctx.roundRect(0, 0, 640, 200, 26); ctx.fill()
+    ctx.strokeStyle = '#f2b53c'; ctx.lineWidth = 12; ctx.beginPath(); ctx.roundRect(10, 10, 620, 180, 20); ctx.stroke()
+    const title = (name || (this.theme === 'sanayi' ? 'SANAYİ SAHA' : this.theme === 'sahil' ? 'SAHİL SAHA' : 'HALI SAHA')).toUpperCase()
+    ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.font = `800 ${title.length > 10 ? 58 : 80}px sans-serif`
+    ctx.fillText(title, 320, 76)
+    ctx.font = '800 42px sans-serif'; ctx.fillStyle = '#f2b53c'
+    ctx.fillText('SALI 21:00 SENİNDİR', 320, 150)
+    const t = new THREE.CanvasTexture(cvs); t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }
+  /** tabelaya oyuncunun verdiği adı yaz */
+  setSignName(name: string) {
+    this.signName = (name || '').slice(0, 16)
+    if (this.signMat) {
+      this.signMat.map?.dispose()
+      this.signMat.map = this.signTexture(this.signName)
+      this.signMat.needsUpdate = true
+    }
+  }
+
   /** prosedürel kulüp binası → Kenney ticari bina + ayaklı tabela */
   private upgradeClubhouse() {
     const k = this.kit
@@ -305,18 +331,10 @@ export class World {
     b.rotation.z = Math.PI   // kapısı avluya baksın
     g.add(b)
     // AYAKLI TABELA: iki direk + pano (binadan bağımsız, yola bakar)
-    const cvs = document.createElement('canvas'); cvs.width = 640; cvs.height = 200
-    const ctx = cvs.getContext('2d')!
-    ctx.fillStyle = '#0e3d22'; ctx.beginPath(); ctx.roundRect(0, 0, 640, 200, 26); ctx.fill()
-    ctx.strokeStyle = '#f2b53c'; ctx.lineWidth = 12; ctx.beginPath(); ctx.roundRect(10, 10, 620, 180, 20); ctx.stroke()
-    ctx.fillStyle = '#ffffff'; ctx.font = '800 80px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText(this.theme === 'sanayi' ? 'SANAYİ SAHA' : this.theme === 'sahil' ? 'SAHİL SAHA' : 'HALI SAHA', 320, 76)
-    ctx.font = '800 42px sans-serif'; ctx.fillStyle = '#f2b53c'
-    ctx.fillText('SALI 21:00 SENİNDİR', 320, 150)
-    const btex = new THREE.CanvasTexture(cvs); btex.colorSpace = THREE.SRGBColorSpace
-    const bmat = new THREE.MeshBasicMaterial({ map: btex, transparent: true, side: THREE.DoubleSide })
+    const bmat = new THREE.MeshBasicMaterial({ map: this.signTexture(this.signName), transparent: true, side: THREE.DoubleSide })
     bmat.toneMapped = false  // ACES tonemap panoyu soluk mint'e çeviriyordu
     const board = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.45), bmat)
+    this.signMat = bmat
     board.rotation.x = Math.PI / 2
     const sg = new THREE.Group()
     for (const px of [-2.0, 2.0]) {

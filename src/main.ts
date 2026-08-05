@@ -643,7 +643,7 @@ function openParcel(c: number, r: number) {
 let dragging = false, dragMoved = 0, lastX = 0, lastY = 0
 addEventListener('pointerdown', e => {
   if (pendingBuild) return
-  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#fbbtn,#fbmodal')) return
+  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#fbbtn,#fbmodal,#namemodal')) return
   dragging = true; dragMoved = 0; lastX = e.clientX; lastY = e.clientY
 })
 addEventListener('pointermove', e => {
@@ -658,7 +658,7 @@ addEventListener('pointerup', e => {
   document.body.style.cursor = ''
   // ELİNDE YAPI VARKEN: sürükleme kontrolünden ÖNCE yerleştir (pan bu modda kapalı)
   if (pendingBuild) {
-    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar,#fbbtn,#fbmodal')) return
+    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar,#fbbtn,#fbmodal,#namemodal')) return
     const hit = world.pickParcel(e.clientX, e.clientY)
     if (!hit) return
     const k = pendingBuild
@@ -674,7 +674,7 @@ addEventListener('pointerup', e => {
   }
   // DÜZENLEME MODU: yapı seç → boş arsaya taşı
   if (editMode && !pendingBuild) {
-    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar,#fbbtn,#fbmodal')) { /* UI */ }
+    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar,#fbbtn,#fbmodal,#namemodal')) { /* UI */ }
     else {
       const hit = world.pickParcel(e.clientX, e.clientY)
       if (hit) {
@@ -702,7 +702,7 @@ addEventListener('pointerup', e => {
   if (!dragging) return
   dragging = false
   if (dragMoved > 6) return                    // sürükleme yaptıysa tıklama sayma
-  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#fbbtn,#fbmodal')) return
+  if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#fbbtn,#fbmodal,#namemodal')) return
   if (world.pickYazihane(e.clientX, e.clientY)) { openOffice(); return }
   const hit = world.pickParcel(e.clientX, e.clientY)
   if (hit) { audio.click(); openParcel(hit.c, hit.r) }
@@ -834,6 +834,11 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
 
   const prevDay = game.day
+  // İLK İŞ: tesise isim (gate kapalıyken, isim boşsa)
+  if (!game.facilityName && !$('gate').classList.contains('show') && !$('namemodal').classList.contains('show')) {
+    $('namemodal').classList.add('show')
+    setTimeout(() => ($('nameinput') as HTMLInputElement).focus(), 100)
+  }
   // misafir gün 3'e geldiyse: günde bir kez 'hesap aç' dürtmesi (ilerleme risk mesajıyla)
   if (!auth.loggedIn() && game.day >= 3 && localStorage.getItem('hs-regnudge') !== String(game.day)
       && !$('gate').classList.contains('show')) {
@@ -1011,7 +1016,21 @@ function wireGate() {
   })()
 }
 setLang(lang)
+if (game.facilityName) world.setSignName(game.facilityName)
 wireGate()
+// TESİS İSMİ
+$('nameok').addEventListener('click', () => {
+  const nm = ($('nameinput') as HTMLInputElement).value.trim().slice(0, 14)
+  if (nm.length < 2) { toast(t('En az 2 harf olsun kral.'), 'b'); return }
+  game.facilityName = nm
+  world.setSignName(nm)
+  save()
+  $('namemodal').classList.remove('show')
+  audio.build()
+  toast(`${nm.toUpperCase()} ${t('tabelası asıldı — hayırlı olsun!')}`, 'g')
+})
+;($('nameinput') as HTMLInputElement).addEventListener('keydown', e => { if (e.key === 'Enter') $('nameok').click() })
+
 // SORUN/ÖNERİ BİLDİR (kırmızı buton — misafir dahil herkese açık)
 $('fbbtn').addEventListener('click', () => { $('fbmodal').classList.add('show'); audio.click() })
 $('fbclose').addEventListener('click', () => $('fbmodal').classList.remove('show'))

@@ -317,6 +317,9 @@
     font-weight:800; font-size:11px; letter-spacing:.3px; padding:10px 14px; border-radius:8px;
     box-shadow:0 4px 14px rgba(214,69,69,.35); border-bottom:3px solid #b45c33; }
   #fbbtn:hover { filter:brightness(1.08); }
+  #namemodal { position:fixed; inset:0; z-index:70; display:none; align-items:center; justify-content:center;
+    background:rgba(20,40,25,.5); }
+  #namemodal.show { display:flex; }
   #fbmodal { position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center;
     background:rgba(20,40,25,.45); }
   #fbmodal.show { display:flex; }
@@ -426,6 +429,17 @@
 </div>
 
 <button id="fbbtn" data-i18n="Sorun / Öneri Bildir">Sorun / Öneri Bildir</button>
+<div id="namemodal">
+  <div class="gcard">
+    <div class="ghead" data-i18n="SAHANA İSİM VER">SAHANA İSİM VER</div>
+    <div class="gbody">
+      <div class="gsub" data-i18n="Tabelaya yazılacak — mahalle seni bu isimle tanıyacak.">Tabelaya yazılacak — mahalle seni bu isimle tanıyacak.</div>
+      <input id="nameinput" class="ginput" maxlength="14" placeholder="Örn: ARENA 34, GOL KRALI..." data-i18n-ph="Örn: ARENA 34, GOL KRALI...">
+      <button id="nameok" class="gprimary" data-i18n="Tabelayı As">Tabelayı As</button>
+    </div>
+  </div>
+</div>
+
 <div id="fbmodal">
   <div class="fbcard">
     <div class="fbhead"><span data-i18n="SORUN / ÖNERİ BİLDİR">SORUN / ÖNERİ BİLDİR</span> <button id="fbclose">✕</button></div>
