@@ -454,5 +454,29 @@ console.log('\n— DENETİM REGRESYONLARI (kenar-durum avı bulguları) —')
   k.hasCanteen = false
   check('kantinsiz tezgâh gelirleri sıfırlanır', k.extraPerMatch() < withC - 150)
 }
+
+console.log('\n— ANALİZ RAPORU P0 (K3/K9) —')
+{
+  const g = new Game()
+  g.pitches = 21
+  for (let d = 0; d < 7; d++) for (const h of [20, 21]) for (let l = 0; l < 21; l++)
+    g.bookings.push({ day: d, hour: h, team: 'T', segment: 'klasik', price: 1, sub: false, weeksLeft: 0, lane: l })
+  check('K3: occupancy sahaları sayar (%100 tavanını aşamaz)', g.occupancy() <= 1.0)
+  const tek = new Game()
+  tek.bookings.push({ day: 0, hour: 20, team: 'T', segment: 'klasik', price: 1, sub: false, weeksLeft: 0 })
+  check('K3: tek sahada oran hâlâ doğru', Math.abs(tek.occupancy() - 1 / 105) < 1e-9)
+
+  // K9: müdür çoklu yerleştirmeyi TEK bildirimde toplar
+  const m = new Game(); m.money = 200_000
+  m.hire('mudur'); m.personel.auto = true
+  for (let i = 0; i < 3000 && m.queue.length < 3; i++) m.spawnReservation()
+  const q = m.queue.length
+  if (q >= 2) {
+    m.notices.length = 0
+    m.tick(0.05)
+    const mgr = m.notices.filter(n => n.includes('Müdür'))
+    check('K9: müdür N yerleştirmeyi tek bildirimde toplar', mgr.length <= 1)
+  }
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

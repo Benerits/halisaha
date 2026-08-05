@@ -358,7 +358,7 @@ export class Game {
   }
   /** doluluk yüzdesi */
   occupancy(): number {
-    const usable = 7 * HOURS.length
+    const usable = 7 * HOURS.length * Math.max(1, this.pitches)  // K3: sahaları saymıyordu → %1658 doluluk + 10x pazarlık tavanı
     return usable === 0 ? 0 : this.bookings.length / usable
   }
   subRatio(): number {
@@ -575,8 +575,9 @@ export class Game {
   personel: Personel = emptyPersonel()
   /** sosyal medya reklamı: kalan gün — sürerken talep +%50 */
   adDays = 0
-  /** oyun-içi otomatik olaylar için bildirim kuyruğu (UI toast'a çevirir) */
+  /** oyun-içi otomatik olaylar için bildirim kuyruğu (UI toast'a çevirir + Defter'e kopyalanır) */
   notices: string[] = []
+  pushNotice(msg: string) { this.notices.push(msg); this.events.push(msg) }
   /** kaçan müşteri bildirimleri (üzgün ses + toast) */
   lostNotices: string[] = []
   /** toplam yerleştirme sayısı — öğretici vurgular buna göre sakinleşir */
@@ -744,6 +745,8 @@ export class Game {
     }
     // MÜDÜRE BIRAK: müdür telefona bakar, gelen kartı en iyi slota kendisi koyar
     if (this.personel.auto && this.personel.mudur > 0) {
+      let placedByMgr = 0
+      let lastPlaced = ''
       for (const r of [...this.queue]) {
         const slot = this.bestSlot(r)
         if (!slot) continue
@@ -751,9 +754,14 @@ export class Game {
           const bump = Math.round(r.price * 0.1 / 10) * 10
           if (r.price + bump <= r.maxPay) r.price += bump  // usta müdür ufak zam koparır
         }
-        if (this.place(r.id, slot.day, slot.hour).ok)
-          this.notices.push(t('Müdür yerleştirdi: ') + `${r.team} → ${dayName(slot.day)} ${slot.hour}:00`)
+        if (this.place(r.id, slot.day, slot.hour).ok) {
+          placedByMgr++
+          lastPlaced = `${r.team} → ${dayName(slot.day)} ${slot.hour}:00`
+        }
       }
+      // K9: bildirim SELİ yok — tek tick'in tüm yerleştirmeleri tek bildirimde
+      if (placedByMgr === 1) this.notices.push(t('Müdür yerleştirdi: ') + lastPlaced)
+      else if (placedByMgr > 1) this.notices.push(t('Müdür yerleştirdi: ') + placedByMgr + t(' maç'))
     }
     // kart sabrı — EL SIKIŞILAN (pazarlığı biten) kart KAÇMAZ, süresi donar
     for (let i = this.queue.length - 1; i >= 0; i--) {

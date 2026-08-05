@@ -802,13 +802,25 @@ function applyLocSwitch() {
 function renderAll() { renderHud(); renderQueue(); renderCal(); renderGoals(); renderTips(); renderLocs() }
 
 let lastPush = 0
+let lastPushHash = ''
+let lastBookWarnAt = 0
 let lastPushErrAt = 0
+let cloudBlocked = false
 function save() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())) } catch { /* kota */ }
+  if (game.bookings.length > 1800 && Date.now() - lastBookWarnAt > 300_000) {
+    lastBookWarnAt = Date.now()
+    toast(t('Takvim arşivi doluyor — en eski kayıtlar yakında düşecek.'), 'b')
+  }
   // BULUT KAYIT: girişliyse 10 sn'de bir sunucuya (çakışmada sunucu kazanır)
-  if (auth.loggedIn() && !auth.isKicked() && Date.now() - lastPush > 10_000) {
+  // K7: kayıt diyeti — içerik DEĞİŞMEDİYSE buluta gönderme (400KB × her 10sn israfı)
+  if (auth.loggedIn() && !auth.isKicked() && !cloudBlocked && Date.now() - lastPush > 20_000) {
+    const snap = game.save()
+    const body = JSON.stringify(snap)
+    if (body === lastPushHash) return
+    lastPushHash = body
     lastPush = Date.now()
-    auth.pushSave(game.save()).then(r => {
+    auth.pushSave(snap).then(r => {
       if (r.kicked) return // onKicked bildirimi zaten gösterildi; bu cihaz artık yazmaz
       if (r.conflict) {
         if (r.save) { game.load(r.save as never); applyLocSwitch(); toast('Diğer cihazdaki güncel kayıt yüklendi.') }
@@ -828,9 +840,31 @@ let matchWasOn = false
 let uiT = 0
 let saveT = 0
 
+let hiddenAt = 0
+let hiddenMatchesBefore = 0
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); hiddenMatchesBefore = game.gMatches }
+  else if (hiddenAt) {
+    const mins = Math.round((Date.now() - hiddenAt) / 60000)
+    const played = game.gMatches - hiddenMatchesBefore
+    if (mins >= 1 && played > 0) toast(`${t('Sen yokken')}: ${played} ${t('maç oynandı')} (${mins} dk)`, 'g')
+    hiddenAt = 0
+  }
+})
+// K1: sekme arkadayken oyun DURMAZ — düşük frekanslı arka plan kalbi zamanı işletir
+setInterval(() => {
+  if (!document.hidden) return
+  if ($('gate').classList.contains('show') || $('namemodal').classList.contains('show')) return
+  const dt = clock.getDelta()           // gerçek geçen süre (rAF durunca da doğru)
+  if (dt > 0 && dt < 120) {
+    game.tick(Math.min(dt, 60))
+    save()
+  }
+}, 5000)
+
 function frame() {
   requestAnimationFrame(frame)
-  if (document.hidden) { clock.getDelta(); return }
+  if (document.hidden) { return }
   const dt = Math.min(clock.getDelta(), 0.05)
 
   const prevDay = game.day
@@ -852,7 +886,15 @@ function frame() {
   }
   const gateOpen = $('gate').classList.contains('show')
   if (!gateOpen) game.tick(dt)
-  while (game.notices.length) { toast(game.notices.shift()!, 'g'); audio.place() }
+  {
+    let shown = 0
+    while (game.notices.length && shown < 2) { toast(game.notices.shift()!, 'g'); if (shown === 0) audio.place(); shown++ }
+    if (game.notices.length) {
+      toast(`+${game.notices.length} ${t('bildirim daha — Defter\'de')}`)
+      game.events.push(...game.notices)
+      game.notices.length = 0
+    }
+  }
   while (game.lostNotices.length) { toast(game.lostNotices.shift()!, 'b'); audio.lost() }
   // anlaşılan kart kaçmaz (süre donuk) — 45 sn sonra bir kez nazikçe hatırlat
   for (const r of game.queue) {
@@ -1075,11 +1117,25 @@ setInterval(() => {
     guest: !auth.loggedIn(),
   }) }).catch(() => {})
   if (auth.loggedIn()) {
-    try {
-      const sv = await auth.pullSave()
-      if (sv) { game.load(sv as never); applyLocSwitch() }
-      else auth.pushSave(game.save()).catch(() => {})
-    } catch { /* çevrimdışı: yerel kayıtla devam */ }
+    // K8 (BenelOil cloudBlocked dersi): bulut OKUNMADAN oyun başlamaz — gerçek bir
+    // override kazasından sonra eklendi; yerel gün-40, buluttaki gün-60'ı ezmesin
+    const tryPull = async (): Promise<boolean> => {
+      try {
+        const sv = await auth.pullSave()
+        if (sv) { game.load(sv as never); applyLocSwitch() }
+        else await auth.pushSave(game.save())
+        return true
+      } catch { return false }
+    }
+    if (!(await tryPull())) {
+      cloudBlocked = true
+      $('cloudlock').classList.add('show')
+      $('cloudretry').addEventListener('click', async () => {
+        if (await tryPull()) { cloudBlocked = false; $('cloudlock').classList.remove('show'); toast(t('Bulut bağlandı — devam!'), 'g') }
+        else toast(t('Hâlâ ulaşılamıyor.'), 'b')
+      })
+      $('cloudlogout').addEventListener('click', () => { auth.logout(); location.reload() })
+    }
   } else if (!localStorage.getItem(GUEST_OK)) {
     $('gate').classList.add('show')
   } else if (game.activeLoc !== 'mahalle') {

@@ -63,10 +63,13 @@ export class World {
     this.camera.position.copy(this.target).add(this.camOffset)
     this.camera.lookAt(this.target.x, this.target.y, 0)
 
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+    // K2 (BenelOil 56 ısınma şikayeti): mobilde render bütçesi — gölge yok,
+    // antialias yok, pixelRatio 1.5 tavan
+    const mobile = matchMedia('(pointer: coarse)').matches || innerWidth < 900
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile })
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2))
     this.renderer.setSize(innerWidth, innerHeight)
-    this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.enabled = !mobile
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
