@@ -236,8 +236,10 @@
 
   /* ===== OFİS ===== */
   #locbar { position:fixed; top:44px; left:10px; z-index:11; display:flex; gap:4px; align-items:stretch; }
-  #locbar > * { height:27px; box-sizing:border-box; display:inline-flex; align-items:center;
-    font-size:9.5px; font-weight:800; letter-spacing:.5px; border-radius:6px; }
+  #locbar > * { height:26px !important; box-sizing:border-box !important; display:inline-flex !important;
+    align-items:center !important; font-size:9.5px !important; font-weight:800 !important;
+    letter-spacing:.5px !important; border-radius:6px !important; padding:0 11px !important;
+    line-height:1 !important; margin:0 !important; }
   .loclbl { color:#3d4a3f; background:rgba(255,255,255,.75); padding:0 8px; }
   .loc { background:var(--paper); color:var(--ink); padding:0 11px; box-shadow:var(--shadow);
     border-bottom:3px solid #b9c9ae; gap:6px; }
@@ -255,6 +257,7 @@
     border:5px solid transparent; border-top-color:var(--head); border-bottom:0; }
   #yazpill:hover { background:#1f282e; }
   #zoombar { position:fixed; right:10px; bottom:14px; z-index:13; display:flex; flex-direction:column; gap:5px; align-items:flex-end; }
+  #zoombar button.on { background:var(--sun); color:#5a3c05; border-bottom-color:#c98d1e; }
   #zoombar button { width:44px; height:36px; background:var(--paper); color:var(--head); font-size:19px;
     font-weight:800; border-radius:10px; box-shadow:var(--shadow); border:1.5px solid #dde9d5; line-height:1; }
   #zoombar button:hover { background:#fff; border-color:var(--green); }
@@ -383,7 +386,7 @@
 </div>
 
 <div id="yazpill">YAZIHANE</div>
-<div id="zoombar"><button id="zin">+</button><button id="zout">−</button></div>
+<div id="zoombar"><button id="editbtn" title="Düzenleme modu — yapı taşı">✥</button><button id="zin">+</button><button id="zout">−</button></div>
 
 <div id="office">
   <div class="panel">

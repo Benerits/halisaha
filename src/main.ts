@@ -375,6 +375,8 @@ function doBuy(id: BuyId) {
 let officeTab = 'yatirim'
 // ---- İNŞAAT: görselli katalog + yerleştirme modu ----
 let pendingBuild: BuildKind | null = null
+let editMode = false
+let moveFrom: { c: number; r: number; kind: BuildKind } | null = null
 const THUMB: Record<BuildKind, string> = {
   pitch: `<svg width="62" height="44"><rect width="62" height="44" fill="#3c8d49"/><rect x="4" y="4" width="54" height="36" fill="none" stroke="#fff" stroke-width="2"/><line x1="31" y1="4" x2="31" y2="40" stroke="#fff" stroke-width="2"/><circle cx="31" cy="22" r="7" fill="none" stroke="#fff" stroke-width="2"/></svg>`,
   mini: `<svg width="62" height="44"><rect width="62" height="44" fill="#dff0e2"/><rect x="12" y="8" width="38" height="28" fill="#47a055"/><rect x="14" y="10" width="34" height="24" fill="none" stroke="#fff" stroke-width="1.5"/><line x1="31" y1="10" x2="31" y2="34" stroke="#fff" stroke-width="1.5"/></svg>`,
@@ -402,12 +404,18 @@ function cancelPlacing(msg = true) {
   world.clearGhost()
   if (msg) toast('İnşaat iptal edildi.')
 }
-addEventListener('keydown', e => { if (e.key === 'Escape') cancelPlacing() })
+addEventListener('keydown', e => { if (e.key === 'Escape') { cancelPlacing(); cancelMove() } })
+function cancelMove() {
+  if (!moveFrom) return
+  moveFrom = null
+  world.clearGhost()
+  toast('Taşıma iptal edildi.')
+}
 addEventListener('contextmenu', e => { if (pendingBuild) { e.preventDefault(); cancelPlacing() } })
 addEventListener('pointermove', e => {
-  if (!pendingBuild) return
+  if (!pendingBuild && !moveFrom) return
   const hit = world.moveGhost(e.clientX, e.clientY)
-  if (hit) world.setGhostOk(game.ownsParcel(hit.c, hit.r))
+  if (hit) world.setGhostOk(game.ownsParcel(hit.c, hit.r) && (!moveFrom || !game.buildAt(hit.c, hit.r) || (hit.c === moveFrom.c && hit.r === moveFrom.r)))
 })
 
 function renderOffice() {
@@ -485,7 +493,7 @@ function renderOffice() {
           <div class="bi"><div class="bn">${b.label}</div>
             <div class="bg2">${b.gain}</div>
             <div class="bd">${b.desc}</div></div>
-          <button data-place="${k}" ${done ? 'disabled' : ''}>${done ? 'VAR ✓' : '₺' + tl(b.cost) + '<br>YERLEŞTİR'}</button>
+          <button data-place="${k}" ${done ? 'disabled' : ''}>${done ? 'VAR ✓' : '₺' + tl(b.cost)}</button>
         </div>`
       }).join('')}</div>`
     body.querySelectorAll<HTMLElement>('button[data-place]').forEach(b =>
@@ -649,6 +657,33 @@ addEventListener('pointerup', e => {
     } else { audio.bad(); toast(res.msg, 'b') }
     return
   }
+  // DÜZENLEME MODU: yapı seç → boş arsaya taşı
+  if (editMode && !pendingBuild) {
+    if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar')) { /* UI */ }
+    else {
+      const hit = world.pickParcel(e.clientX, e.clientY)
+      if (hit) {
+        if (!moveFrom) {
+          const b = game.buildAt(hit.c, hit.r)
+          if (b) {
+            moveFrom = { c: hit.c, r: hit.r, kind: b.kind }
+            world.startGhost(b.kind)
+            audio.click()
+            toast(`${BUILDS[b.kind].label} elinde — boş arsana tıkla (ESC: vazgeç).`)
+          } else toast('Taşımak için önce bir YAPIYA tıkla.')
+          return
+        }
+        const res = game.moveBuild(moveFrom.c, moveFrom.r, hit.c, hit.r)
+        if (res.ok) {
+          moveFrom = null
+          world.clearGhost()
+          audio.build(); toast(res.msg, 'g')
+          save(); world.syncParcels(game.ownedParcels, game.builds); renderAll()
+        } else { audio.bad(); toast(res.msg, 'b') }
+        return
+      }
+    }
+  }
   if (!dragging) return
   dragging = false
   if (dragMoved > 6) return                    // sürükleme yaptıysa tıklama sayma
@@ -668,6 +703,13 @@ for (const ev of ['pointerdown', 'keydown', 'wheel'] as const)
 document.addEventListener('visibilitychange', () => { if (!document.hidden) audio.kick(game.activeLoc) })
 function openOffice() { audio.click(); $('office').classList.add('show'); renderOffice() }
 $('yazpill').addEventListener('click', openOffice)
+$('editbtn').addEventListener('click', () => {
+  editMode = !editMode
+  $('editbtn').classList.toggle('on', editMode)
+  if (!editMode) cancelMove()
+  audio.click()
+  toast(editMode ? 'DÜZENLEME MODU: taşımak istediğin yapıya tıkla.' : 'Düzenleme modu kapandı.')
+})
 $('goalsbtn').addEventListener('click', () => { goalsOpen = !goalsOpen; if (goalsOpen) tipsOpen = false; audio.click(); renderGoals(); renderTips() })
 $('tipsbtn').addEventListener('click', () => { tipsOpen = !tipsOpen; if (tipsOpen) goalsOpen = false; audio.click(); renderGoals(); renderTips() })
 $('closeoffice').addEventListener('click', () => $('office').classList.remove('show'))
@@ -934,6 +976,13 @@ function wireGate() {
   })()
 }
 wireGate()
+// OTURUM NABZI: dakikada bir — sunucu sayaçları oturum süresi/aktiflik ölçer
+setInterval(() => {
+  fetch('/api/metric', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ k: 'session_minutes' }) }).catch(() => {})
+}, 60_000)
+setInterval(() => {
+  fetch('/api/metric', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ k: 'session_minutes' }) }).catch(() => {})
+}, 60_000)
 
 ;(async () => {
   fetch('/api/visit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) }).catch(() => {})

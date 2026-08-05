@@ -85,6 +85,7 @@ async function initDb() {
   )`)
   // sosyal giriş (Google/Apple): sağlayıcı kimliği ile hesap eşleştirme
   await pool.query(`ALTER TABLE halisaha_player ADD COLUMN IF NOT EXISTS google_id text`)
+  await pool.query(`ALTER TABLE halisaha_player ADD COLUMN IF NOT EXISTS last_ua text`)
   await pool.query(`ALTER TABLE halisaha_player ADD COLUMN IF NOT EXISTS apple_id text`)
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS halisaha_player_google ON halisaha_player (google_id) WHERE google_id IS NOT NULL`)
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS halisaha_player_apple ON halisaha_player (apple_id) WHERE apple_id IS NOT NULL`)
@@ -689,7 +690,7 @@ async function handleApi(req, res, url) {
       // Hafif huni/oturum sayacı — yalnız BEYAZ LİSTEDEKİ kolonlar (bumpStat kolon adı
       // enterpolasyonu yapıyor; whitelist dışı girdi ASLA geçmez). IP başına saatlik tavan.
       const mb = await readBody(req).catch(() => ({}))
-      const ALLOWED = new Set(['gate_shown', 'gate_converted', 'ad_views', 'session_minutes'])
+      const ALLOWED = new Set(['gate_shown', 'gate_converted', 'ad_views', 'session_minutes', 'hb'])
       const k = String((mb && mb.k) || '')
       if (ALLOWED.has(k) && rateLimit('metric:' + k + ':' + clientIp(req), 90, 3600_000)) bumpStat(k)
       return json(res, 200, { ok: true })
@@ -770,7 +771,7 @@ async function handleApi(req, res, url) {
         return json(res, 401, { error: 'E-posta veya şifre hatalı.' })
       }
       if (r.rows[0].banned_at) return bannedJson(res, e, r.rows[0].ban_reason)
-      await pool.query('UPDATE halisaha_player SET sessions=sessions+1, last_seen_at=now(), last_ip=$2 WHERE email=$1', [e, clientIp(req)])
+      await pool.query('UPDATE halisaha_player SET sessions=sessions+1, last_seen_at=now(), last_ip=$2, last_ua=$3 WHERE email=$1', [e, clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300)])
       bumpStat('logins')
       return json(res, 200, { token: sign(e), email: e, emailVerified: !!r.rows[0].email_verified, verifyRequired: requireVerify() })
     }

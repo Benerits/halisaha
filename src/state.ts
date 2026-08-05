@@ -123,7 +123,7 @@ export interface ShopItem {
 // Başlangıç mülkü: üst sıra (kulüp binası + avlu + otopark) ve ortadaki saha parseli.
 // Kalan 5 parsel dümdüz çimen; satın alınıp geliştirilebilir.
 export const PARCEL_COLS = 3
-export const PARCEL_ROWS = 3
+export const PARCEL_ROWS = 6
 /** parsel dünya boyutu (izometrik birim) — ana saha (13x8) bir parsele tam sığar */
 export const PARCEL_W = 14
 export const PARCEL_D = 9.6
@@ -996,6 +996,18 @@ export class Game {
     if (kind === 'garden') this.rep = Math.min(5, this.rep + 0.2)
     this.events.push(`${b.label} kuruldu.`)
     return { ok: true, msg: `${b.label} hazır — ${b.gain}` }
+  }
+
+  /** yapıyı TAŞI (düzenleme modu): bedava, sahipli boş arsaya */
+  moveBuild(fc: number, fr: number, tc: number, tr: number): { ok: boolean; msg: string } {
+    const b = this.buildAt(fc, fr)
+    if (!b) return { ok: false, msg: 'Burada taşınacak yapı yok.' }
+    if (fc === tc && fr === tr) return { ok: false, msg: 'Aynı yer.' }
+    if (!this.ownsParcel(tc, tr)) return { ok: false, msg: 'Hedef arsa senin değil.' }
+    if (this.buildAt(tc, tr)) return { ok: false, msg: 'Hedef arsa dolu.' }
+    b.key = parcelKey(tc, tr)
+    this.events.push(`${BUILDS[b.kind].label} taşındı.`)
+    return { ok: true, msg: `${BUILDS[b.kind].label} yeni yerine taşındı.` }
   }
 
   /** yapıyı yık: maliyetin %40'ı iade — arsa yeniden düzenlenebilir */
