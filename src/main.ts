@@ -103,8 +103,9 @@ function renderCal() {
     const hasValid = sel ? HOURS.some(h => game.canPlaceAt(sel, d, h)) : false
     return `<div class="dtab ${d === viewDay ? 'on' : ''} ${d === nowDay ? 'today' : ''}" data-d="${d}">
       ${hasValid ? `<span class="dot ${game.placedCount < 12 ? '' : 'calm'}"></span>` : ''}
-      <b>${nm}</b>${d === nowDay ? '<span class="bugun">BUGÜN</span>' : ''}
+      <b>${nm}</b>
       <div class="obar"><i style="width:${Math.round(occ * 100)}%"></i></div>
+      ${d === nowDay ? '<span class="bugun">bugün</span>' : ''}
     </div>`
   }).join('')
   if (tabsHtml !== tabsCache) {
