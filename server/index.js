@@ -713,19 +713,19 @@ async function handleApi(req, res, url) {
       return json(res, 200, { ok: true })
     }
     if (url === '/api/visit' && req.method === 'POST') {
+      // gövde TEK SEFER okunur: ikinci readBody tüketilmiş stream'de sonsuza dek bekler → CF 524
+      const vb = await readBody(req).catch(() => ({}))
       if (rateLimit('visit:' + clientIp(req), 1, 30_000)) {
         bumpStat('visits')
-        const vb2 = await readBody(req).catch(() => ({}))
         pool.query(`INSERT INTO halisaha_visit(ip, ua, ref, utm, lang, screen, guest)
           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [clientIp(req), String(req.headers['user-agent'] || '').slice(0, 200),
-           String(vb2.ref || '').slice(0, 200), String(vb2.utm || '').slice(0, 120),
-           String(vb2.lang || '').slice(0, 8), String(vb2.screen || '').slice(0, 16),
-           vb2.guest === true]).catch(() => {})
+           String(vb.ref || '').slice(0, 200), String(vb.utm || '').slice(0, 120),
+           String(vb.lang || '').slice(0, 8), String(vb.screen || '').slice(0, 16),
+           vb.guest === true]).catch(() => {})
       }
       // yeni MİSAFİR (client ilk kez oynamaya başladı, localStorage'da dedup'lı) → ekibe ayrı push.
       // IP başına saatte 1 ile spam engellenir (kötü niyetli çağrı da bunu aşamaz).
-      const vb = await readBody(req).catch(() => ({}))
       if (vb && vb.guest === true && rateLimit('guestnotif:' + clientIp(req), 1, 3600_000)) {
         await bumpStat('guests') // misafir istatistiği: saatlik sayaç (admin engagement'ta görünür)
         // STACK (Oğuz): misafir push'u HER misafirde değil, her 10.'da bir gider
@@ -1160,7 +1160,7 @@ function userRow(r) {
   return {
     id: String(r.id),
     email: r.email,
-    name: st.stationName || null,
+    name: st.facilityName || null,
     avatarUrl: null,
     country: null,
     plan: 'free',
@@ -1176,11 +1176,11 @@ function userRow(r) {
     coins: typeof st.money === 'number' ? Math.round(st.money) : 0,
     metadata: {
       day: st.day ?? 1,
-      pumps: st.pumps ?? 1,
-      reputation: st.reputation ?? 3,
-      served: st.stats?.served ?? 0,
+      pitches: st.pitches ?? 1,
+      reputation: st.rep ?? 3,
+      stars: st.stars ?? 0,
+      bookings: Array.isArray(st.bookings) ? st.bookings.length : 0,
       parcels: Array.isArray(st.ownedParcels) ? st.ownedParcels.length : 1,
-      paved: Array.isArray(st.pavedParcels) ? st.pavedParcels.length : 1,
     },
   }
 }
@@ -1220,7 +1220,7 @@ async function handleVs(req, res, url) {
       const rows = await pool.query(`
         SELECT id, email, save, created_at, last_seen_at, sessions, banned_at, google_id, apple_id
         FROM halisaha_player
-        WHERE ($1 = '' OR lower(email) LIKE '%' || $1 || '%' OR lower(coalesce(save->'s'->>'stationName','')) LIKE '%' || $1 || '%')
+        WHERE ($1 = '' OR lower(email) LIKE '%' || $1 || '%' OR lower(coalesce(save->>'facilityName','')) LIKE '%' || $1 || '%')
         ORDER BY ${order} OFFSET $2 LIMIT $3`, [search, cursor, limit + 1])
       const page = rows.rows.slice(0, limit).map(userRow)
       const nextCursor = rows.rows.length > limit ? Buffer.from(String(cursor + limit)).toString('base64url') : null
@@ -1237,17 +1237,16 @@ async function handleVs(req, res, url) {
         return json(res, 200, { data: {
           email: r.email,
           source: r.google_id ? 'Gmail (Google ile giriş)' : r.apple_id ? 'Apple ile giriş' : 'E-posta + şifre',
-          station: st.stationName || '—',
+          tesis: st.facilityName || '—',
           balance: Math.round(Number(st.money) || 0),
           day: st.day ?? 1,
-          pumps: st.pumps ?? 1,
-          evChargers: st.evChargers ?? 0,
+          pitches: st.pitches ?? 1,
+          stars: st.stars ?? 0,
           parcels: Array.isArray(st.ownedParcels) ? st.ownedParcels.length : 1,
-          paved: Array.isArray(st.pavedParcels) ? st.pavedParcels.length : 1,
-          reputation: Math.round((Number(st.reputation) || 0) * 100) / 100,
-          served: st.stats?.served ?? 0,
-          kwh: Math.round(Number(st.stats?.kwh) || 0),
-          revenue: Math.round(Number(st.stats?.revenue) || 0),
+          builds: Array.isArray(st.builds) ? st.builds.length : 0,
+          reputation: Math.round((Number(st.rep) || 0) * 100) / 100,
+          bookings: Array.isArray(st.bookings) ? st.bookings.length : 0,
+          lastDayProfit: Math.round(Number(st.lastDayProfit) || 0),
           sessions: r.sessions ?? 0,
           signedUp: r.created_at,
           lastSeen: r.last_seen_at ?? null,
@@ -1314,8 +1313,8 @@ async function handleVs(req, res, url) {
         const save = body?.save
         if (!save || typeof save !== 'object') return json(res, 400, { error: { code: 'invalid_request', message: 'save gerekli.' } })
         await pool.query('UPDATE halisaha_player SET save=$2 WHERE id=$1', [id, JSON.stringify(save)])
-        const s = save.s || {}
-        return json(res, 200, { data: { restored: true, day: s.day ?? null, station: s.stationName ?? null } })
+        const s = save.s || save || {}
+        return json(res, 200, { data: { restored: true, day: s.day ?? null, tesis: s.facilityName ?? null } })
       }
       if (m[2] === 'ban' && req.method === 'POST') {
         const { reason } = await readBody(req)
@@ -1434,17 +1433,14 @@ async function handleVs(req, res, url) {
           count(*) FILTER (WHERE last_seen_at > created_at + interval '1 day')::int AS d1,
           count(*) FILTER (WHERE last_seen_at > created_at + interval '7 day')::int AS d7,
           count(*) FILTER (WHERE last_seen_at > created_at + interval '30 day')::int AS d30,
-          coalesce(sum((save->'s'->'stats'->>'served')::int), 0)::int AS served,
-          coalesce(sum((save->'s'->'stats'->>'kwh')::int), 0)::int AS kwh,
-          coalesce(sum((save->'s'->'stats'->>'revenue')::numeric), 0)::bigint AS revenue,
+          coalesce(sum(CASE WHEN jsonb_typeof(save->'bookings')='array' THEN jsonb_array_length(save->'bookings') ELSE 0 END), 0)::int AS bookings,
+          coalesce(sum((save->>'pitches')::int), 0)::int AS pitches,
+          coalesce(sum((save->>'stars')::int), 0)::int AS stars,
           coalesce(round(avg(COALESCE(save->'s'->>'day', save->>'day')::int)), 0)::int AS avg_day,
           coalesce(max(COALESCE(save->'s'->>'day', save->>'day')::int), 0)::int AS max_day,
-          coalesce(sum((save->'s'->'stats'->'liters'->>'benzin')::numeric), 0)::bigint AS l_benzin,
-          coalesce(sum((save->'s'->'stats'->'liters'->>'dizel')::numeric), 0)::bigint AS l_dizel,
-          coalesce(sum((save->'s'->'stats'->'liters'->>'lpg')::numeric), 0)::bigint AS l_lpg,
-          count(*) FILTER (WHERE (save->'s'->>'evChargers')::int > 0)::int AS ev_stations,
-          count(*) FILTER (WHERE (save->'s'->>'hasSMR')::boolean)::int AS nuclear_stations,
-          coalesce(round(avg((save->'s'->>'reputation')::numeric), 2), 0)::float AS avg_rep
+          count(*) FILTER (WHERE jsonb_typeof(save->'unlockedLocs')='array' AND jsonb_array_length(save->'unlockedLocs') > 1)::int AS multi_loc,
+          count(*) FILTER (WHERE jsonb_typeof(save->'locStore')='object')::int AS sube_sahibi,
+          coalesce(round(avg((save->>'rep')::numeric), 2), 0)::float AS avg_rep
         FROM halisaha_player`)
       const fb = await pool.query("SELECT count(*)::int AS n, count(*) FILTER (WHERE status='open')::int AS acik FROM halisaha_feedback")
       const vis = await pool.query(`SELECT
@@ -1478,16 +1474,12 @@ async function handleVs(req, res, url) {
           { event: 'DONUSUM · misafir→kayit %', count: guestConv },
           { event: 'YENI OYUNCU · son 24 saat', count: Number(a.new1d) },
           { event: 'ACIK sorun bildirimi', count: fb.rows[0].acik },
-          { event: 'toplam_musteri_servisi', count: Number(a.served) },
-          { event: 'satilan_benzin_L', count: Number(a.l_benzin) },
-          { event: 'satilan_dizel_L', count: Number(a.l_dizel) },
-          { event: 'satilan_lpg_L', count: Number(a.l_lpg) },
-          { event: 'satilan_elektrik_kWh', count: Number(a.kwh) },
-          { event: 'toplam_ciro_TL', count: Number(a.revenue) },
+          { event: 'takvimdeki_mac_rezervasyonu', count: Number(a.bookings) },
+          { event: 'toplam_saha_sayisi', count: Number(a.pitches) },
+          { event: 'toplam_sezon_yildizi', count: Number(a.stars) },
           { event: 'ortalama_oyun_gunu', count: Number(a.avg_day) },
           { event: 'en_ileri_oyun_gunu', count: Number(a.max_day) },
-          { event: 'elektrikli_istasyon_sayisi', count: Number(a.ev_stations) },
-          { event: 'nukleer_reaktorlu_istasyon', count: Number(a.nuclear_stations) },
+          { event: 'coklu_bolge_acan_oyuncu', count: Number(a.multi_loc) },
           { event: 'gun_ici_aktif_oyuncu', count: Number(a.active1d) },
           { event: 'ortalama_itibar_x100', count: Math.round(Number(a.avg_rep) * 100) },
           { event: 'sorun_bildirimi', count: fb.rows[0].n },
