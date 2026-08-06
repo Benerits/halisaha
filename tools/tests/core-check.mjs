@@ -225,7 +225,7 @@ console.log('\n— ANLAŞMA DONDURMASI + SAAT —')
     t.tick(5)
     check('pazarlıksız kartın süresi normal akar', r2.patience < before)
   }
-  check('1 oyun günü = TAM 20 sn (hiper tempo, kesin karar)', DAY_SECONDS === 20)
+  check('1 SAAT=20sn, 1 GÜN=480sn (24 saat — kesin karar)', DAY_SECONDS === 480)
 }
 
 console.log('\n— ADAPTİF VURGU SAYACI —')
@@ -538,7 +538,7 @@ console.log('\n— 2 HAFTALIK TAKVİM + ANINDA ÖDEME —')
 {
   const g = new Game()
   // Pazartesi 22:00: gün 1 (dow 0), saat 22 → t = (13/15) * DAY_SECONDS
-  g.t = (13 / 18) * DAY_SECONDS
+  g.t = 13 * 20
   check('saat doğru hesaplanır (22)', g.hourNow() === 22)
   g.queue.push({ id: 7777, team: 'Pazartesici', segment: 'klasik', day: 0, hour: 17, price: 900, maxPay: 2000,
     patience: 120, maxPatience: 120, flexible: false, hours: 1, weeks: 0, needFull: false })
@@ -559,7 +559,7 @@ console.log('\n— 2 HAFTALIK TAKVİM + ANINDA ÖDEME —')
 {
   const g = new Game()
   g.bookings.push({ day: g.todayDow(), hour: 10, team: 'Erkenciler', segment: 'klasik', price: 1000, sub: false, weeksLeft: 0, lane: 0 })
-  g.t = (3 / 18) * DAY_SECONDS   // saat 12 — 10:00 maçı bitti
+  g.t = 3 * 20   // saat 12 — 10:00 maçı bitti
   const before = g.money
   g.tick(0.1)
   const b = g.bookings.find(x => x.team === 'Erkenciler')

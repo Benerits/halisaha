@@ -1472,7 +1472,7 @@ export class World {
         g.add(p)
         for (const ox of [-w / 2 + 0.35, w / 2 - 0.35]) {
           const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6), lam(0x8d97a1))
-          leg.rotation.x = Math.PI / 2; leg.position.set(ox, 0, 0.5); g.add(leg)
+          leg.rotation.x = Math.PI / 2; leg.position.set(ox, 0.24, 0.5); g.add(leg) // panelin ARKASI — yazı net
         }
         g.position.set(cursor + w / 2, PITCH_Y - PITCH_D / 2 - 1.5, 0)
         this.scene.add(g); this.billboards.push(g)

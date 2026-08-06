@@ -65,7 +65,7 @@ function confirmFlash(d: number, h: number, span = 1) {
 
 function renderCal() {
   const head = document.querySelector('#desk .desk-head') as HTMLElement | null
-  const nowHour = OPEN_HOUR + Math.floor((game.t / DAY_SECONDS) * HOURS.length)
+  const nowHour = game.hourNow()
   const nowDay = (game.day - 1) % 7
   if (viewDay < 0) { viewDay = nowDay; viewWk = 0 }
   const sel = selected !== null ? game.queue.find(r => r.id === selected) : null
@@ -269,8 +269,21 @@ function selectCard(id: number) {
     const best = game.bestSlot(r)
     if (best) {
       viewDay = best.day; viewWk = best.wk
-      const lane = game.resolveLane(r, best.day, best.hour, undefined, best.wk)
-      if (lane !== null) laneCat = game.laneKinds()[lane] ?? 'full'
+      // SEKME SEÇİMİ: mini/kort isteği kendi sekmesine; NORMAL istek 'Sahalar'a
+      // (eski hâli 'önce mini doldur' şerit tercihinden Mini sekmesi açıyordu — yanlış his)
+      if (r.forCourt) laneCat = r.forCourt
+      else if (r.forMini) laneCat = 'mini'
+      else {
+        const kindsArr = game.laneKinds()
+        const fullFree = kindsArr.some((k2, l2) => k2 === 'full'
+          && !game.laneTakenBy(best.day, best.hour, l2, best.wk)
+          && (!r.needFull || true))
+        if (fullFree) laneCat = 'full'
+        else {
+          const lane = game.resolveLane(r, best.day, best.hour, undefined, best.wk)
+          laneCat = lane !== null ? (kindsArr[lane] ?? 'full') : 'full'
+        }
+      }
     }
   }
   renderQueue(); renderCal()
@@ -971,12 +984,11 @@ document.querySelectorAll<HTMLElement>('.tab').forEach(t => t.addEventListener('
 
 // ---------- HUD ----------
 function renderHud() {
-  const hour = OPEN_HOUR + Math.floor((game.t / DAY_SECONDS) * HOURS.length)
+  const hour = game.hourNow()
   $('h-money').textContent = '₺' + tl(game.money)
   $('h-day').textContent = `${DAY_NAMES[(game.day - 1) % 7]} · ${game.day}`
-  const totalMin = Math.floor((game.t / DAY_SECONDS) * 15 * 60)
-  const ch = 9 + Math.floor(totalMin / 60), cm = totalMin % 60
-  $('h-clock').textContent = String(Math.min(23, ch)).padStart(2, '0') + ':' + String(cm).padStart(2, '0')
+  // SADECE SAAT (dakika yok) — ve doğru gün uzunluğuyla (eski kod 15 saatlik güne sabitlenmişti)
+  $('h-clock').textContent = hourLabel(game.hourNow())
   $('h-rep').textContent = game.rep.toFixed(1)
   $('h-occ').textContent = '%' + Math.round(game.occupancy() * 100)
   const rd = game.daysToRent()
@@ -1183,7 +1195,7 @@ function frame() {
 
   // rezervasyon üretimi — TELEFON KAPALIYSA çalmaz (ceza da yok, moladasın).
   // ÇAĞRI SIKLIĞI yatırımla artar: tabela/reklam/2. hat/itibar telefonu daha sık çaldırır
-  if (!gateOpen && !phoneOff) spawnT -= dt
+  if (!gateOpen && !phoneOff && game.isOpen()) spawnT -= dt
   if (spawnT <= 0) {
     const callMult = 1 + (game.hasRoadSign ? 0.25 : 0) + (game.adDays > 0 ? 0.5 : 0)
       + game.rep * 0.06 + (game.hasPhone2 ? 0.15 : 0)
@@ -1198,11 +1210,15 @@ function frame() {
 
   // gün-gece
   const frac = game.t / DAY_SECONDS
-  const night = frac < 0.56 ? 0 : Math.min(1, (frac - 0.56) / 0.14) // 19:00 gün batımı → ~21:30 tam gece → 03:00
+  const nhF = 9 + game.t / 20 // kesirli saat
+  const night = nhF < 19 ? (nhF >= 7 + 24 ? 0 : nhF < 9 ? 1 : 0)
+    : nhF < 21 ? (nhF - 19) / 2
+    : nhF < 31 ? 1
+    : Math.max(0, 1 - (nhF - 31) / 2) // 07:00-09:00 gün doğumu
   world.setNight(night, game.hasLights)
 
   // o an maç var mı → botlar oynasın
-  const hour = OPEN_HOUR + Math.floor(frac * HOURS.length)
+  const hour = game.hourNow()
   const nowDay = (game.day - 1) % 7
   const nowMatch = !!game.bookingAt(nowDay, hour)
   // maç başladı → araba yoldan gelir, park eder, oyuncular inip YÜRÜYEREK sahaya girer

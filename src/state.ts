@@ -14,10 +14,12 @@ export const OPEN_HOUR = 9
 export const NIGHT_START = 24
 export const CLOSE_HOUR = 27
 export const HOURS: number[] = Array.from({ length: CLOSE_HOUR - OPEN_HOUR }, (_, i) => OPEN_HOUR + i)
-// 1 GÜN = TAM 20 GERÇEK SANİYE (kesin lansman kararı). Saat ≈1.1 sn;
-// hafta ~2.3 dk, sezon (30 gün) ~10 dk — hiper tempo.
-export const DAY_SECONDS = 20
-export const HOUR_SECONDS = DAY_SECONDS / HOURS.length
+// KESİN TEMPO: 1 SAAT = 20 SN, 1 GÜN = 24 SAAT = 480 SN (8 dakika).
+// Takvim 18 AÇIK saat (09:00→03:00); 03:00-09:00 tesis KAPALI geçiş dönemi
+// (6 saat × 20 sn = 120 sn) — saat akar, telefon çalmaz, yeni gün 09:00'da başlar.
+export const HOUR_SECONDS = 20
+export const DAY_HOURS = 24
+export const DAY_SECONDS = HOUR_SECONDS * DAY_HOURS
 /** iç saat → ekran etiketi (25 → '1:00') */
 export const hourLabel = (h: number): string => `${h % 24}:00`
 export const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'] as const
@@ -335,8 +337,10 @@ export class Game {
     return true
   }
   /** şimdiki oyun saati (gün içi) */
-  hourNow(): number { return OPEN_HOUR + Math.floor((this.t / DAY_SECONDS) * HOURS.length) }
+  hourNow(): number { return OPEN_HOUR + Math.min(DAY_HOURS - 1, Math.floor(this.t / HOUR_SECONDS)) }
   todayDow(): number { return (this.day - 1) % 7 }
+  /** tesis şu an açık mı (09:00→03:00) — kapalı dönemde telefon çalmaz */
+  isOpen(): boolean { return this.hourNow() < CLOSE_HOUR }
   /** bu kayıt (day,hour) slotunu w. haftada işgal ediyor mu — abonelik HER hafta tutar */
   private occupies(b: Booking, wk: number): boolean { return b.sub || (b.wk ?? 0) === wk }
   bookingAt(day: number, hour: number, wk = 0): Booking | undefined {

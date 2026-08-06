@@ -425,10 +425,9 @@ function maxIncomeRate(s) {
     }
   }
   pitches = Math.max(1, Math.min(24, pitches))
-  // ölçüm: GÜN = 20 sn (hiper tempo) → saha başına tepe ~1.300 TL/sn.
-  // SAFETY ile meşru oyuncu asla kırpılmaz.
+  // ölçüm: SAAT = 20 sn (gün 360 sn) → saha başına tepe ~70 TL/sn.
   const SAFETY = 3
-  return Math.max(100, (50 + pitches * 1300 + courts * 120 + mudur * 60) * SAFETY)
+  return Math.max(20, (10 + pitches * 95 + courts * 10 + mudur * 10) * SAFETY)
 }
 
 /** ŞUBE KASASI CLAMP'İ: istemci tavanıyla BİREBİR (state.ts BRANCH_VAULT_HARD).
