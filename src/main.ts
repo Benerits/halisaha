@@ -1484,6 +1484,20 @@ setInterval(() => {
   }
 })()
 
+// MİSAFİR NABZI: hesapsız oyuncu 60 sn'de bir ping atar → admin 'ŞU AN MİSAFİR' sayacı çalışır
+{
+  let gsid = localStorage.getItem('hs-gsid')
+  if (!gsid) { gsid = (crypto?.randomUUID?.() ?? String(Date.now()) + Math.random().toString(36).slice(2)); localStorage.setItem('hs-gsid', gsid) }
+  const guestPing = () => {
+    if (auth.loggedIn() || document.hidden) return
+    if (!localStorage.getItem(GUEST_OK)) return
+    fetch('/api/guest-ping', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sid: gsid }) }).catch(() => { /* sessiz */ })
+  }
+  guestPing()
+  setInterval(guestPing, 60_000)
+}
+
 // ---- CANLI KÖPRÜ (admin makroları): bakiye / bildirim / patch / reload / ban ----
 let liveWs: WebSocket | null = null
 let liveRetry = 0
