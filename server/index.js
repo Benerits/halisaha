@@ -388,9 +388,9 @@ function auditCheat(email, kind, info) {
 }
 
 // ---- HALI SAHA ekonomi tabloları (src/state.ts ile BİREBİR senkron) ----
-const HS_BUILD_COST = { pitch: 62000, mini: 34000, basket: 26000, voley: 20000, parking: 18000, garden: 9000, kantin: 9000, dus: 18000, wc: 4000 }
-const HS_SHOP = [['hasCanteen',9000],['hasFridge',3500],['hasCleats',4200],['hasKeeper',5000],['hasTost',3000],['hasBaklava',4500],['hasLights',14000],['hasShower',18000],['hasSchoolDeal',12000],['hasTeaRoom',7500],['hasCorporate',15000],['hasBillboard',11000],['hasRoadSign',16000],['docService',9500],['hasPhone2',5500],['hasWC',4000]]
-const HS_LOC_COST = { sanayi: 150000, sahil: 400000 }
+const HS_BUILD_COST = { pitch: 52000, mini: 28000, basket: 22000, voley: 16000, parking: 14000, garden: 9000, kantin: 9000, dus: 14000, wc: 4000 }
+const HS_SHOP = [['hasCanteen',9000],['hasFridge',3500],['hasCleats',4200],['hasKeeper',5000],['hasTost',3000],['hasBaklava',4500],['hasLights',11000],['hasShower',14000],['hasSchoolDeal',9000],['hasTeaRoom',7500],['hasCorporate',12000],['hasBillboard',8500],['hasRoadSign',12500],['docService',6000],['hasPhone2',5500],['hasWC',4000]]
+const HS_LOC_COST = { sanayi: 120000, sahil: 300000 }
 function hsLocValue(sn) {
   if (!sn || typeof sn !== 'object') return 0
   let v = 0
@@ -398,14 +398,14 @@ function hsLocValue(sn) {
     if (b && (b.kind === 'kantin' || b.kind === 'dus' || b.kind === 'wc')) continue // bayraktan sayılıyor (çift sayım fixi)
     v += (b && HS_BUILD_COST[b.kind]) || 0
   }
-  if (Array.isArray(sn.ownedParcels)) v += Math.max(0, sn.ownedParcels.length - 4) * 14000
+  if (Array.isArray(sn.ownedParcels)) v += Math.max(0, sn.ownedParcels.length - 4) * 10000
   const p = sn.personel
   if (p && typeof p === 'object') {
-    if (p.mudur >= 1) v += 25000
-    if (p.mudur >= 2) v += 60000
-    if (p.cirak) v += 8000
-    if (p.kantinci) v += 6000
-    if (p.sekreter) v += 5000
+    if (p.mudur >= 1) v += 18000
+    if (p.mudur >= 2) v += 45000
+    if (p.cirak) v += 6000
+    if (p.kantinci) v += 5000
+    if (p.sekreter) v += 4000
   }
   return v
 }

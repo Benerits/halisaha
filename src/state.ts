@@ -148,21 +148,21 @@ export const STARTER_PARCELS = ['0,0', '1,0', '2,0', '1,1']
 /** Fiyat ana sahaya (1,1) yakınlıkla artar */
 export function parcelCost(c: number, r: number): number {
   const d = Math.abs(c - 1) + Math.abs(r - 1)
-  return Math.max(14_000, 26_000 - d * 4_000)
+  return Math.max(10_000, 20_000 - d * 3_000)
 }
 
 export type BuildKind = 'pitch' | 'mini' | 'basket' | 'voley' | 'parking' | 'garden' | 'kantin' | 'dus' | 'wc'
 export interface PlacedBuild { kind: BuildKind; gx?: number; gy?: number; key?: string; wear?: number }
 
 export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: string; desc: string }> = {
-  pitch:   { label: 'Halı Saha', cost: 62_000, gain: 'Aynı saate +1 maç', desc: 'Tam boy ikinci saha — prime-time çakışmaları biter.' },
-  mini:    { label: 'Mini Saha 5v5', cost: 34_000, gain: 'Aynı saate +1 maç', desc: 'Küçük ve ucuz; çocuk/genç grupları için hızlı devir.' },
-  basket:  { label: 'Basketbol Sahası', cost: 26_000, gain: 'Günde +₺800 kira', desc: 'Saatlik kiralanır; futbol takviminden bağımsız pasif gelir.' },
-  voley:   { label: 'Voleybol Sahası', cost: 20_000, gain: 'Günde +₺550 · itibar +0,2', desc: 'Kum zemin; yazın çok tutar, tesise çeşitlilik katar.' },
-  parking: { label: 'Ek Otopark', cost: 18_000, gain: 'İtibar +0,3', desc: 'Araç sığmayınca müşteri kaçar; park yeri memnuniyeti artırır.' },
+  pitch:   { label: 'Halı Saha', cost: 52_000, gain: 'Aynı saate +1 maç', desc: 'Tam boy ikinci saha — prime-time çakışmaları biter.' },
+  mini:    { label: 'Mini Saha 5v5', cost: 28_000, gain: 'Aynı saate +1 maç', desc: 'Küçük ve ucuz; çocuk/genç grupları için hızlı devir.' },
+  basket:  { label: 'Basketbol Sahası', cost: 22_000, gain: 'Günde +₺800 kira', desc: 'Saatlik kiralanır; futbol takviminden bağımsız pasif gelir.' },
+  voley:   { label: 'Voleybol Sahası', cost: 16_000, gain: 'Günde +₺550 · itibar +0,2', desc: 'Kum zemin; yazın çok tutar, tesise çeşitlilik katar.' },
+  parking: { label: 'Ek Otopark', cost: 14_000, gain: 'İtibar +0,3', desc: 'Araç sığmayınca müşteri kaçar; park yeri memnuniyeti artırır.' },
   garden:  { label: 'Yeşil Alan', cost: 9_000, gain: 'İtibar +0,2', desc: 'Oturma alanı ve peyzaj — tesis daha bakımlı görünür.' },
   kantin:  { label: 'Kantin Binası', cost: 9_000, gain: 'Her maçtan +₺120', desc: 'Çay, tost, ayran — maç sonrası oturulan yer. (Mağazadaki kantinle aynı etki, binalı.)' },
-  dus:     { label: 'Duş & Soyunma', cost: 18_000, gain: 'İtibar +0,5', desc: 'Kalite algısını yükseltir; abonelikler uzar.' },
+  dus:     { label: 'Duş & Soyunma', cost: 14_000, gain: 'İtibar +0,5', desc: 'Kalite algısını yükseltir; abonelikler uzar.' },
   wc:      { label: 'Tuvalet', cost: 4_000, gain: 'İtibar +0,2', desc: 'Olmazsa olmaz — yoksa kimse uzun kalmaz.' },
 }
 /** tek kurulabilen işletme binaları (tesiste bir tane) */
@@ -203,16 +203,16 @@ export interface LocDef {
 export const LOCATIONS: LocDef[] = [
   { id: 'mahalle', label: 'MAHALLE', cost: 0, priceMult: 1, demandMult: 1,
     desc: 'Başladığın yer. Dengeli talep, dengeli fiyat.' },
-  { id: 'sanayi', label: 'SANAYİ', cost: 150_000, priceMult: 0.9, demandMult: 1.3,
+  { id: 'sanayi', label: 'SANAYİ', cost: 120_000, priceMult: 0.9, demandMult: 1.3,
     desc: 'İşçi ve şirket takımları — talep yüksek, fiyat bir tık düşük.' },
-  { id: 'sahil', label: 'SAHİL', cost: 400_000, priceMult: 1.35, demandMult: 0.85,
+  { id: 'sahil', label: 'SAHİL', cost: 300_000, priceMult: 1.35, demandMult: 0.85,
     desc: 'Zengin muhit — fiyatlar %35 yüksek, müşteri daha seçici.' },
 ]
 /** şube personeli: müdür 0=yok 1=acemi 2=usta */
 export interface Personel { mudur: 0 | 1 | 2; cirak: boolean; kantinci: boolean; sekreter: boolean; auto: boolean }
 export const emptyPersonel = (): Personel => ({ mudur: 0, cirak: false, kantinci: false, sekreter: false, auto: false })
 export const MAAS = { mudur1: 600, mudur2: 1_000, cirak: 350, kantinci: 400, sekreter: 300 }
-export const ISE_ALIM = { mudur1: 25_000, mudur2: 60_000, cirak: 8_000, kantinci: 6_000, sekreter: 5_000 }
+export const ISE_ALIM = { mudur1: 18_000, mudur2: 45_000, cirak: 6_000, kantinci: 5_000, sekreter: 4_000 }
 
 /** şubenin taşınabilir durumu */
 interface LocSnap {
@@ -799,7 +799,7 @@ export class Game {
     this.t += dt
     // belge aşınması (docService varsa otomatik yenilenir)
     if (this.docService) this.docs = Math.min(1, this.docs + 0.0014 * dt)
-    else this.docs = Math.max(0, this.docs - 0.0009 * dt)
+    else this.docs = Math.max(0, this.docs - 0.0004 * dt) // %9/gün — eski %20/gün kazanca göre acımasızdı
 
     if (this.t >= DAY_SECONDS) {
       this.t -= DAY_SECONDS
@@ -1012,7 +1012,7 @@ export class Game {
       + (courtRent > 0 ? ` · ek saha kirası ₺${courtRent.toLocaleString('tr-TR')}` : ''))
     // denetim riski: belgeler zayıfsa
     if (this.docs < 0.35 && Math.random() < 0.4) {
-      const fine = Math.round(this.basePrice() * 1.5)
+      const fine = Math.round(this.basePrice() * 1.0)
       this.money = Math.max(0, this.money - fine)
       this.docs = Math.min(1, this.docs + 0.3)
       this.events.push(`DENETİM: evrak eksiği — ₺${fine.toLocaleString('tr-TR')} ceza kesildi.`)
@@ -1035,32 +1035,32 @@ export class Game {
       { id: 'baklava', label: 'Baklava Tezgâhı', gain: 'Her maçtan +₺55', cost: 4_500, upkeep: 0,
         desc: 'Galibiyet baklavayla kutlanır — tepsiyle gider.', owned: this.hasBaklava,
         locked: this.hasCanteen ? null : 'Önce kantin gerekli' },
-      { id: 'keeper', label: 'Kaleci Kiralama', gain: 'Her maçtan +₺70', cost: 5_000, upkeep: 150,
+      { id: 'keeper', label: 'Kaleci Kiralama', gain: 'Her maçtan +₺70', cost: 5_000, upkeep: 100,
         desc: '"Kalecimiz yok abi" derdine son — tesisin kadrolu kalecisi maça girer.', owned: this.hasKeeper, locked: null },
       { id: 'cleats', label: 'Krampon Kiralama', gain: 'Her maçtan +₺45', cost: 4_200, upkeep: 0,
         desc: '“Abi kramponu unuttum” geliri. Zamanla eskir, yenilemek gerekir.', owned: this.hasCleats, locked: null },
-      { id: 'lights', label: 'LED Projektör', gain: 'Akşam talebi +%25', cost: 14_000, upkeep: 180,
+      { id: 'lights', label: 'LED Projektör', gain: 'Akşam talebi +%25', cost: 11_000, upkeep: 140,
         desc: 'Işık kalitesi akşam maçlarını çeker; elektrik gideri artar.', owned: this.hasLights, locked: null },
-      { id: 'shower', label: 'Duş & Soyunma', gain: 'İtibar +0,5', cost: 18_000, upkeep: 70,
+      { id: 'shower', label: 'Duş & Soyunma', gain: 'İtibar +0,5', cost: 14_000, upkeep: 70,
         desc: 'Kalite algısını yükseltir, abonelikler daha uzun sürer.', owned: this.hasShower, locked: null },
       { id: 'schooldeal', label: 'Okul Anlaşması', gain: 'Gençlik segmenti açılır (14-18)', cost: 12_000, upkeep: 0,
         desc: 'Öğleden sonra ölü saatleri okul takımlarıyla doldurursun.', owned: this.hasSchoolDeal, locked: null },
       { id: 'tearoom', label: 'Çay Ocağı', gain: 'Veteran segmenti açılır (9-13)', cost: 7_500, upkeep: 0,
         desc: 'Sabah emekli grupları gelir — en ölü saat dolar.', owned: this.hasTeaRoom, locked: null },
-      { id: 'corporate', label: 'Kurumsal Fatura', gain: 'Şirket segmenti açılır (12-17)', cost: 15_000, upkeep: 0,
+      { id: 'corporate', label: 'Kurumsal Fatura', gain: 'Şirket segmenti açılır (12-17)', cost: 12_000, upkeep: 0,
         desc: 'Şirket turnuvaları gündüz gelir, ücreti %30 yüksek.', owned: this.hasCorporate, locked: null },
-      { id: 'billboard', label: 'Reklam Panoları', gain: 'Her maçtan +₺90', cost: 11_000, upkeep: 0,
+      { id: 'billboard', label: 'Reklam Panoları', gain: 'Her maçtan +₺90', cost: 8_500, upkeep: 0,
         desc: 'Saha kenarına yerel esnaf reklamı asarsın; kira her maçta cebe girer.', owned: this.hasBillboard, locked: null },
-      { id: 'roadsign', label: 'Yol Tabelası', gain: 'Tüm talep +%20', cost: 16_000, upkeep: 60,
+      { id: 'roadsign', label: 'Yol Tabelası', gain: 'Tüm talep +%20', cost: 12_500, upkeep: 60,
         desc: 'Ana caddeden görünen büyük tabela — yoldan geçen daha çok kişi arar.', owned: this.hasRoadSign, locked: null },
       { id: 'phone2', label: '2. Telefon Hattı', gain: 'Sırada 6 istek bekler (4 yerine)', cost: 5_500, upkeep: 40,
         desc: 'Hat meşgulken arayan müşteri kaçıyordu — ikinci hat kuyruk kapasitesini artırır.', owned: this.hasPhone2, locked: null },
       { id: 'ads', label: 'Sosyal Medya Reklamı', gain: '2 gün talep +%50', cost: 2_500, upkeep: 0,
         desc: 'Mahalle gruplarında sponsorlu ilan. Bitince tekrar verebilirsin.', owned: false,
         locked: this.adDays > 0 ? `Reklam yayında (${this.adDays} gün kaldı)` : null },
-      { id: 'staff', label: 'Tesis Görevlisi', gain: 'Saha bakımı otomatik', cost: 6_000, upkeep: 400,
+      { id: 'staff', label: 'Tesis Görevlisi', gain: 'Saha bakımı otomatik', cost: 6_000, upkeep: 280,
         desc: 'Yovmiyesi var ama bakım işini üstlenir.', owned: this.staff >= 1, locked: null },
-      { id: 'docs', label: 'Belge Takip Servisi', gain: 'Evraklar otomatik yenilenir', cost: 9_500, upkeep: 250,
+      { id: 'docs', label: 'Belge Takip Servisi', gain: 'Evraklar otomatik yenilenir', cost: 6_000, upkeep: 120,
         desc: 'Denetimde ceza yeme riskini bitirir.', owned: this.docService, locked: null },
     ]
     return rows
@@ -1151,11 +1151,11 @@ export class Game {
     return { ok: true, msg: `${b.label} hazır — ${b.gain}` }
   }
 
-  /** kort bakımı: ₺6.000 → wear sıfırlanır (tekrarlayan sink) */
+  /** kort bakımı: ₺4.000 → wear sıfırlanır (tekrarlayan sink) */
   serviceBuild(c: number, r: number): { ok: boolean; msg: string } {
     const b = this.buildAt(c, r)
     if (!b || (b.kind !== 'basket' && b.kind !== 'voley')) return { ok: false, msg: 'Burada bakım gerektiren kort yok.' }
-    const COST = 6_000
+    const COST = 4_000
     if (this.money < COST) return { ok: false, msg: `₺${(COST - this.money).toLocaleString('tr-TR')} eksik.` }
     this.money -= COST
     b.wear = 0
@@ -1256,18 +1256,18 @@ export class Game {
     // 1. acil: evrak
     if (!this.docService && this.docs < 0.5) {
       out.push({ title: t('Evrakların eskiyor'), why: `${t('Geçerlilik')} %${Math.round(this.docs * 100)}. ${t('Denetim gelirse ceza yersin.')} ${t('Aşağıdaki butonla hemen çöz:')}`,
-        action: 'docs', cta: `${t('Belge Takip Servisi')} ₺9.500`, urgent: true })
+        action: 'docs', cta: `${t('Belge Takip Servisi')} ₺6.000`, urgent: true })
     }
     // 2. boş prime-time varsa: ışık
     if (!this.hasLights && this.day >= 3) {
       out.push({ title: t('Akşam saatlerin boş kalıyor'), why: t('Işık kalitesi düşük olduğu için akşam takımları başka sahaya gidiyor.'),
-        action: 'lights', cta: `${t('LED Projektör')} ₺14.000 → ${t('akşam talebi')} +%25`, urgent: false })
+        action: 'lights', cta: `${t('LED Projektör')} ₺11.000 → ${t('akşam talebi')} +%25`, urgent: false })
     }
     // 3. gündüz boş: segment aç
     const dayEmpty = this.bookings.filter(b => b.hour < 18).length
     if (dayEmpty < 3 && !this.hasSchoolDeal) {
       out.push({ title: t('Gündüz saatlerin bomboş'), why: t('Öğleden sonra (14-18) hiç müşterin yok. Okul takımları bu saati doldurur.'),
-        action: 'schooldeal', cta: `${t('Okul Anlaşması')} ₺12.000 → ${t('gençlik segmenti')}`, urgent: false })
+        action: 'schooldeal', cta: `${t('Okul Anlaşması')} ₺9.000 → ${t('gençlik segmenti')}`, urgent: false })
     }
     if (dayEmpty < 3 && this.hasSchoolDeal && !this.hasTeaRoom) {
       out.push({ title: t('Sabahlar hâlâ ölü'), why: t('Emekli grupları sabah oynar ama çay ocağı olmayan sahaya gelmezler.'),

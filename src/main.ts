@@ -653,7 +653,7 @@ function openParcel(c: number, r: number) {
     const wearPct = Math.round((b.wear ?? 0) * 100)
     h += `<div class="srow"><span class="nm">${BUILDS[b.kind].label}</span>
       <span class="gn">${BUILDS[b.kind].gain}${isCourt ? ` · ${t('yıpranma')} %${wearPct}` : ''}</span>
-      ${isCourt ? `<button class="buy" id="pservice" ${wearPct < 10 ? 'disabled' : ''}>₺6.000</button>` : ''}
+      ${isCourt ? `<button class="buy" id="pservice" ${wearPct < 10 ? 'disabled' : ''}>₺4.000</button>` : ''}
       <button class="buy" id="pdemol" style="background:var(--clay)">YIK · %40 iade</button>
       <span class="ds">${BUILDS[b.kind].desc} Yıkarsan arsa boşalır, yerine başka şey kurabilirsin.</span></div>`
   } else if (!owned) {

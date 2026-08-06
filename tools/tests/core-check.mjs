@@ -410,7 +410,7 @@ console.log('\n— ESNEK İNŞA (üstüne kur) —')
   const before = g.money
   const r = g.placeBuild(0, 1, 'voley')
   check('dolu arsaya kurunca eskisi yıkılıp yenisi kurulur', r.ok && g.buildAt(0, 1).kind === 'voley')
-  check('yıkım iadesi kesildi ve yeni maliyet düştü', g.money === before + Math.round(26000 * 0.4 / 100) * 100 - 20000)
+  check('yıkım iadesi kesildi ve yeni maliyet düştü', g.money === before + Math.round(22000 * 0.4 / 100) * 100 - 16000)
   const t = new Game(); t.money = 300_000
   t.buyParcel(0, 1); t.placeBuild(0, 1, 'pitch')
   t.pitches = 2 // ana + bu
