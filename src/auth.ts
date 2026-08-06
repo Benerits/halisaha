@@ -23,9 +23,18 @@ export function loadGuest(): unknown | null {
 export function clearGuest() { localStorage.removeItem(GUEST_KEY) }
 export function hasGuest(): boolean { return !!localStorage.getItem(GUEST_KEY) }
 
-// Tek-cihaz kilidi: her açılış (yükleme) benzersiz bir oturum kimliği üretir. Başka cihaz
-// açılınca sunucu oturumu ona devreder; eski cihaz bir sonraki save'de "kicked" alır.
-const SESSION_ID = (globalThis.crypto?.randomUUID?.() ?? (Date.now().toString(36) + Math.random().toString(36).slice(2)))
+// Tek-cihaz kilidi: SEKME başına benzersiz oturum kimliği. sessionStorage'da tutulur ki
+// REFRESH aynı kimliği korusun — yoksa pagehide çıkış-push'u eski kimlikle sunucuya varıyor,
+// yeni sayfa onu "başka cihaz yazmış" sanıp sahte 409 conflict yiyordu ("Diğer cihazdaki
+// güncel kayıt yüklendi" döngüsü). Farklı sekme/cihaz yine farklı kimlik alır → kick bozulmaz.
+const SESSION_ID = (() => {
+  const gen = () => (globalThis.crypto?.randomUUID?.() ?? (Date.now().toString(36) + Math.random().toString(36).slice(2)))
+  try {
+    const v = sessionStorage.getItem('hs-sess')
+    if (v) return v
+    const n = gen(); sessionStorage.setItem('hs-sess', n); return n
+  } catch { return gen() } // private mode vb. — eski davranışa düş
+})()
 export function sessionId(): string { return SESSION_ID }
 let _onKicked: (() => void) | null = null
 export function onKicked(cb: () => void) { _onKicked = cb }
