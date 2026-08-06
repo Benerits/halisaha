@@ -1176,41 +1176,41 @@ export class Game {
     const out: { title: string; why: string; action?: BuyId; cta?: string; urgent: boolean }[] = []
     // 1. acil: evrak
     if (!this.docService && this.docs < 0.5) {
-      out.push({ title: 'Evrakların eskiyor', why: `Geçerlilik %${Math.round(this.docs * 100)}. Denetim gelirse ceza yersin.`,
-        action: 'docs', cta: 'Belge Takip Servisi ₺9.500', urgent: true })
+      out.push({ title: t('Evrakların eskiyor'), why: `${t('Geçerlilik')} %${Math.round(this.docs * 100)}. ${t('Denetim gelirse ceza yersin.')}`,
+        action: 'docs', cta: `${t('Belge Takip Servisi')} ₺9.500`, urgent: true })
     }
     // 2. boş prime-time varsa: ışık
     if (!this.hasLights && this.day >= 3) {
-      out.push({ title: 'Akşam saatlerin boş kalıyor', why: 'Işık kalitesi düşük olduğu için akşam takımları başka sahaya gidiyor.',
-        action: 'lights', cta: 'LED Projektör ₺14.000 → akşam talebi +%25', urgent: false })
+      out.push({ title: t('Akşam saatlerin boş kalıyor'), why: t('Işık kalitesi düşük olduğu için akşam takımları başka sahaya gidiyor.'),
+        action: 'lights', cta: `${t('LED Projektör')} ₺14.000 → ${t('akşam talebi')} +%25`, urgent: false })
     }
     // 3. gündüz boş: segment aç
     const dayEmpty = this.bookings.filter(b => b.hour < 18).length
     if (dayEmpty < 3 && !this.hasSchoolDeal) {
-      out.push({ title: 'Gündüz saatlerin bomboş', why: 'Öğleden sonra (14-18) hiç müşterin yok. Okul takımları bu saati doldurur.',
-        action: 'schooldeal', cta: 'Okul Anlaşması ₺12.000 → gençlik segmenti', urgent: false })
+      out.push({ title: t('Gündüz saatlerin bomboş'), why: t('Öğleden sonra (14-18) hiç müşterin yok. Okul takımları bu saati doldurur.'),
+        action: 'schooldeal', cta: `${t('Okul Anlaşması')} ₺12.000 → ${t('gençlik segmenti')}`, urgent: false })
     }
     if (dayEmpty < 3 && this.hasSchoolDeal && !this.hasTeaRoom) {
-      out.push({ title: 'Sabahlar hâlâ ölü', why: 'Emekli grupları sabah oynar ama çay ocağı olmayan sahaya gelmezler.',
-        action: 'tearoom', cta: 'Çay Ocağı ₺7.500 → veteran segmenti', urgent: false })
+      out.push({ title: t('Sabahlar hâlâ ölü'), why: t('Emekli grupları sabah oynar ama çay ocağı olmayan sahaya gelmezler.'),
+        action: 'tearoom', cta: `${t('Çay Ocağı')} ₺7.500 → ${t('veteran segmenti')}`, urgent: false })
     }
     // 4. kantin yoksa
     if (!this.hasCanteen && this.bookings.length >= 3) {
-      out.push({ title: 'Maç sonrası herkes dağılıyor', why: 'Kantin yok; her maçtan ₺120 ek gelir kaçırıyorsun.',
-        action: 'canteen', cta: 'Kantin ₺9.000', urgent: false })
+      out.push({ title: t('Maç sonrası herkes dağılıyor'), why: t('Kantin yok; her maçtan ₺120 ek gelir kaçırıyorsun.'),
+        action: 'canteen', cta: `${t('Kantin')} ₺9.000`, urgent: false })
     }
     // 5. doluluk yüksekse ikinci saha (arsa yoluyla)
     if (this.pitches < 2 && this.occupancy() > 0.35) {
-      out.push({ title: 'Saha yetmiyor', why: `Doluluk %${Math.round(this.occupancy() * 100)}. Boş arsaya tıkla: arsa al + mini saha kur (₺${(parcelCost(0, 1) + BUILDS.mini.cost).toLocaleString('tr-TR')}).`,
+      out.push({ title: t('Saha yetmiyor'), why: `${t('Doluluk')} %${Math.round(this.occupancy() * 100)}. ${t('Boş arsaya tıkla: arsa al + mini saha kur')} (₺${(parcelCost(0, 1) + BUILDS.mini.cost).toLocaleString('tr-TR')}).`,
         urgent: false })
     }
     // 6. abonelik dengesi
     if (this.subRatio() > 0.65) {
-      out.push({ title: 'Fazla abone bağladın', why: `Slotlarının %${Math.round(this.subRatio() * 100)}'i abonelikte. Yüksek ücretli tek maçlara yer kalmıyor.`,
+      out.push({ title: t('Fazla abone bağladın'), why: `%${Math.round(this.subRatio() * 100)} ${t('slotun abonelikte — yüksek ücretli tek maçlara yer kalmıyor.')}`,
         urgent: false })
     }
     if (out.length === 0) {
-      out.push({ title: 'İşler yolunda', why: 'Gelen rezervasyon isteklerini takvime yerleştirmeye devam et.', urgent: false })
+      out.push({ title: t('İşler yolunda'), why: t('Gelen rezervasyon isteklerini takvime yerleştirmeye devam et.'), urgent: false })
     }
     return out.slice(0, 3)
   }

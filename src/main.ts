@@ -183,6 +183,12 @@ function renderCal() {
     calCache = calHtml
     cal.innerHTML = calHtml
     cal.classList.toggle('multi', N > 1)
+    // MOBİL: saatler yatay kayar — yanan saat ekran dışındaysa görüş alanına getir
+    // (masaüstünde taşma yok, scrollIntoView no-op kalır)
+    const firstHint = cal.querySelector<HTMLElement>('.dslot.hint, .dcell.hint')
+    const wrap = document.getElementById('calwrap')
+    if (firstHint && wrap && wrap.scrollWidth > wrap.clientWidth + 4)
+      firstHint.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
     cal.querySelectorAll<HTMLElement>('.dslot, .dcell').forEach(el => {
       el.addEventListener('click', () => {
         if (selected === null) { toast('Önce soldan bir istek seç.'); return }
@@ -677,12 +683,34 @@ function openParcel(c: number, r: number) {
 
 // SAHNE GEZİNME: sürükle → kaydır, bırak → (hareket yoksa) arsa tıklaması
 let dragging = false, dragMoved = 0, lastX = 0, lastY = 0
+// PINCH-ZOOM (mobil): iki parmak — mesafe oranı zoom, orta nokta kayması pan.
+// touch-action:none canvas'ta; tarayıcı jesti karışmaz.
+const touchPts = new Map<number, { x: number; y: number }>()
+let pinchD = 0, pinchMX = 0, pinchMY = 0
 addEventListener('pointerdown', e => {
   if (pendingBuild) return
   if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#fbbtn,#fbmodal,#namemodal')) return
+  touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  if (touchPts.size === 2) {
+    dragging = false // tek parmak pan'ı bırak, pinch devrede
+    const [a, b] = [...touchPts.values()]
+    pinchD = Math.hypot(a.x - b.x, a.y - b.y)
+    pinchMX = (a.x + b.x) / 2; pinchMY = (a.y + b.y) / 2
+    return
+  }
   dragging = true; dragMoved = 0; lastX = e.clientX; lastY = e.clientY
 })
 addEventListener('pointermove', e => {
+  if (touchPts.has(e.pointerId)) touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  if (touchPts.size === 2) {
+    const [a, b] = [...touchPts.values()]
+    const d = Math.hypot(a.x - b.x, a.y - b.y)
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+    if (pinchD > 8 && d > 8) world.zoomBy(Math.min(1.15, Math.max(0.87, pinchD / d)))
+    world.pan(mx - pinchMX, my - pinchMY)
+    pinchD = d; pinchMX = mx; pinchMY = my
+    return
+  }
   if (!dragging) return
   const dx = e.clientX - lastX, dy = e.clientY - lastY
   lastX = e.clientX; lastY = e.clientY
@@ -690,7 +718,9 @@ addEventListener('pointermove', e => {
   world.pan(dx, dy)
   document.body.style.cursor = 'grabbing'
 })
+addEventListener('pointercancel', e => { touchPts.delete(e.pointerId); if (touchPts.size < 2) pinchD = 0 })
 addEventListener('pointerup', e => {
+  touchPts.delete(e.pointerId); if (touchPts.size < 2) pinchD = 0
   document.body.style.cursor = ''
   // ELİNDE YAPI VARKEN: sürükleme kontrolünden ÖNCE yerleştir (pan bu modda kapalı)
   if (pendingBuild) {
