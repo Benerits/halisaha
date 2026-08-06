@@ -136,7 +136,7 @@ function verifyToken(token) {
 }
 
 // ---- E-posta doğrulama + şifre sıfırlama altyapısı ----
-const BASE_URL = process.env.PUBLIC_URL || 'https://petrol.benerits.com'
+const BASE_URL = process.env.PUBLIC_URL || 'https://halisaha.benerits.com' // mail linkleri BU alan adına gider
 function requireVerify() { return process.env.REQUIRE_EMAIL_VERIFY === 'true' } // key gelene dek kapalı
 function randToken() { return crypto.randomBytes(24).toString('base64url') }
 
