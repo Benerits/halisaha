@@ -962,18 +962,6 @@ export class World {
         this.scene.add(G)
       })
     }
-    // ARABALAR — otoparkta
-    if (k.cars.length) {
-      const slots: [number, number, number][] = [
-        [10.68, 9.75, Math.PI], [14.58, 9.75, Math.PI], [16.53, 9.75, Math.PI], // üst sıra: slotun dibinde
-        [12.63, 4.25, 0], [16.53, 4.25, 0],                                      // alt sıra: slotun dibinde
-      ]
-      slots.forEach(([x, y, rot], i) => {
-        const car = fitModel(k.cars[i % k.cars.length], 1.0)
-        car.position.set(x, y, 0); car.rotation.z = rot
-        this.scene.add(car); this.parkedCars.push(car)
-      })
-    }
     // AKAN TRAFİK — yol canlı olsun
     if (k.cars.length) {
       for (let i = 0; i < 10; i++) {
@@ -1053,7 +1041,6 @@ export class World {
   updateMatch(dt: number, active: boolean) {
     this.matchGroup.visible = active
     this.matchHeat = active ? Math.min(1, Math.hypot(this.bvx, this.bvy) / 8) : 0
-    for (const c of this.parkedCars) c.visible = true
     if (!active) { this.matchWasActive = false; return }
     // MAÇ BAŞLADI: oyuncular sahaya IŞINLANMAZ — girişten (otopark tarafı) yürüyerek gelir.
     // Giriş noktası saha sağ kenarının dışı; yol diğer sahaların içinden geçmez.

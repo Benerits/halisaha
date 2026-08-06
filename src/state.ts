@@ -916,6 +916,9 @@ export class Game {
     if (this.t >= DAY_SECONDS) {
       this.t -= DAY_SECONDS
       this.endDay()
+      // PATLAMA FRENİ: sekme dönüşünde birikmiş zaman art arda gün atlatmasın —
+      // ('gün 5 saniye' hissinin kökü). Fazlalık atılır; offline kazancı applyOffline verir.
+      if (this.t >= DAY_SECONDS) this.t = DAY_SECONDS * 0.9
     }
     // ANINDA ÖDEME: maç bitti mi (saati geçti mi) → para o an kasaya + bildirim kuyruğu.
     // 'Para gelmiyor' hissinin ilacı: gün sonunu bekleme. endDay ödenmişleri atlar.
