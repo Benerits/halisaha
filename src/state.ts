@@ -269,16 +269,17 @@ export class Game {
 
   /** belge geçerliliği 0-1 (1 = tam) — sıfıra yaklaşınca denetimde ceza */
   docs = 1
-  /** HAFTALIK KİRA — 7 günde bir öde; ödeyemezsen itibar yanar (baskı davulu) */
-  rentDueDay = 7
+  /** AYLIK KİRA — 30 günde bir öde; ödeyemezsen itibar yanar (baskı davulu).
+   *  Haftalıktı: gerçek zamanda ~3 dk'da bir fatura mantıksızdı — aylık tek büyük fatura. */
+  rentDueDay = 30
   rentMissed = 0
   rentAmount(): number {
-    // K4: saha başına kira MARJİNAL ARTAR (2. saha +4k, 3. +5.2k, 4. +6.4k...) —
-    // ölçek bedava değil; gider gelirle birlikte büyür
+    // K4: saha başına kira MARJİNAL ARTAR — ölçek bedava değil; gider gelirle büyür.
+    // Aylık ≈ 3.5 haftalık (yarım haftalık indirim: tek seferde büyük fatura ödemenin ödülü)
     let pitchRent = 0
     const p = this.totalPitches()
-    for (let i = 1; i < p; i++) pitchRent += 4_000 + (i - 1) * 1_200
-    return 12_000 + pitchRent + (this.unlockedLocs.length - 1) * 8_000
+    for (let i = 1; i < p; i++) pitchRent += 14_000 + (i - 1) * 4_200
+    return 42_000 + pitchRent + (this.unlockedLocs.length - 1) * 28_000
   }
   daysToRent(): number { return Math.max(0, this.rentDueDay - this.day + 1) }
 
@@ -781,7 +782,7 @@ export class Game {
       const weekly = sn.bookings.reduce((sum, b) => sum + b.price, 0)
       gross += Math.round((weekly / 7) * days * mult)
     }
-    const rentShare = Math.round(this.rentAmount() / 7 * days)
+    const rentShare = Math.round(this.rentAmount() / 30 * days)
     const net = Math.max(0, gross - rentShare)
     this.money += net
     // sekreter: telefonlara bakmış — dönüşte hazır istekler
@@ -1012,13 +1013,13 @@ export class Game {
       const rent = this.rentAmount()
       if (this.money >= rent) {
         this.money -= rent
-        this.events.push(`Haftalık kira ödendi: ₺${rent.toLocaleString('tr-TR')}`)
+        this.events.push(t('Aylık kira ödendi: ') + `₺${rent.toLocaleString('tr-TR')}`)
       } else {
         this.rentMissed++
         this.rep = Math.max(0, this.rep - 0.5)
         this.events.push(`KİRA ÖDENEMEDİ! (₺${rent.toLocaleString('tr-TR')}) — itibar düştü.`)
       }
-      this.rentDueDay = this.day + 7
+      this.rentDueDay = this.day + 30
     }
     this.day++
     // memnuniyet: oynanan her maç itibar kazandırır (günde en çok +0.12)

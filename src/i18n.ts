@@ -124,7 +124,7 @@ const EN: Record<string, string> = {
   'Müdür yerleştirdi: ': 'Manager booked it: ',
   'Sen yokken tesis çalıştı: ': 'While you were away: ',
   ' kasada': ' earned',
-  'Haftalık kira ödendi: ': 'Weekly rent paid: ',
+  'Aylık kira ödendi: ': 'Monthly rent paid: ',
   'KİRA ÖDENEMEDİ!': 'RENT UNPAID!',
   'Anlaşma tamam — şimdi çizelgede yanan saate tıkla.': 'Deal done — now tap a glowing hour in the schedule.',
   'takvimde yerini bekliyor — hazır olunca koy.': 'is waiting for a slot — place when ready.',

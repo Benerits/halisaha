@@ -143,17 +143,17 @@ console.log('\n— PAZARLIK —')
   check('olmayan isteğe pazarlık güvenli', !g3.haggle(9999, 1).ok)
 }
 
-console.log('\n— HAFTALIK KİRA (baskı davulu) —')
+console.log('\n— AYLIK KİRA (baskı davulu) —')
 {
   const g = new Game()
   check('kira tutarı pozitif', g.rentAmount() > 0)
   check('kira gününe kalan sayı görünür', g.daysToRent() > 0)
-  g.money = 500_000; g.day = 7
+  g.money = 500_000; g.day = 30
   const before = g.money
   g.endDay()
   check('kira günü kasadan düşer', g.money < before)
-  check('sonraki kira 7 gün sonraya kurulur', g.rentDueDay === 8 + 7 - 1 || g.rentDueDay > 7)
-  const p = new Game(); p.money = 0; p.day = 7
+  check('sonraki kira 30 gün sonraya kurulur', g.rentDueDay > 30)
+  const p = new Game(); p.money = 0; p.day = 30
   const repBefore = p.rep
   p.endDay()
   check('kira ödenemezse itibar yanar', p.rep < repBefore && p.rentMissed === 1)
@@ -493,8 +493,7 @@ console.log('\n— ANALİZ RAPORU P1 (K4/K5/K6 sink paketi) —')
   // K4: marjinal kira artar
   const r1 = new Game(); r1.pitches = 2
   const r2 = new Game(); r2.pitches = 6
-  check('K4: kira saha sayısıyla MARJİNAL artar', (r2.rentAmount() - r2.rentAmount() + r2.rentAmount()) > 0 &&
-    (r2.rentAmount() - 12000) > (r1.rentAmount() - 12000) * 4)
+  check('K4: kira saha sayısıyla MARJİNAL artar', (r2.rentAmount() - 42000) > (r1.rentAmount() - 42000) * 4)
 
   // K4: abonelik ömrü — 3 yenileme sonrası kesin biter
   const a = new Game(); a.rep = 5
