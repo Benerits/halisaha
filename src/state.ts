@@ -353,16 +353,20 @@ export class Game {
   /** bu saatte hâlâ boş saha var mı */
   freeAt(day: number, hour: number, wk = 0): boolean { return this.usedAt(day, hour, wk) < this.totalLanes() }
   /** tam boy saha sayısı (ana saha + parsel halı sahaları; mini hariç) */
-  fullPitchCount(): number { return this.pitches - this.builds.reduce((n, b) => n + (b.kind === 'mini' ? (b.count ?? 1) : 0), 0) }
+  /** YAPI GERÇEĞİ: 1 ana saha + parseldeki halı sahalar (sayaç bozulmalarından bağımsız) */
+  fullPitchCount(): number { return 1 + this.builds.filter(b => b.kind === 'pitch').length }
+  miniCount(): number { return this.builds.reduce((n, b) => n + (b.kind === 'mini' ? (b.count ?? 1) : 0), 0) }
+  /** pitches sayacını yapı gerçeğine eşitle — bozuk kayıtları kendiliğinden onarır */
+  healPitches() { this.pitches = this.fullPitchCount() + this.miniCount() }
   courtCount(kind: 'basket' | 'voley'): number { return this.builds.filter(b => b.kind === kind).length }
   /** takvimdeki TOPLAM şerit: futbol sahaları + basket + voley kortları */
-  totalLanes(): number { return this.pitches + this.courtCount('basket') + this.courtCount('voley') }
+  totalLanes(): number { return this.fullPitchCount() + this.miniCount() + this.courtCount('basket') + this.courtCount('voley') }
   /** şerit türleri sırayla: tam sahalar, miniler, basketler, voleyler */
   laneKinds(): ('full' | 'mini' | 'basket' | 'voley')[] {
     const out: ('full' | 'mini' | 'basket' | 'voley')[] = []
     const fullN = this.fullPitchCount()
     for (let i = 0; i < fullN; i++) out.push('full')
-    for (let i = fullN; i < this.pitches; i++) out.push('mini')
+    for (let i = 0; i < this.miniCount(); i++) out.push('mini')
     for (let i = 0; i < this.courtCount('basket'); i++) out.push('basket')
     for (let i = 0; i < this.courtCount('voley'); i++) out.push('voley')
     return out
@@ -445,11 +449,12 @@ export class Game {
     }
     if (wanted !== undefined && okLane(wanted)) return wanted
     const order: number[] = []
-    if (r.forCourt) { for (let l = this.pitches; l < this.totalLanes(); l++) order.push(l) }
-    else if (r.forMini) { for (let l = fullN; l < this.pitches; l++) order.push(l) }
+    const footN = fullN + this.miniCount()
+    if (r.forCourt) { for (let l = footN; l < this.totalLanes(); l++) order.push(l) }
+    else if (r.forMini) { for (let l = fullN; l < footN; l++) order.push(l) }
     else if (r.needFull) { for (let l = 0; l < fullN; l++) order.push(l) }
     else {
-      for (let l = this.pitches - 1; l >= fullN; l--) order.push(l)  // önce miniler
+      for (let l = footN - 1; l >= fullN; l--) order.push(l)  // önce miniler
       for (let l = fullN - 1; l >= 0; l--) order.push(l)
     }
     for (const l of order) if (okLane(l)) return l
@@ -803,6 +808,7 @@ export class Game {
     this.bookings = sn.bookings; this.queue = sn.queue; this.pitches = sn.pitches
     this.ownedParcels = sn.ownedParcels; this.builds = sn.builds
     this.personel = sn.personel ?? emptyPersonel()
+    this.healPitches() // sayaç-yapı tutarlılığı (bozuk kayıt onarımı)
     // ŞUBEYE ÖZEL yatırımlar: kayıtta yoksa bu şube SIFIRDAN başlar ('zaten var' bug'ı bitti)
     const self = this as unknown as Record<string, boolean | number>
     const fl = sn.flags ?? {}
@@ -1552,5 +1558,6 @@ export class Game {
     // GÖÇ: eski kayıtlarda başlangıç otoparkı yapı değildi — yoksa (2,0)'a ekle (yıkılabilir olsun)
     if (!this.builds.some(b2 => b2.kind === 'parking') && !this.builds.some(b2 => b2.key === '2,0'))
       this.builds.push({ key: '2,0', kind: 'parking' })
+    this.healPitches() // yükleme sonrası sayaç-yapı tutarlılığı
   }
 }
