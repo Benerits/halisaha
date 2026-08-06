@@ -425,9 +425,10 @@ function maxIncomeRate(s) {
     }
   }
   pitches = Math.max(1, Math.min(24, pitches))
-  // ölçüm: saha başına aktif tepe ~40 TL/sn (15 slot x ~1200 / 450 sn) + kort + müdür payı
+  // ölçüm: saha başına aktif tepe ~95 TL/sn (15 slot x ~1400₺ / 225 sn gün — saat 15sn'e indi,
+  // fiyat tabanı 850'ye çıktı; 120 günlük simülasyon zirvesi 622 TL/sn ölçüldü) + kort + müdür payı
   const SAFETY = 3
-  return Math.max(20, (10 + pitches * 40 + courts * 4 + mudur * 8) * SAFETY)
+  return Math.max(20, (10 + pitches * 95 + courts * 8 + mudur * 8) * SAFETY)
 }
 
 /** ŞUBE KASASI CLAMP'İ: istemci tavanıyla BİREBİR (state.ts BRANCH_VAULT_HARD).

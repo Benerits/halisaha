@@ -19,7 +19,7 @@ function box(w: number, d: number, h: number, c: number, x: number, y: number, z
   parent.add(m); return m
 }
 
-interface Ply { g: THREE.Group; team: 0 | 1; hx: number; hy: number; sp: number; cd: number; ang: number }
+interface Ply { g: THREE.Group; team: 0 | 1; hx: number; hy: number; sp: number; cd: number; ang: number; entering?: boolean }
 
 export type LocTheme = 'mahalle' | 'sanayi' | 'sahil'
 
@@ -937,11 +937,21 @@ export class World {
   /** 0-1: maçın o anki heyecanı (top hızından) — kalabalık uğultusu bunu izler */
   matchHeat = 0
 
+  private matchWasActive = false
   updateMatch(dt: number, active: boolean) {
     this.matchGroup.visible = active
     this.matchHeat = active ? Math.min(1, Math.hypot(this.bvx, this.bvy) / 8) : 0
     for (const c of this.parkedCars) c.visible = true
-    if (!active) return
+    if (!active) { this.matchWasActive = false; return }
+    // MAÇ BAŞLADI: oyuncular sahaya IŞINLANMAZ — girişten (otopark tarafı) yürüyerek gelir.
+    // Giriş noktası saha sağ kenarının dışı; yol diğer sahaların içinden geçmez.
+    if (!this.matchWasActive) {
+      this.matchWasActive = true
+      this.players.forEach((p, i) => {
+        p.g.position.set(PITCH_W / 2 + 2.0 + (i % 3) * 0.7, PITCH_Y + 2.4 + Math.floor(i / 3) * 0.6, 0)
+        p.entering = true
+      })
+    }
     const b = this.ball.position
     b.x += this.bvx * dt; b.y += this.bvy * dt
     this.bvx *= 0.982; this.bvy *= 0.982
@@ -960,7 +970,23 @@ export class World {
     const now = performance.now()
     near.forEach((p, idx) => {
       p.cd = Math.max(0, p.cd - dt)
-      const chase = idx < 3
+      // GİRİŞ FAZI: önce ev pozisyonuna yürü (top kovalamak yok), varınca oyuna karış
+      if (p.entering) {
+        const ex = p.hx - p.g.position.x, ey = p.hy - p.g.position.y
+        const ed = Math.hypot(ex, ey)
+        if (ed < 0.35) { p.entering = false }
+        else {
+          const st = Math.min(p.sp * 0.62 * dt, ed)
+          p.g.position.x += (ex / ed) * st; p.g.position.y += (ey / ed) * st
+          const want = Math.atan2(ey, ex) + Math.PI / 2
+          let dw = want - p.ang
+          while (dw > Math.PI) dw -= Math.PI * 2
+          while (dw < -Math.PI) dw += Math.PI * 2
+          p.ang += dw * Math.min(1, 10 * dt); p.g.rotation.z = p.ang
+          return
+        }
+      }
+      const chase = idx < 3 && !p.entering
       const tx = chase ? b.x : p.hx + Math.sin(now / 1500 + p.hy * 2) * 1.1
       const ty = chase ? b.y : p.hy + Math.cos(now / 1700 + p.hx * 2) * 0.9
       const dx = tx - p.g.position.x, dy = ty - p.g.position.y
@@ -994,6 +1020,7 @@ export class World {
 
   /** yol trafiği + maça yürüyen oyuncular — sahne hep canlı */
   updateAmbient(dt: number) {
+    this.updateMissions(dt)
     for (const t of this.traffic) {
       if (t.axis === 'x') {
         t.g.position.x += t.sp * t.dir * dt
@@ -1013,6 +1040,79 @@ export class World {
       w.g.position.z = 0
       const d = new THREE.Vector3().subVectors(w.to, w.from)
       w.g.rotation.z = Math.atan2(d.y, d.x) + Math.PI / 2
+    }
+  }
+
+  // --- GÖREV ARAÇLARI: maç öncesi gelen araba + acil araçlar (polis/ambulans) ---
+  // yol şeridi y=16.6; araç yoldan girer, hedefte bekler, işi bitince çekip gider.
+  private missions: { g: THREE.Object3D; seg: number; wait: number; waited: boolean
+    path: { x: number; y: number; sp: number }[]; lights?: THREE.Mesh[]; onArrive?: () => void }[] = []
+
+  /** maç öncesi: araba yoldan gelip otoparka park eder; kapılar açılır (callback) → oyuncular iner */
+  carArrival(onOut?: () => void) {
+    const k = this.kit
+    if (!k?.cars.length) { onOut?.(); return }
+    const g = fitModel(k.cars[Math.floor(Math.random() * k.cars.length)], 1.0)
+    const slotX = 12.4 + Math.random() * 4.2
+    g.position.set(-70, 16.6, 0); g.rotation.z = Math.PI / 2
+    this.scene.add(g)
+    this.missions.push({ g, seg: 0, wait: 7, waited: false, onArrive: onOut,
+      path: [{ x: slotX, y: 16.6, sp: 15 }, { x: slotX, y: 10.9, sp: 4 },
+             { x: slotX, y: 16.6, sp: 4 }, { x: 85, y: 16.6, sp: 15 }] })
+  }
+
+  /** ACİL ARAÇ: kavga → polis, sakatlanma → ambulans. Tesis önünde yanıp sönerek bekler. */
+  emergency(kind: 'polis' | 'ambulans') {
+    const g = new THREE.Group()
+    const bodyCol = kind === 'polis' ? 0xf4f6f8 : 0xffffff
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.15, 0.95), lam(bodyCol))
+    body.position.z = 0.62; body.castShadow = true; g.add(body)
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.62, 1.17, 0.22), lam(kind === 'polis' ? 0x2b3b8f : 0xd64545))
+    stripe.position.z = 0.62; g.add(stripe)
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.05, 0.5), lam(0xbcd6e8))
+    cab.position.set(0.55, 0, 1.25); g.add(cab)
+    for (const sx of [-0.8, 0.8]) for (const sy of [-0.62, 0.62]) {
+      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.18, 10), lam(0x2b2f33))
+      wh.rotation.x = Math.PI / 2; wh.position.set(sx, sy, 0.24); g.add(wh)
+    }
+    const lights: THREE.Mesh[] = []
+    const mkLight = (x: number, col: number) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.22),
+        new THREE.MeshBasicMaterial({ color: col }))
+      m.position.set(x, 0, 1.62); g.add(m); lights.push(m)
+    }
+    mkLight(-0.25, 0xff2f2f); mkLight(0.25, kind === 'polis' ? 0x2f6fff : 0xff2f2f)
+    g.position.set(-70, 16.6, 0); g.rotation.z = Math.PI / 2
+    this.scene.add(g)
+    this.missions.push({ g, seg: 0, wait: 7, waited: false, lights,
+      path: [{ x: 1.5, y: 16.6, sp: 22 }, { x: 1.5, y: 14.2, sp: 6 },
+             { x: 1.5, y: 16.6, sp: 6 }, { x: 85, y: 16.6, sp: 22 }] })
+  }
+
+  private updateMissions(dt: number) {
+    const blink = Math.floor(performance.now() / 220) % 2
+    for (let i = this.missions.length - 1; i >= 0; i--) {
+      const m = this.missions[i]
+      if (m.lights) m.lights.forEach((l, li) => { l.visible = (li % 2 === blink) })
+      const tgt = m.path[m.seg]
+      if (!tgt) { this.scene.remove(m.g); this.missions.splice(i, 1); continue }
+      const dx = tgt.x - m.g.position.x, dy = tgt.y - m.g.position.y
+      const d = Math.hypot(dx, dy)
+      if (d < 0.15) {
+        // park segmentinin sonunda bekle + kapıları aç (bir kez)
+        if (m.seg === 1 && !m.waited) {
+          if (m.onArrive) { m.onArrive(); m.onArrive = undefined }
+          m.wait -= dt
+          if (m.wait > 0) continue
+          m.waited = true
+        }
+        m.seg++
+        continue
+      }
+      const step = Math.min(tgt.sp * dt, d)
+      m.g.position.x += (dx / d) * step
+      m.g.position.y += (dy / d) * step
+      m.g.rotation.z = Math.atan2(dy, dx) - Math.PI / 2 + Math.PI
     }
   }
 

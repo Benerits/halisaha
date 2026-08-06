@@ -84,6 +84,28 @@ class Audio {
     osc.start(t0); osc.stop(t0 + dur + 0.04)
   }
 
+  /** SİREN — polis: hızlı iki-ton; ambulans: uzun inişli-çıkışlı vaylama. DSP, telif yok. */
+  siren(kind: 'polis' | 'ambulans') {
+    this.ensure()
+    if (!this.ctx || !this.master || !this.on) return
+    if (kind === 'polis') {
+      for (let i = 0; i < 6; i++) this.tone(i % 2 ? 660 : 880, 0.22, 'square', 0.05, i * 0.24)
+    } else {
+      const t0 = this.ctx.currentTime
+      const o = this.ctx.createOscillator(); o.type = 'triangle'
+      const g = this.ctx.createGain()
+      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.06, t0 + 0.05)
+      for (let i = 0; i < 3; i++) {
+        o.frequency.setValueAtTime(650, t0 + i)
+        o.frequency.linearRampToValueAtTime(950, t0 + i + 0.5)
+        o.frequency.linearRampToValueAtTime(650, t0 + i + 1)
+      }
+      g.gain.linearRampToValueAtTime(0.0008, t0 + 3)
+      o.connect(g); g.connect(this.master)
+      o.start(t0); o.stop(t0 + 3.05)
+    }
+  }
+
   /** TELEFON — gerçek masa telefonu zili: 425Hz taşıyıcı + 20Hz tremolo, çift vuruş */
   ring() {
     this.ensure()

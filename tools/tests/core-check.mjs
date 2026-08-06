@@ -225,7 +225,7 @@ console.log('\n— ANLAŞMA DONDURMASI + SAAT —')
     t.tick(5)
     check('pazarlıksız kartın süresi normal akar', r2.patience < before)
   }
-  check('1 oyun günü = 450 sn (saat=30sn, dakika akışı)', DAY_SECONDS === 450)
+  check('1 oyun günü = 225 sn (saat=15sn, lansman temposu)', DAY_SECONDS === 225)
 }
 
 console.log('\n— ADAPTİF VURGU SAYACI —')
@@ -246,7 +246,7 @@ console.log('\n— DOLU SAAT / KAPASİTE —')
 {
   const g = new Game()
   g.pitches = 2
-  const mk = () => { let r=null; for(let i=0;i<1500&&!r;i++){const x=g.spawnReservation(); if(x&&!x.flexible)r=x; if(g.queue.length>=4)g.queue.length=0} return r }
+  const mk = () => { let r=null; for(let i=0;i<1500&&!r;i++){const x=g.spawnReservation(); if(x&&!x.flexible)r=x; if(!r&&g.queue.length>=4)g.queue.length=0} return r }
   const a = mk()
   if (a) {
     check('1. maç yerleşir', g.place(a.id, a.day, a.hour).ok)
@@ -534,5 +534,56 @@ console.log('\n— ANALİZ RAPORU P2 (K12 sezon/prestij) —')
   g.closeSeason()
   check('K12: ikinci yıldız birikir (+%10)', g.stars === 2 && Math.abs(g.starMult() - 1.10) < 1e-9)
 }
+
+console.log('\n— 2 HAFTALIK TAKVİM + ANINDA ÖDEME —')
+{
+  const g = new Game()
+  // Pazartesi 22:00: gün 1 (dow 0), saat 22 → t = (13/15) * DAY_SECONDS
+  g.t = (13 / 15) * DAY_SECONDS
+  check('saat doğru hesaplanır (22)', g.hourNow() === 22)
+  g.queue.push({ id: 7777, team: 'Pazartesici', segment: 'klasik', day: 0, hour: 17, price: 900, maxPay: 2000,
+    patience: 120, maxPatience: 120, flexible: false, hours: 1, weeks: 0, needFull: false })
+  const r = g.queue.find(x => x.id === 7777)
+  check('geçmiş saat BU hafta yerleşmez', !g.canPlaceAt(r, 0, 17, 0))
+  check('aynı saat SONRAKİ hafta yerleşir', g.canPlaceAt(r, 0, 17, 1))
+  const best = g.bestSlot(r)
+  check('bestSlot sonraki haftayı önerir', best && best.wk === 1 && best.day === 0 && best.hour === 17)
+  check('sonraki haftaya yerleştirme başarılı', g.place(7777, 0, 17, undefined, 1).ok)
+  const wkb = g.bookings.find(b => b.team === 'Pazartesici')
+  check('kayıt wk=1 taşır', wkb && wkb.wk === 1)
+  // gün sonu Pazartesi: wk azalır ama MAÇ OYNANMAZ (para gelmez)
+  const cash0 = g.money
+  g.endDay()
+  check('bu Pazartesi oynanmadı (para yok)', g.money <= cash0) // sadece gider düşer
+  check('wk sayacı 0 oldu (sıradaki Pazartesi oynar)', g.bookings.find(b => b.team === 'Pazartesici')?.wk === 0)
+}
+{
+  const g = new Game()
+  g.bookings.push({ day: g.todayDow(), hour: 10, team: 'Erkenciler', segment: 'klasik', price: 1000, sub: false, weeksLeft: 0, lane: 0 })
+  g.t = (3 / 15) * DAY_SECONDS   // saat 12 — 10:00 maçı bitti
+  const before = g.money
+  g.tick(0.1)
+  const b = g.bookings.find(x => x.team === 'Erkenciler')
+  check('maç bitince ANINDA ödenir', g.money > before && b?.paid === true)
+  check('ödeme bildirimi kuyruğa düşer', g.payouts.length === 1 && g.payouts[0].amt >= 1000)
+  const paid = g.money - before
+  g.day = g.todayDow() + 1 // bugünü işlet
+  const cashAfterPay = g.money
+  g.endDay()
+  check('gün sonunda AYNI maç ikinci kez ödenmez', g.money - cashAfterPay < paid)
+}
+{
+  const g = new Game()
+  g.phonePaused = true
+  const q = { id: 1, team: 'X', segment: 'klasik', day: 1, hour: 20, price: 500, maxPay: 900,
+    patience: 10, maxPatience: 120, flexible: false, hours: 1, weeks: 0, needFull: false }
+  g.queue.push(q)
+  g.tick(30)
+  check('telefon kapalıyken sabır DONAR', g.queue.length === 1 && q.patience === 10)
+  g.phonePaused = false
+  g.tick(30)
+  check('telefon açılınca sabır yeniden işler', g.queue.length === 0)
+}
+
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

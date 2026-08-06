@@ -47,6 +47,7 @@ function toast(msg: string, kind: '' | 'g' | 'b' = '') {
 
 // ---------- takvim (gün sekmeli tek şerit — 105 minik hücre yerine 15 büyük slot) ----------
 let viewDay = -1
+let viewWk = 0 // 0 = bu hafta, 1 = SONRAKİ hafta (2 haftalık takvim)
 let tabsCache = '', calCache = '', pickCache = ''
 let flashUntil = 0
 const DAY_FULL = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
@@ -65,7 +66,7 @@ function renderCal() {
   const head = document.querySelector('#desk .desk-head') as HTMLElement | null
   const nowHour = OPEN_HOUR + Math.floor((game.t / DAY_SECONDS) * HOURS.length)
   const nowDay = (game.day - 1) % 7
-  if (viewDay < 0) viewDay = nowDay
+  if (viewDay < 0) { viewDay = nowDay; viewWk = 0 }
   const sel = selected !== null ? game.queue.find(r => r.id === selected) : null
   if (head) {
     if (sel) head.textContent = `${sel.team} ${t('için saat seç — yanan kutuya tıkla')}`
@@ -84,7 +85,8 @@ function renderCal() {
   // YÖNERGE ŞERİDİ — nereye koyacağını söylemez, sadece kimin için seçtiğini söyler
   const pickbar = $('pickbar')
   if (performance.now() > flashUntil) {
-    const anyPartial = sel ? DAY_NAMES.some((_, d) => HOURS.some(h => game.canPlacePartial(sel, d, h))) : false
+    const anyPartial = sel ? DAY_NAMES.some((_, d) => HOURS.some(h =>
+      game.canPlacePartial(sel, d, h, 0) || game.canPlacePartial(sel, d, h, 1))) : false
     const noSlot = sel && !game.bestSlot(sel)
     const ph = !sel ? ''
       : noSlot && anyPartial ? `${sel.hours} saatlik yer yok — KESİKLİ saate tıkla, 1 saat öner (kabul etmeyebilir)`
@@ -101,23 +103,27 @@ function renderCal() {
     }
   }
 
-  // GÜN SEKMELERİ (önbellekli — değişmediyse DOM'a dokunma, tıklama yutulmasın)
+  // GÜN SEKMELERİ — 2 HAFTALIK takvim: bu hafta + sonraki hafta (önbellekli)
   const tabs = $('daytabs')
-  const tabsHtml = DAY_NAMES.map((nm, d) => {
-    const occ = game.bookings.filter(b => b.day === d).length / HOURS.length
-    const hasValid = sel ? HOURS.some(h => game.canPlaceAt(sel, d, h)) : false
-    return `<div class="dtab ${d === viewDay ? 'on' : ''} ${d === nowDay ? 'today' : ''}" data-d="${d}">
+  const tabHtml = (d: number, w: number) => {
+    const nm = DAY_NAMES[d]
+    const occ = game.bookings.filter(b => b.day === d && (b.sub || (b.wk ?? 0) === w)).length / HOURS.length
+    const hasValid = sel ? HOURS.some(h => game.canPlaceAt(sel, d, h, w)) : false
+    return `<div class="dtab ${d === viewDay && w === viewWk ? 'on' : ''} ${w === 0 && d === nowDay ? 'today' : ''}" data-d="${d}" data-w="${w}">
       ${hasValid ? `<span class="dot ${game.placedCount < 12 ? '' : 'calm'}"></span>` : ''}
       <b>${nm}</b>
       <div class="obar"><i style="width:${Math.round(occ * 100)}%"></i></div>
-      ${d === nowDay ? `<span class="bugun">${t('bugün')}</span>` : ''}
+      ${w === 0 && d === nowDay ? `<span class="bugun">${t('bugün')}</span>` : ''}
     </div>`
-  }).join('')
+  }
+  const tabsHtml = DAY_NAMES.map((_, d) => tabHtml(d, 0)).join('')
+    + `<div class="wksep" title="${t('sonraki hafta')}">+7g ➜</div>`
+    + DAY_NAMES.map((_, d) => tabHtml(d, 1)).join('')
   if (tabsHtml !== tabsCache) {
     tabsCache = tabsHtml
     tabs.innerHTML = tabsHtml
     tabs.querySelectorAll<HTMLElement>('.dtab').forEach(el => {
-      el.addEventListener('click', () => { viewDay = Number(el.dataset.d); audio.click(); renderCal() })
+      el.addEventListener('click', () => { viewDay = Number(el.dataset.d); viewWk = Number(el.dataset.w); audio.click(); renderCal() })
     })
   }
 
@@ -128,27 +134,27 @@ function renderCal() {
   const laneLbl = (l: number) => l < fullN ? `Saha ${l + 1}` : `Mini ${l - fullN + 1}`
   const cellHint = (r: typeof sel, hour: number, lane: number): boolean => {
     if (!r) return false
-    if (!game.canPlaceAt(r, viewDay, hour)) return false
+    if (!game.canPlaceAt(r, viewDay, hour, viewWk)) return false
     if (r.needFull && lane >= fullN) return false
-    if (game.laneTakenBy(viewDay, hour, lane)) return false
-    if (r.hours === 2 && game.laneTakenBy(viewDay, hour + 1, lane)) return false
+    if (game.laneTakenBy(viewDay, hour, lane, viewWk)) return false
+    if (r.hours === 2 && game.laneTakenBy(viewDay, hour + 1, lane, viewWk)) return false
     return true
   }
   const hintCls = game.placedCount < 12 ? 'hint' : 'hint calm'
   let calHtml = ''
   if (N === 1) {
     calHtml = HOURS.map(hour => {
-      const bs = game.bookingsAt(viewDay, hour)
+      const bs = game.bookingsAt(viewDay, hour, viewWk)
       const b = bs[0]
-      const free = game.freeAt(viewDay, hour)
-      const hint = sel && free && game.canPlaceAt(sel, viewDay, hour)
-      const part = sel && !hint && game.canPlacePartial(sel, viewDay, hour)
+      const free = game.freeAt(viewDay, hour, viewWk)
+      const hint = sel && free && game.canPlaceAt(sel, viewDay, hour, viewWk)
+      const part = sel && !hint && game.canPlacePartial(sel, viewDay, hour, viewWk)
       const cls = ['dslot']
       if (b) cls.push(b.sub ? 'sub' : 'full')
       if (hint) cls.push(hintCls)
       if (part) cls.push('part')
-      if (viewDay === nowDay && hour === nowHour) cls.push('now')
-      if (viewDay === nowDay && hour < nowHour) cls.push('past')
+      if (viewWk === 0 && viewDay === nowDay && hour === nowHour) cls.push('now')
+      if (viewWk === 0 && viewDay === nowDay && hour < nowHour) cls.push('past')
       if (!b && hour >= 20 && hour <= 22) cls.push('prime')
       return `<div class="${cls.join(' ')}" data-h="${hour}" data-l="0"
         title="${b ? b.team + ' · ₺' + tl(b.price) : DAY_NAMES[viewDay] + ' ' + hour + ':00 — boş'}">
@@ -161,12 +167,12 @@ function renderCal() {
       Array.from({ length: N }, (_, l) =>
         `<div class="ll ${l < fullN ? '' : 'mini'}">${laneLbl(l)}</div>`).join('') + '</div>'
     calHtml += HOURS.map(hour => {
-      const isPast = viewDay === nowDay && hour < nowHour
-      let col = `<div class="dcol"><div class="lh ${viewDay === nowDay && hour === nowHour ? 'nowh' : ''}">${hour}</div>`
+      const isPast = viewWk === 0 && viewDay === nowDay && hour < nowHour
+      let col = `<div class="dcol"><div class="lh ${viewWk === 0 && viewDay === nowDay && hour === nowHour ? 'nowh' : ''}">${hour}</div>`
       for (let l = 0; l < N; l++) {
-        const b = game.laneTakenBy(viewDay, hour, l)
+        const b = game.laneTakenBy(viewDay, hour, l, viewWk)
         const hint = cellHint(sel, hour, l)
-        const part = sel && !hint && !b && game.canPlacePartial(sel, viewDay, hour) && (!sel.needFull || l < fullN)
+        const part = sel && !hint && !b && game.canPlacePartial(sel, viewDay, hour, viewWk) && (!sel.needFull || l < fullN)
         const cls = ['dcell']
         if (b) cls.push(b.sub ? 'sub' : 'full')
         if (hint) cls.push(hintCls)
@@ -195,15 +201,15 @@ function renderCal() {
         const day = viewDay, hour = Number(el.dataset.h), lane = Number(el.dataset.l)
         const selR = game.queue.find(x => x.id === selected)
         const span = selR?.hours ?? 1
-        if (selR && !game.canPlaceAt(selR, day, hour) && game.canPlacePartial(selR, day, hour)) {
-          const pr = game.placePartial(selected, day, hour)
+        if (selR && !game.canPlaceAt(selR, day, hour, viewWk) && game.canPlacePartial(selR, day, hour, viewWk)) {
+          const pr = game.placePartial(selected, day, hour, viewWk)
           if (pr.ok) { audio.place(); selected = null; save(); confirmFlash(day, hour, 1) }
           else { audio.bad() }
           toast(pr.msg, pr.ok ? 'g' : 'b')
           renderAll()
           return
         }
-        const r = game.place(selected, day, hour, lane)
+        const r = game.place(selected, day, hour, lane, viewWk)
         if (r.ok) audio.place(); else audio.bad()
         if (r.ok) { selected = null; save(); confirmFlash(day, hour, span) }
         else {
@@ -226,11 +232,9 @@ function selectCard(id: number) {
   audio.click()
   const r = game.queue.find(x => x.id === id)
   if (r) {
-    const days = r.flexible ? r.flexDays : [r.day]
-    const hours = r.flexible ? r.flexHours : [r.hour]
-    outer: for (const d of days) for (const h of hours) {
-      if (!game.bookingAt(d, h)) { viewDay = d; break outer }
-    }
+    // en iyi yerleştirilebilir slota atla — bugünün saati geçtiyse SONRAKİ HAFTA sekmesine götürür
+    const best = game.bestSlot(r)
+    if (best) { viewDay = best.day; viewWk = best.wk }
   }
   renderQueue(); renderCal()
 }
@@ -242,6 +246,7 @@ function renderQueue() {
   if (game.queue.length === 0) {
     const h = `<div class="empty">${t('Şu an istek yok.')}<br>${t('Birazdan telefon çalar…')}</div>`
     if (h !== qCache) { qCache = h; list.innerHTML = h }
+    $('coach').classList.remove('show')
     return
   }
   // yapı anahtarı: sabır çubuğu HARİÇ her şey — çubuk ayrıca güncellenir,
@@ -313,6 +318,22 @@ function renderQueue() {
       el.classList.toggle('deal', r.haggled)
     }
   })
+  // İLK OYUNCU KOÇU: hiç maç yerleştirmemiş oyuncu ilk kartı fark etmiyordu —
+  // kart sarı nabız + yanında "karta tıkla" balonu. Kart seçilince mevcut
+  // takvim rehberi (yanan saat + pickbar) devralır; ilk yerleştirmeyle kalıcı kapanır.
+  const coach = $('coach')
+  const firstCard = list.querySelector<HTMLElement>('.rcard[data-id]')
+  const coachOn = game.placedCount === 0 && selected === null && !!firstCard
+    && !$('gate').classList.contains('show') && !$('namemodal').classList.contains('show')
+  list.querySelectorAll<HTMLElement>('.rcard.coach').forEach(el => { if (!coachOn || el !== firstCard) el.classList.remove('coach') })
+  if (coachOn && firstCard) {
+    firstCard.classList.add('coach')
+    const r = firstCard.getBoundingClientRect()
+    coach.innerHTML = '👈 ' + t('Takım saha istiyor — karta tıkla, saatini ver!')
+    coach.style.left = `${Math.round(r.right + 10)}px`
+    coach.style.top = `${Math.round(r.top + 6)}px`
+    coach.classList.add('show')
+  } else coach.classList.remove('show')
 }
 
 // ---------- hedefler (oyunda tutan kısa döngü) ----------
@@ -785,6 +806,14 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) audi
 function openOffice() { audio.click(); $('office').classList.add('show'); renderOffice() }
 $('yazpill').addEventListener('click', openOffice)
 $('setbtn').addEventListener('click', () => openOfficeTab('ayarlar'))
+$('phonebtn').addEventListener('click', () => {
+  phoneOff = !phoneOff
+  game.phonePaused = phoneOff
+  $('phonebtn').classList.toggle('off', phoneOff)
+  $('phonebtn').textContent = phoneOff ? '📵' : '📞'
+  audio.click()
+  toast(phoneOff ? t('Telefon KAPALI — yeni istek gelmez, bekleyenler küsmez.') : t('Telefon açık — istekler yeniden gelmeye başlar.'), phoneOff ? 'b' : 'g')
+})
 $('editbtn').addEventListener('click', () => {
   editMode = !editMode
   $('editbtn').classList.toggle('on', editMode)
@@ -912,6 +941,8 @@ window.addEventListener('pagehide', () => {
 // ---------- döngü ----------
 const clock = new THREE.Clock()
 let spawnT = 2
+// TELEFON KAPAT: yeni istek gelmez; MEVCUT kartların sabrı da donar (itibar cezası işlemez)
+let phoneOff = false
 let matchWasOn = false
 let uiT = 0
 let saveT = 0
@@ -956,12 +987,32 @@ function frame() {
     const gr = document.getElementById('greason')
     if (gr) {
       gr.style.display = 'block'
-      gr.textContent = `${game.day}. gündesin ve ilerlemen SADECE bu cihazda. Hesap aç: buluta taşınsın + ₺2.500 hediye.`
+      gr.textContent = `${game.day}. ${t('gündesin ve ilerlemen SADECE bu cihazda. Hesap aç: buluta taşınsın + ₺2.500 hediye.')}`
     }
+    $('gate').classList.add('show')
+  }
+  // MİSAFİR SINIRI: 5. günden sonra misafirlik biter — kapı kalıcı, 'misafir devam' gizli.
+  // İlerleme KAYBOLMAZ: kayıt/girişte yerel kayıt buluta taşınır (mevcut akış).
+  if (!auth.loggedIn() && game.day > 5 && !$('gate').classList.contains('show')) {
+    const gr = document.getElementById('greason')
+    if (gr) {
+      gr.style.display = 'block'
+      gr.textContent = t('Misafir deneme süresi bitti (5 gün). Ücretsiz hesap aç — tüm ilerlemen aynen taşınır, üstüne ₺2.500 hediye.')
+    }
+    ;($('gguest') as HTMLElement).style.display = 'none'
     $('gate').classList.add('show')
   }
   const gateOpen = $('gate').classList.contains('show')
   if (!gateOpen) game.tick(dt)
+  // ANINDA ÖDEME bildirimi: maç bitti → "+₺X · takım" (çoksa tek toplu toast)
+  if (game.payouts.length) {
+    const tot = game.payouts.reduce((s, p) => s + p.amt, 0)
+    toast(game.payouts.length === 1
+      ? `+₺${tl(tot)} · ${game.payouts[0].team}`
+      : `+₺${tl(tot)} · ${game.payouts.length} ${t('maç bitti')}`, 'g')
+    audio.cash()
+    game.payouts.length = 0
+  }
   {
     let shown = 0
     while (game.notices.length && shown < 2) { toast(game.notices.shift()!, 'g'); if (shown === 0) audio.place(); shown++ }
@@ -987,8 +1038,8 @@ function frame() {
   }
   for (const g of game.claimGoals()) { audio.cash(); toast(`${t('HEDEF TAMAM:')} ${g.label} · +₺${tl(g.reward)}`, 'g') }
 
-  // rezervasyon üretimi
-  if (!gateOpen) spawnT -= dt
+  // rezervasyon üretimi — TELEFON KAPALIYSA çalmaz (ceza da yok, moladasın)
+  if (!gateOpen && !phoneOff) spawnT -= dt
   if (spawnT <= 0) { spawnT = 8 + Math.random() * 9
     for (let k = 0; k < 6; k++) if (game.spawnReservation()) {
       renderQueue(); audio.ring()
@@ -1006,10 +1057,21 @@ function frame() {
   const hour = OPEN_HOUR + Math.floor(frac * HOURS.length)
   const nowDay = (game.day - 1) % 7
   const nowMatch = !!game.bookingAt(nowDay, hour)
-  if (nowMatch && !matchWasOn) { world.sendArrivals(4); audio.cheer() }   // maç başladı → yürüyüş + tezahürat
+  // maç başladı → araba yoldan gelir, park eder, oyuncular inip YÜRÜYEREK sahaya girer
+  if (nowMatch && !matchWasOn) { world.carArrival(() => world.sendArrivals(5)); audio.cheer() }
   matchWasOn = nowMatch
   world.updateMatch(dt, nowMatch)
   world.updateAmbient(dt)
+  // MAÇ OLAYLARI: kavga → polis, sakatlanma → ambulans (siren + araç + toast)
+  while (game.incidents.length) {
+    const inc = game.incidents.shift()!
+    const pol = inc.kind === 'kavga'
+    world.emergency(pol ? 'polis' : 'ambulans')
+    audio.siren(pol ? 'polis' : 'ambulans')
+    toast(pol
+      ? `🚨 ${inc.team} ${t('maçında kavga çıktı — polis geldi! İtibar -0.06')}`
+      : `🚑 ${inc.team} ${t('maçında sakatlanma — ambulans yolda, geçmiş olsun.')}`, pol ? 'b' : '')
+  }
   world.setBillboards(game.hasBillboard)
   world.setRoadSign(game.hasRoadSign)
   world.syncParcels(game.ownedParcels, game.builds)

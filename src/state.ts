@@ -9,9 +9,9 @@ import { t, dayName } from './i18n'
  */
 
 // ---- Zaman ----
-// 1 oyun saati = 30 gerçek sn → dakika göstergesi okunur hızda akar (sn'de ~2 dk).
-// (1 saat = 1 dk denendi: gün 15 dk oluyor, ekonomi temposu ölüyor — 30 sn tatlı nokta.)
-export const HOUR_SECONDS = 30
+// 1 oyun saati = 15 gerçek sn → gün 3.75 dk; tempo yüksek, oturum başına daha çok gün
+// (30 sn denendi: ilk oyuncular günü uzun buldu — 15 sn'e indirildi, lansman kararı.)
+export const HOUR_SECONDS = 15
 export const DAY_SECONDS = HOUR_SECONDS * 15
 export const OPEN_HOUR = 9
 export const CLOSE_HOUR = 24
@@ -86,6 +86,11 @@ export interface Booking {
   needFull?: boolean
   /** hangi saha şeridinde (0..fullCount-1 tam, sonrası mini) — görsel + atama */
   lane?: number
+  /** kaç hafta SONRA oynanacak (0/yok = bu haftaki gün; 1 = sonraki hafta).
+   *  2 haftalık takvim: bugünün geçmiş saatine gelecek hafta rezervasyon konabilsin. */
+  wk?: number
+  /** bu haftaki maçın parası ANINDA ödendi mi (maç bitiminde kasaya düşer) */
+  paid?: boolean
   day: number
   hour: number
   team: string
@@ -101,6 +106,13 @@ const TEAM_NAMES = [
   'Yılmazlar', 'Kaptanlar', 'Mahalle FK', 'Şimşekler', 'Kartallar', 'Dostlar SK',
   'Gece Vardiyası', 'Beton Mikserleri', 'Emekliler', 'Çaycılar', 'Site Gençliği',
   'Ofis Ligi', 'Sanayi Spor', 'Kırmızı Kartlar', 'Ayaküstü FC', 'Kandilliler',
+  'Boğaz Boys', 'Orta Saha AŞ', 'Demir Yumruk', 'Halı Kaplanları', 'Son Dakika FK',
+  'Kalecisiz 5', 'Taksiciler', 'Fırıncılar SK', 'Berberler United', 'Komşular FC',
+  'Efsaneler', 'Rövaşata', 'Ters Makas', 'Aut Çizgisi', 'Korner Bayrağı',
+  'Devre Arası', 'Uzatma Dakikaları', 'Penaltıcılar', 'Direkten Döndü', 'Ofsayt Bekleyenler',
+  'Çift Kale', 'Kaleye Kim Geçecek', 'Topu Dışarı Atanlar', 'Yedek Kulübesi', 'Antrenmansızlar',
+  'Kramponsuzlar', 'Halı Saha Delileri', 'Pazartesi Sendromu', 'Mesai Kaçakları', 'Kadro Dışı',
+  'Golcüler Derneği', 'Verkaç Ustaları', 'Çalım Akademisi',
 ]
 
 // ---- Mağaza / yatırım kalemleri ----
@@ -266,7 +278,8 @@ export class Game {
 
   // ---- türetilmiş ----
   get slotCount() { return this.pitches * 7 * HOURS.length }
-  basePrice() { return 700 + this.pitches * 40 + Math.round(this.rep * 60) }
+  // 700→850 + itibar 60→75: 'para yavaş akıyor' geri bildirimi (lansman öncesi tempo ayarı)
+  basePrice() { return 850 + this.pitches * 40 + Math.round(this.rep * 75) }
   /** kantin + ekipman geliri (maç başına) */
   extraPerMatch() {
     let kantin = 0
@@ -303,31 +316,36 @@ export class Game {
     if (s === 'kurumsal') return this.hasCorporate
     return true
   }
-  bookingAt(day: number, hour: number): Booking | undefined {
-    return this.bookings.find(b => b.day === day && b.hour === hour)
+  /** şimdiki oyun saati (gün içi) */
+  hourNow(): number { return OPEN_HOUR + Math.floor((this.t / DAY_SECONDS) * HOURS.length) }
+  todayDow(): number { return (this.day - 1) % 7 }
+  /** bu kayıt (day,hour) slotunu w. haftada işgal ediyor mu — abonelik HER hafta tutar */
+  private occupies(b: Booking, wk: number): boolean { return b.sub || (b.wk ?? 0) === wk }
+  bookingAt(day: number, hour: number, wk = 0): Booking | undefined {
+    return this.bookings.find(b => b.day === day && b.hour === hour && this.occupies(b, wk))
   }
-  bookingsAt(day: number, hour: number): Booking[] {
-    return this.bookings.filter(b => b.day === day && b.hour === hour)
+  bookingsAt(day: number, hour: number, wk = 0): Booking[] {
+    return this.bookings.filter(b => b.day === day && b.hour === hour && this.occupies(b, wk))
   }
-  usedAt(day: number, hour: number): number { return this.bookingsAt(day, hour).length }
+  usedAt(day: number, hour: number, wk = 0): number { return this.bookingsAt(day, hour, wk).length }
   /** bu saatte hâlâ boş saha var mı */
-  freeAt(day: number, hour: number): boolean { return this.usedAt(day, hour) < this.pitches }
+  freeAt(day: number, hour: number, wk = 0): boolean { return this.usedAt(day, hour, wk) < this.pitches }
   /** tam boy saha sayısı (ana saha + parsel halı sahaları; mini hariç) */
   fullPitchCount(): number { return this.pitches - this.builds.filter(b => b.kind === 'mini').length }
-  fullUsedAt(day: number, hour: number): number {
-    return this.bookingsAt(day, hour).filter(b => b.needFull).length
+  fullUsedAt(day: number, hour: number, wk = 0): number {
+    return this.bookingsAt(day, hour, wk).filter(b => b.needFull).length
   }
   /** tam saha isteyen için bu saatte yer var mı */
-  fullFreeAt(day: number, hour: number): boolean {
-    return this.fullUsedAt(day, hour) < this.fullPitchCount()
+  fullFreeAt(day: number, hour: number, wk = 0): boolean {
+    return this.fullUsedAt(day, hour, wk) < this.fullPitchCount()
   }
-  laneTakenBy(day: number, hour: number, lane: number): Booking | undefined {
-    return this.bookingsAt(day, hour).find(b => this.laneOf(b, day, hour) === lane)
+  laneTakenBy(day: number, hour: number, lane: number, wk = 0): Booking | undefined {
+    return this.bookingsAt(day, hour, wk).find(b => this.laneOf(b, day, hour) === lane)
   }
   /** kayıtlı şerit; eski kayıtların şeritsiz maçlarına deterministik şerit ver */
   laneOf(b: Booking, day: number, hour: number): number {
     if (b.lane !== undefined) return b.lane
-    const peers = this.bookingsAt(day, hour)
+    const peers = this.bookingsAt(day, hour, b.sub ? 0 : (b.wk ?? 0))
     let i = 0
     for (const x of peers) {
       if (x === b) break
@@ -344,13 +362,13 @@ export class Game {
   }
   /** İSTENEN şerit uygun mu; değilse AKILLI atama: tam saha isteyen tam şeride,
    *  normal maç MİNİ şeritlere öncelikli (tam sahalar kurumsala boş kalsın) */
-  resolveLane(r: Reservation, day: number, hour: number, wanted?: number): number | null {
+  resolveLane(r: Reservation, day: number, hour: number, wanted?: number, wk = 0): number | null {
     const fullN = this.fullPitchCount()
     const okLane = (l: number) => {
       if (l < 0 || l >= this.pitches) return false
       if (r.needFull && l >= fullN) return false
-      if (this.laneTakenBy(day, hour, l)) return false
-      if (r.hours === 2 && this.laneTakenBy(day, hour + 1, l)) return false
+      if (this.laneTakenBy(day, hour, l, wk)) return false
+      if (r.hours === 2 && this.laneTakenBy(day, hour + 1, l, wk)) return false
       return true
     }
     if (wanted !== undefined && okLane(wanted)) return wanted
@@ -411,7 +429,12 @@ export class Game {
       if (!flexDays.includes(baseDay)) baseDay = flexDays[Math.floor(Math.random() * flexDays.length)]
       if (!flexHours.includes(baseHour)) baseHour = flexHours[0]
     }
-    const team = TEAM_NAMES[Math.floor(Math.random() * TEAM_NAMES.length)]
+    // AYNI GÜN TEKRAR ENGELİ: kuyrukta ya da bugünün takviminde olan isim tekrar aramasın
+    const busy = new Set([...this.queue.map(q => q.team),
+      ...this.bookings.filter(b => b.day === this.todayDow()).map(b => b.team)])
+    let team = TEAM_NAMES[Math.floor(Math.random() * TEAM_NAMES.length)]
+    for (let tries = 0; tries < 12 && busy.has(team); tries++)
+      team = TEAM_NAMES[Math.floor(Math.random() * TEAM_NAMES.length)]
     // GİZLİ TAVAN: talep + doluluk + sadakat okunabilir sinyallerden türer
     const dem = hourDemand(hour, day)
     const lever = 1 + dem * 0.35 + this.occupancy() * 0.5 + (seg.id === 'kurumsal' ? 0.25 : 0)
@@ -433,41 +456,45 @@ export class Game {
   }
 
   /** kartı takvime yerleştir */
-  place(resId: number, day: number, hour: number, wantedLane?: number): { ok: boolean; msg: string } {
+  place(resId: number, day: number, hour: number, wantedLane?: number, wk = 0): { ok: boolean; msg: string } {
     const i = this.queue.findIndex(r => r.id === resId)
     if (i < 0) return { ok: false, msg: 'Bu istek artık geçerli değil.' }
     const r = this.queue[i]
-    if (!this.freeAt(day, hour)) {
+    if (!this.freeAt(day, hour, wk)) {
       const alt = this.bestSlot(r)
-      return { ok: false, msg: `${DAY_NAMES[day]} ${hour}:00 DOLU (${this.usedAt(day, hour)}/${this.pitches} saha).`
+      return { ok: false, msg: `${DAY_NAMES[day]} ${hour}:00 DOLU (${this.usedAt(day, hour, wk)}/${this.pitches} saha).`
         + (alt ? ` En yakın boş: ${DAY_NAMES[alt.day]} ${alt.hour}:00.` : ' Uygun boş saat kalmamış.') }
     }
     if (hour < OPEN_HOUR || hour >= CLOSE_HOUR) return { ok: false, msg: 'Tesis o saatte kapalı.' }
+    if (wk === 0 && day === this.todayDow() && hour < this.hourNow()) {
+      return { ok: false, msg: t('Bu saat geçti — aynı güne SONRAKİ HAFTA sekmesinden verebilirsin.') }
+    }
     if (!this.slotOk(r, day, hour)) {
       return r.flexible
         ? { ok: false, msg: `${r.team} bu saati kabul etmiyor — yanıp sönen slotlardan birini seç.` }
         : { ok: false, msg: `${r.team} sadece ${DAY_NAMES[r.day]} ${r.hour}:00 istiyor.` }
     }
-    if (r.needFull && !this.fullFreeAt(day, hour)) {
+    if (r.needFull && !this.fullFreeAt(day, hour, wk)) {
       return { ok: false, msg: `${r.team} TAM SAHA istiyor — bu saatte tam sahalar dolu (mini boş ama onlara küçük).` }
     }
-    if (r.hours === 2 && !this.freeAt(day, hour + 1)) {
+    if (r.hours === 2 && !this.freeAt(day, hour + 1, wk)) {
       return { ok: false, msg: `${r.team} 2 saat istiyor — ${hour + 1}:00 da boş olmalı.` }
     }
-    if (r.hours === 2 && r.needFull && !this.fullFreeAt(day, hour + 1)) {
+    if (r.hours === 2 && r.needFull && !this.fullFreeAt(day, hour + 1, wk)) {
       return { ok: false, msg: `${r.team} TAM SAHA istiyor — ${hour + 1}:00'da tam sahalar dolu.` }
     }
-    const lane = this.resolveLane(r, day, hour, wantedLane)
+    const lane = this.resolveLane(r, day, hour, wantedLane, wk)
     if (lane === null) return { ok: false, msg: 'Uygun saha şeridi yok — şeritler dolu.' }
     this.queue.splice(i, 1)
+    const wkF = wk > 0 ? wk : undefined
     if (r.hours === 2) {
       const half = Math.round(r.price / 2 / 10) * 10
-      this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0, needFull: r.needFull, lane })
-      this.bookings.push({ day, hour: hour + 1, team: r.team, segment: r.segment, price: r.price - half, sub: false, weeksLeft: 0, needFull: r.needFull, lane })
+      this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0, needFull: r.needFull, lane, wk: wkF })
+      this.bookings.push({ day, hour: hour + 1, team: r.team, segment: r.segment, price: r.price - half, sub: false, weeksLeft: 0, needFull: r.needFull, lane, wk: wkF })
     } else {
       this.bookings.push({
         day, hour, team: r.team, segment: r.segment, price: r.price,
-        sub: r.weeks > 0, weeksLeft: r.weeks, needFull: r.needFull, lane,
+        sub: r.weeks > 0, weeksLeft: r.weeks, needFull: r.needFull, lane, wk: r.weeks > 0 ? undefined : wkF,
       })
     }
     if (r.weeks > 0) { if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] } this.gSubs++ }
@@ -477,15 +504,15 @@ export class Game {
   }
 
   /** ÖNERİLEN SLOT: bitişik saat primi kuran slot öncelikli, yoksa ilk boş geçerli slot */
-  bestSlot(r: Reservation): { day: number; hour: number; adj: boolean } | null {
+  bestSlot(r: Reservation): { day: number; hour: number; adj: boolean; wk: number } | null {
     const days = r.flexible ? r.flexDays : [r.day]
     const hours = r.flexible ? r.flexHours : [r.hour]
-    let first: { day: number; hour: number; adj: boolean } | null = null
-    for (const d of days) for (const h of hours) {
-      if (!this.canPlaceAt(r, d, h)) continue
-      const adj = !!(this.bookingAt(d, h - 1) || this.bookingAt(d, h + 1))
-      if (adj) return { day: d, hour: h, adj: true }   // bitişik = kantin primi → en iyi
-      if (!first) first = { day: d, hour: h, adj: false }
+    let first: { day: number; hour: number; adj: boolean; wk: number } | null = null
+    for (const wk of [0, 1]) for (const d of days) for (const h of hours) {
+      if (!this.canPlaceAt(r, d, h, wk)) continue
+      const adj = !!(this.bookingAt(d, h - 1, wk) || this.bookingAt(d, h + 1, wk))
+      if (adj) return { day: d, hour: h, adj: true, wk }   // bitişik = kantin primi → en iyi
+      if (!first) first = { day: d, hour: h, adj: false, wk }
     }
     return first
   }
@@ -500,21 +527,22 @@ export class Game {
 
   /** YERLEŞTİRİLEBİLİR Mİ: kural + kapasite (UI vurgusu ve bestSlot bunu kullanır) */
   /** 2 saatlik kart TEK saate sığar mı (tam yer yokken kısmi karşı-teklif) */
-  canPlacePartial(r: Reservation, day: number, hour: number): boolean {
+  canPlacePartial(r: Reservation, day: number, hour: number, wk = 0): boolean {
     if (r.hours < 2 || r.partialRefused) return false
-    if (this.canPlaceAt(r, day, hour)) return false // tam yer varsa kısmiye gerek yok
+    if (this.canPlaceAt(r, day, hour, wk)) return false // tam yer varsa kısmiye gerek yok
+    if (wk === 0 && day === this.todayDow() && hour < this.hourNow()) return false
     if (!r.flexible) { if (r.day !== day || r.hour !== hour) return false }
     else if (!r.flexDays.includes(day) || !r.flexHours.includes(hour)) return false
-    if (!this.freeAt(day, hour)) return false
-    return !r.needFull || this.fullFreeAt(day, hour)
+    if (!this.freeAt(day, hour, wk)) return false
+    return !r.needFull || this.fullFreeAt(day, hour, wk)
   }
 
   /** KISMİ KARŞI-TEKLİF: "2 saat yok, 1 saat vereyim?" — esnek %70, katı %50 kabul eder */
-  placePartial(resId: number, day: number, hour: number): { ok: boolean; msg: string } {
+  placePartial(resId: number, day: number, hour: number, wk = 0): { ok: boolean; msg: string } {
     const i = this.queue.findIndex(x => x.id === resId)
     if (i < 0) return { ok: false, msg: 'Bu istek artık geçerli değil.' }
     const r = this.queue[i]
-    if (!this.canPlacePartial(r, day, hour)) return { ok: false, msg: 'Bu saat kısmi teklife uygun değil.' }
+    if (!this.canPlacePartial(r, day, hour, wk)) return { ok: false, msg: 'Bu saat kısmi teklife uygun değil.' }
     if (Math.random() > (r.flexible ? 0.7 : 0.5)) {
       r.partialRefused = true
       this.loyalty[r.team] = (this.loyalty[r.team] ?? 0) - 0.2
@@ -523,18 +551,20 @@ export class Game {
     const half = Math.round(r.price / r.hours / 10) * 10
     this.queue.splice(i, 1)
     this.bookings.push({ day, hour, team: r.team, segment: r.segment, price: half, sub: false, weeksLeft: 0,
-      needFull: r.needFull, lane: this.resolveLane(r, day, hour) ?? 0 })
+      needFull: r.needFull, lane: this.resolveLane(r, day, hour, undefined, wk) ?? 0, wk: wk > 0 ? wk : undefined })
     this.placedCount++
     this.events.push(`${r.team} 1 saatle idare etti (₺${half.toLocaleString('tr-TR')}).`)
     return { ok: true, msg: `${r.team} 1 saati kabul etti — ₺${half.toLocaleString('tr-TR')}.` }
   }
 
-  canPlaceAt(r: Reservation, day: number, hour: number): boolean {
+  canPlaceAt(r: Reservation, day: number, hour: number, wk = 0): boolean {
     if (!this.slotOk(r, day, hour)) return false
-    if (!this.freeAt(day, hour)) return false
-    if (r.needFull && !this.fullFreeAt(day, hour)) return false
+    // BUGÜNÜN geçmiş saati bu hafta oynatılamaz — gelecek hafta sekmesinden verilir
+    if (wk === 0 && day === this.todayDow() && hour < this.hourNow()) return false
+    if (!this.freeAt(day, hour, wk)) return false
+    if (r.needFull && !this.fullFreeAt(day, hour, wk)) return false
     if (r.hours < 2) return true
-    return this.freeAt(day, hour + 1) && (!r.needFull || this.fullFreeAt(day, hour + 1))
+    return this.freeAt(day, hour + 1, wk) && (!r.needFull || this.fullFreeAt(day, hour + 1, wk))
   }
 
   /** İsteği kibarca GERİ ÇEVİR — takılı kart kalmasın (dolu takvim supabı) */
@@ -587,6 +617,15 @@ export class Game {
   adDays = 0
   /** oyun-içi otomatik olaylar için bildirim kuyruğu (UI toast'a çevirir + Defter'e kopyalanır) */
   notices: string[] = []
+  /** ANINDA ÖDEME bildirimleri — UI her karede boşaltır ("+₺X · takım") */
+  payouts: { team: string; amt: number }[] = []
+  /** telefon kapalı (UI set eder): sabır donuk, kayıp yok — kaydedilmez, oturumluk */
+  phonePaused = false
+  /** maç olayları (kavga→polis, sakatlanma→ambulans) — UI tüketir */
+  incidents: { kind: 'kavga' | 'sakatlanma'; team: string }[] = []
+  private lastIncidentDay = 0
+  /** bugün maç bitiminde anında ödenen toplam (endDay defteri bununla kapanır) */
+  paidToday = 0
   pushNotice(msg: string) { this.notices.push(msg); this.events.push(msg) }
   /** kaçan müşteri bildirimleri (üzgün ses + toast) */
   lostNotices: string[] = []
@@ -766,6 +805,34 @@ export class Game {
       this.t -= DAY_SECONDS
       this.endDay()
     }
+    // ANINDA ÖDEME: maç bitti mi (saati geçti mi) → para o an kasaya + bildirim kuyruğu.
+    // 'Para gelmiyor' hissinin ilacı: gün sonunu bekleme. endDay ödenmişleri atlar.
+    const hn = this.hourNow(), dowNow = this.todayDow()
+    for (const b of this.bookings) {
+      if (b.paid || b.day !== dowNow || !(b.sub || (b.wk ?? 0) === 0)) continue
+      if (b.hour >= hn) continue // maç daha bitmedi
+      const amt = b.price + this.extraPerMatch()
+      b.paid = true
+      this.money += amt
+      this.paidToday += amt
+      this.gEarned += amt
+      this.payouts.push({ team: b.team, amt })
+    }
+    // MAÇ OLAYI: aktif maç varken nadiren kavga/sakatlanma (günde en çok 1, 2. günden itibaren)
+    if (this.day >= 2 && this.lastIncidentDay !== this.day) {
+      const activeMatch = this.bookings.find(b => b.day === dowNow && b.hour === hn && (b.sub || (b.wk ?? 0) === 0))
+      if (activeMatch && Math.random() < dt * 0.006) {
+        this.lastIncidentDay = this.day
+        const kind = Math.random() < 0.5 ? 'kavga' as const : 'sakatlanma' as const
+        if (kind === 'kavga') {
+          this.rep = Math.max(0, this.rep - 0.06)
+          this.events.push(`${activeMatch.team} ${t('maçında KAVGA çıktı — polis geldi, itibar -0.06.')}`)
+        } else {
+          this.events.push(`${activeMatch.team} ${t('maçında sakatlanma — ambulans geldi, oyuncuya geçmiş olsun.')}`)
+        }
+        this.incidents.push({ kind, team: activeMatch.team })
+      }
+    }
     // ÇIRAK: sabrı azalan isteği oyuncu adına yerleştirir
     if (this.personel.cirak) {
       for (const r of [...this.queue]) {
@@ -801,6 +868,8 @@ export class Game {
       else if (placedByMgr > 1) this.notices.push(t('Müdür yerleştirdi: ') + placedByMgr + t(' maç'))
     }
     // kart sabrı — EL SIKIŞILAN (pazarlığı biten) kart KAÇMAZ, süresi donar
+    // TELEFON KAPALI: mola modu — sabır da donar, kimse küsmez (itibar cezası işlemez)
+    if (this.phonePaused) return
     for (let i = this.queue.length - 1; i >= 0; i--) {
       const q = this.queue[i]
       if (q.haggled) {
@@ -819,7 +888,11 @@ export class Game {
 
   /** gün sonu: gelir tahsil, gider düş, abonelikleri işle */
   endDay() {
-    const todays = this.bookings.filter(b => b.day === (this.day - 1) % 7)
+    const dow = (this.day - 1) % 7
+    // yalnız BU haftanın maçları oynanır; gelecek haftaya yazılanlar (wk>0) sırasını bekler
+    const todays = this.bookings.filter(b => b.day === dow && (b.sub || (b.wk ?? 0) === 0))
+    // gelecek haftaya yazılanların sayacı bir azalır (bu günün geçişi tüketildi)
+    for (const b of this.bookings) if (!b.sub && b.day === dow && (b.wk ?? 0) > 0) b.wk = (b.wk ?? 0) - 1
     // KESİNTİSİZ SAAT PRİMİ: arka arkaya dolu saatler kantini patlatır
     const hoursSet = new Set(todays.map(b => b.hour))
     let bestRun = 0, run = 0
@@ -837,9 +910,12 @@ export class Game {
     }, 0)
     income += courtRent
     for (const b of todays) {
-      income += b.price + Math.round(this.extraPerMatch() * runBonus)
+      // anında ödenmişse yalnız kesintisiz-gün bonusu farkı; ödenmemişse (23:00 maçı) tamamı
+      if (b.paid) income += Math.round(this.extraPerMatch() * (runBonus - 1))
+      else income += b.price + Math.round(this.extraPerMatch() * runBonus)
       // abonelik haftası tüket
       if (b.sub) {
+        b.paid = false // gelecek haftaki maçı yeniden ödenecek
         b.weeksLeft--
         if (b.weeksLeft <= 0) {
           // K4/K6: sonsuz abonelik bitti — yenileme OLASILIKLI (%60 + itibar payı),
@@ -864,10 +940,12 @@ export class Game {
     this.gEarned += income
     const upkeep = this.dailyUpkeep()
     this.money += income - upkeep
-    this.lastDayProfit = income - upkeep
-    this.locIncome[this.activeLoc] = income - upkeep
-    this.incomeToday = income
+    // defter: gün içinde anında ödenenler + gün sonu kalemleri birlikte raporlanır
+    this.lastDayProfit = this.paidToday + income - upkeep
+    this.locIncome[this.activeLoc] = this.paidToday + income - upkeep
+    this.incomeToday = this.paidToday + income
     this.expenseToday = upkeep
+    this.paidToday = 0
     // DİĞER ŞUBELER: müdür işletir — maçlar oynanır, abonelikler işler, kort kirası gelir
     const dayIdx = (this.day - 1) % 7
     let subeIncome = 0
@@ -938,6 +1016,7 @@ export class Game {
       this.money = Math.max(0, this.money - fine)
       this.docs = Math.min(1, this.docs + 0.3)
       this.events.push(`DENETİM: evrak eksiği — ₺${fine.toLocaleString('tr-TR')} ceza kesildi.`)
+      this.notices.push(t('Denetim cezası yedin! Kalıcı çözüm: Yazıhane → Yatırım → Belge Takip Servisi.'))
       this.rep = Math.max(0, this.rep - 0.15)
     }
   }
@@ -1176,7 +1255,7 @@ export class Game {
     const out: { title: string; why: string; action?: BuyId; cta?: string; urgent: boolean }[] = []
     // 1. acil: evrak
     if (!this.docService && this.docs < 0.5) {
-      out.push({ title: t('Evrakların eskiyor'), why: `${t('Geçerlilik')} %${Math.round(this.docs * 100)}. ${t('Denetim gelirse ceza yersin.')}`,
+      out.push({ title: t('Evrakların eskiyor'), why: `${t('Geçerlilik')} %${Math.round(this.docs * 100)}. ${t('Denetim gelirse ceza yersin.')} ${t('Aşağıdaki butonla hemen çöz:')}`,
         action: 'docs', cta: `${t('Belge Takip Servisi')} ₺9.500`, urgent: true })
     }
     // 2. boş prime-time varsa: ışık

@@ -49,6 +49,13 @@
   .chip.warn b { color:var(--clay); }
 
   /* ===== SOL: GELEN İSTEKLER (akan şerit) ===== */
+  /* İLK OYUNCU KOÇU: ilk kartı işaret eden balon + kartta sarı nabız */
+  #coach { position:fixed; z-index:14; background:var(--sun); color:#3d2a06; font-weight:800; font-size:12.5px;
+    padding:9px 13px; border-radius:12px; box-shadow:0 8px 22px rgba(160,110,10,.45); max-width:200px;
+    display:none; pointer-events:none; line-height:1.4; animation:coachbob 1s ease-in-out infinite; }
+  #coach.show { display:block; }
+  @keyframes coachbob { 0%,100% { margin-left:0 } 50% { margin-left:8px } }
+  .rcard.coach { box-shadow:0 0 0 3px var(--sun), 0 6px 18px rgba(160,110,10,.35); animation:pulse .9s infinite; }
   #queue { position:fixed; left:10px; top:82px; max-height:calc(100vh - 62px); width:196px; z-index:12;
     background:var(--paper); border-radius:var(--r-lg); box-shadow:var(--shadow);
     display:flex; flex-direction:column; overflow:hidden; }
@@ -132,6 +139,8 @@
   #pickbar .arr { font-size:14px; margin-left:6px; }
   @keyframes bounce { 0%,100% { transform:translateX(-50%) translateY(0) } 50% { transform:translateX(-50%) translateY(7px) } }
   #daytabs { display:flex; gap:3px; padding:6px 8px 0; }
+  .wksep { flex:0 0 auto; align-self:center; font-size:8.5px; font-weight:800; color:var(--muted);
+    background:var(--paper-2); border-radius:6px; padding:5px 5px; letter-spacing:.4px; white-space:nowrap; }
   .dtab { flex:1; min-width:48px; background:var(--paper-2); border:1.5px solid transparent; border-radius:9px;
     padding:5px 6px 6px; cursor:pointer; text-align:center; position:relative; transition:border-color .1s; }
   .dtab:hover { border-color:#bcd4bb; }
@@ -273,6 +282,7 @@
   #yazpill:hover { background:#1f282e; }
   #zoombar { position:fixed; right:10px; bottom:14px; z-index:13; display:flex; flex-direction:column; gap:5px; align-items:flex-end; }
   #zoombar button.on { background:var(--sun); color:#5a3c05; border-bottom-color:#c98d1e; }
+  #zoombar button.off { background:var(--clay); border-bottom-color:#a93636; }
   #zoombar button { width:44px; height:36px; background:var(--paper); color:var(--head); font-size:19px;
     font-weight:800; border-radius:10px; box-shadow:var(--shadow); border:1.5px solid #dde9d5; line-height:1; }
   #zoombar button:hover { background:#fff; border-color:var(--green); }
@@ -416,6 +426,7 @@
     #railbtns button { padding:10px 6px; font-size:10px; }
     /* istek paneli: dar ama parmakla kullanılabilir */
     #queue { width:47vw; max-width:188px; max-height:30vh; }
+    #coach { max-width:150px; font-size:11.5px; }
     .rcard button { min-height:40px; }
     .rcard .rej { padding:9px 6px; }
     /* TAKVİM: küçültme YOK — tam genişlik, büyük hücreler, saatler yatay kayar */
@@ -487,6 +498,7 @@
 
 <div id="pickbar"></div>
 
+<div id="coach"></div>
 <div id="queue">
   <div class="desk-head" data-i18n="Gelen İstekler">Gelen İstekler</div>
   <div id="qlist"></div>
@@ -499,7 +511,7 @@
 </div>
 
 <div id="yazpill">YAZIHANE</div>
-<div id="zoombar"><button id="setbtn" title="Ayarlar">⚙</button><button id="editbtn" title="Düzenleme modu — yapı taşı">✥</button><button id="zin">+</button><button id="zout">−</button></div>
+<div id="zoombar"><button id="setbtn" title="Ayarlar">⚙</button><button id="phonebtn" title="Telefonu kapat/aç — kapalıyken yeni istek gelmez">📞</button><button id="editbtn" title="Düzenleme modu — yapı taşı">✥</button><button id="zin">+</button><button id="zout">−</button></div>
 
 <div id="office">
   <div class="panel">
