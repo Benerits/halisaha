@@ -772,7 +772,7 @@ function openParcel(c: number, r: number) {
       <span class="gn">${BUILDS[b.kind].gain}${isCourt ? ` · ${t('yıpranma')} %${wearPct}` : ''}</span>
       ${isCourt ? `<button class="buy" id="pservice" ${wearPct < 10 ? 'disabled' : ''}>₺4.000</button>` : ''}
       ${b.kind === 'mini' && (b.count ?? 1) < 3 ? `<button class="buy" id="pminiadd">${t('+ Mini Ekle')} (${b.count ?? 1}/3) ₺${tl(game.buildCostFor('mini'))}</button>` : ''}
-      <button class="buy" id="pdemol" style="background:var(--clay)">YIK · %40 iade</button>
+      <button class="buy" id="pdemol" style="background:var(--clay);border-bottom-color:#b45c33">YIK · %40 iade</button>
       ${(() => {
         if (!['pitch', 'mini', 'basket', 'voley'].includes(b.kind)) return ''
         const key = `${c},${r}`

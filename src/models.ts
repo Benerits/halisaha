@@ -109,7 +109,7 @@ export async function loadKit(): Promise<Kit> {
     load(`${B}/roads/road-crossing.glb`),
     load(`${B}/roads/light-curved.glb`),
     load(`${B}/roads/light-curved-double.glb`),
-    load(`${B}/props/wc.glb`).catch(() => null),
+    load(`${B}/props/wc-bina-v2.glb`).catch(() => null), // ad değişti: tarayıcı cache'i eski binayı 24 saat tutuyordu
   ])
   const ok = <T,>(a: (T | null)[]) => a.filter((x): x is T => !!x)
   return { chars: ok(chars), trees: ok(trees), cars: ok(cars), buildings: [...ok(buildings), ...ok(homes)], wc: wcModel ?? null, fence, planter,
