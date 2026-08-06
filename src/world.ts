@@ -656,9 +656,9 @@ export class World {
       // İŞLETME BİNALARI — kenney ticari bina + tür işareti; kit yoksa prosedürel kutu
       const pad2 = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W - 2, PARCEL_D - 2), lam(0xc9c3b4))
       pad2.position.z = 0.06; pad2.receiveShadow = true; g.add(pad2)
-      const bh = kind === 'kantin' ? 2.9 : kind === 'dus' ? 2.5 : 1.9
+      const bh = kind === 'kantin' ? 2.9 : kind === 'dus' ? 2.5 : 2.2
       if (this.kit?.buildings.length) {
-        const idx = kind === 'kantin' ? 1 : kind === 'dus' ? 2 : 3
+        const idx = kind === 'kantin' ? 1 : kind === 'dus' ? 2 : 5 // wc: BenelOil'deki gibi düzgün kenney binası
         const b = fitModel(this.kit.buildings[idx % this.kit.buildings.length], bh)
         b.rotation.z = Math.PI
         g.add(b)

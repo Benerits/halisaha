@@ -392,7 +392,9 @@ function renderQueue() {
     const r = game.queue.find(x => x.id === Number(el.dataset.id))
     const bar = el.querySelector('.bar i') as HTMLElement | null
     if (r && bar) {
-      bar.style.width = r.haggled ? '100%' : `${(r.patience / r.maxPatience) * 100}%`
+      const ratio = r.haggled ? 1 : r.patience / r.maxPatience
+      bar.style.width = `${ratio * 100}%`
+      bar.style.background = ratio > 0.5 ? 'var(--green)' : ratio > 0.25 ? 'var(--sun)' : '#d64545'
       el.classList.toggle('deal', r.haggled)
     }
   })
@@ -1158,6 +1160,7 @@ function frame() {
   if (spawnT <= 0) {
     const callMult = 1 + (game.hasRoadSign ? 0.25 : 0) + (game.adDays > 0 ? 0.5 : 0)
       + game.rep * 0.06 + (game.hasPhone2 ? 0.15 : 0)
+      + (game.totalLanes() - 1) * 0.22 // saha/kort arttıkça telefon daha sık çalar
     spawnT = (6 + Math.random() * 6) / callMult
     for (let k = 0; k < 6; k++) if (game.spawnReservation()) {
       renderQueue(); audio.ring()
