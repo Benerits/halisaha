@@ -230,8 +230,8 @@ function mailTemplate(kind, lang, url) {
     verify: {
       subject: en ? 'HALI SAHA — Verify your email' : 'HALI SAHA — E-postanı doğrula',
       title: en ? 'Verify your email' : 'E-postanı doğrula',
-      body: en ? 'Welcome to HALI SAHA! Confirm your email address to keep running your station.'
-        : 'HALI SAHA’e hoş geldin! İstasyonunu işletmeye devam etmek için e-postanı doğrula.',
+      body: en ? 'Welcome to HALI SAHA! Confirm your email address to keep running your pitch.'
+        : 'HALI SAHA’ya hoş geldin! Sahanı işletmeye devam etmek için e-postanı doğrula.',
       btn: en ? 'Verify my email' : 'E-postamı doğrula',
     },
     reset: {
@@ -248,7 +248,7 @@ function mailTemplate(kind, lang, url) {
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#eef1f4">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f4;padding:28px 12px"><tr><td align="center">
 <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 6px 24px rgba(9,9,11,.08);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
-<tr><td style="background:linear-gradient(135deg,#e8862e,#d64545);padding:26px 28px;text-align:center"><div style="font-size:30px;font-weight:800;color:#fff;letter-spacing:-.5px">HALI SAHA</div></td></tr>
+<tr><td style="background:linear-gradient(135deg,#2f9e57,#14532d);padding:26px 28px;text-align:center"><div style="font-size:30px;font-weight:800;color:#fff;letter-spacing:-.5px">HALI SAHA</div></td></tr>
 <tr><td style="padding:34px 30px 10px;text-align:center">
 <h1 style="margin:0 0 12px;font-size:22px;color:#1c2530">${C.title}</h1>
 <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:#5a6570">${C.body}</p>
