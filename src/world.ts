@@ -104,7 +104,6 @@ export class World {
     this.buildGround()
     this.buildPitch(0, PITCH_Y)
     this.buildClubhouse()
-    this.buildParking()
     this.buildStreet()
     this.spawnPlayers()
     this.buildParcelGrid()
@@ -657,8 +656,12 @@ export class World {
       const pad2 = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W - 2, PARCEL_D - 2), lam(0xc9c3b4))
       pad2.position.z = 0.06; pad2.receiveShadow = true; g.add(pad2)
       const bh = kind === 'kantin' ? 2.9 : kind === 'dus' ? 2.5 : 2.2
-      if (this.kit?.buildings.length) {
-        const idx = kind === 'kantin' ? 1 : kind === 'dus' ? 2 : 5 // wc: BenelOil'deki gibi düzgün kenney binası
+      if (kind === 'wc' && this.kit?.wc) {
+        const b = fitModel(this.kit.wc, bh) // kenney city-kit-suburban binası
+        b.rotation.z = Math.PI
+        g.add(b)
+      } else if (this.kit?.buildings.length) {
+        const idx = kind === 'kantin' ? 1 : 2
         const b = fitModel(this.kit.buildings[idx % this.kit.buildings.length], bh)
         b.rotation.z = Math.PI
         g.add(b)
@@ -1377,12 +1380,12 @@ export class World {
       // GRUP MARKALARI: tek kelimeliler dar (1 birim), uzunlar geniş (2 birim).
       // KOYU zemin + BEYAZ kalın yazı — 'çok aydınlık, okunmuyor' geri bildirimi.
       const ads: { txt: string; bg: string; units: number }[] = [
-        { txt: 'BENERITS', bg: '#14532d', units: 1 },
+        { txt: 'BENERITS', bg: '#c9591d', units: 1 },
         { txt: 'HOPSULE', bg: '#1d3a8f', units: 1 },
         { txt: 'BENELOIL', bg: '#8f1d1d', units: 1 },
         { txt: 'DENIZOGLU CAPITAL', bg: '#123c4a', units: 2 },
       ]
-      const UNIT = 2.9, GAP = 0.35
+      const UNIT = 2.35, GAP = 0.3 // toplam ≤ saha genişliği — kenardan taşmaz
       const totalW = ads.reduce((a2, x) => a2 + x.units * UNIT, 0) + GAP * (ads.length - 1)
       let cursor = -totalW / 2
       for (const ad of ads) {

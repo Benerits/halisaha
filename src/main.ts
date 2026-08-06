@@ -1088,7 +1088,10 @@ setInterval(() => {
 function frame() {
   requestAnimationFrame(frame)
   if (document.hidden) { return }
-  const dt = Math.min(clock.getDelta(), 0.05)
+  // SAAT HASSASİYETİ: görseller 50ms'e kırpılır ama OYUN SAATİ gerçek zamanı izler —
+  // düşük FPS'te kırpma yüzünden '20 sn'lik saat' 24-25 sn sürüyordu.
+  const rawDt = clock.getDelta()
+  const dt = Math.min(rawDt, 0.05)
 
   const prevDay = game.day
   // İLK İŞ: tesise isim (gate kapalıyken, isim boşsa)
@@ -1119,7 +1122,7 @@ function frame() {
     $('gate').classList.add('show')
   }
   const gateOpen = $('gate').classList.contains('show')
-  if (!gateOpen) game.tick(dt)
+  if (!gateOpen) game.tick(Math.min(rawDt, 1))
   // ANINDA ÖDEME bildirimi: maç bitti → "+₺X · takım" (çoksa tek toplu toast)
   if (game.payouts.length) {
     const tot = game.payouts.reduce((s, p) => s + p.amt, 0)

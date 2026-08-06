@@ -268,8 +268,8 @@ export class Game {
   hasRoadSign = false    // yol tabelası — talep artışı
   /** satın alınmış parseller */
   ownedParcels: string[] = [...STARTER_PARCELS]
-  /** parsellere kurulan yapılar */
-  builds: PlacedBuild[] = []
+  /** parsellere kurulan yapılar — başlangıç otoparkı (2,0)'da gerçek yapıdır: yıkılabilir */
+  builds: PlacedBuild[] = [{ key: '2,0', kind: 'parking' }]
 
   /** belge geçerliliği 0-1 (1 = tam) — sıfıra yaklaşınca denetimde ceza */
   docs = 1
@@ -1525,5 +1525,8 @@ export class Game {
     if (Array.isArray(d.ownedParcels))
       this.ownedParcels = [...new Set([...STARTER_PARCELS, ...(d.ownedParcels as string[])])]
     if (Array.isArray(d.builds)) this.builds = d.builds as PlacedBuild[]
+    // GÖÇ: eski kayıtlarda başlangıç otoparkı yapı değildi — yoksa (2,0)'a ekle (yıkılabilir olsun)
+    if (!this.builds.some(b2 => b2.kind === 'parking') && !this.builds.some(b2 => b2.key === '2,0'))
+      this.builds.push({ key: '2,0', kind: 'parking' })
   }
 }
