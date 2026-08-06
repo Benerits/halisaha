@@ -38,6 +38,7 @@ const EN: Record<string, string> = {
   'sonraki hafta': 'next week',
   'İSTE': 'ASK',
   'MİNİ': 'MINI',
+  'Sahalar': 'Pitches',
   'Müdüre Sal': 'Send to Manager',
   'Önce bir müdür işe al (Yazıhane → Personel).': 'Hire a manager first (Office → Staff).',
   ' için uygun boş slot yok — müdür çaresiz.': ' has no free slot — even the manager is stuck.',

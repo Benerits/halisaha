@@ -170,6 +170,12 @@
   .dtab .dot { position:absolute; top:5px; right:6px; width:9px; height:9px; border-radius:99px;
     background:var(--sun); box-shadow:0 0 6px rgba(242,181,60,.9); animation:pulse2 .7s infinite; }
   @keyframes pulse2 { 50% { transform:scale(1.45); } }
+  #lanetabs { display:none; gap:4px; padding:6px 8px 0; }
+  #lanetabs.show { display:flex; }
+  .ltab { flex:0 0 auto; background:var(--paper-2); border-radius:8px; padding:5px 12px;
+    font-size:10.5px; font-weight:800; color:var(--muted); cursor:pointer; border-bottom:2.5px solid transparent; }
+  .ltab.on { background:var(--head); color:var(--head-ink); }
+  .ltab .n { opacity:.7; font-weight:700; margin-left:3px; }
   #calwrap { padding:6px 8px 8px; }
   #cal { display:flex; gap:4px; }
   /* ÇOK SAHA: saha satırlı ızgara */
@@ -526,6 +532,7 @@
 <div id="desk">
   <div class="desk-head">Çizelge — boş saate tıkla</div>
   <div id="daytabs"></div>
+  <div id="lanetabs"></div>
   <div id="calwrap"><div id="cal"></div></div>
 </div>
 

@@ -658,9 +658,21 @@ export class World {
       pad2.position.z = 0.06; pad2.receiveShadow = true; g.add(pad2)
       const bh = kind === 'kantin' ? 2.9 : kind === 'dus' ? 2.5 : 2.2
       if (kind === 'wc' && this.kit?.wc) {
-        const b = fitModel(this.kit.wc, bh) // kenney city-kit-suburban binası
+        const b = fitModel(this.kit.wc, 2.6) // BenelOil ile aynı bina + aynı ölçek
         b.rotation.z = Math.PI
+        b.traverse(mm => { mm.castShadow = true })
         g.add(b)
+        // KİMLİK TABELASI: mavi 'WC' — bina ancak bununla tuvalet diye okunur (BenelOil kalıbı)
+        const cvs = document.createElement('canvas'); cvs.width = 180; cvs.height = 100
+        const ctx = cvs.getContext('2d')!
+        ctx.fillStyle = '#2f6fed'; ctx.beginPath(); ctx.roundRect(0, 0, 180, 100, 16); ctx.fill()
+        ctx.fillStyle = '#fff'; ctx.font = '800 56px sans-serif'
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('WC', 90, 52)
+        const tex = new THREE.CanvasTexture(cvs); tex.colorSpace = THREE.SRGBColorSpace
+        const sm = new THREE.MeshBasicMaterial({ map: tex, transparent: true }); sm.toneMapped = false
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.61), sm)
+        sign.position.set(0, -1.75, 1.9); sign.rotation.x = Math.PI / 2
+        g.add(sign)
       } else if (this.kit?.buildings.length) {
         const idx = kind === 'kantin' ? 1 : 2
         const b = fitModel(this.kit.buildings[idx % this.kit.buildings.length], bh)

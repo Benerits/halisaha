@@ -229,7 +229,14 @@ interface LocSnap {
   bookings: Booking[]; queue: Reservation[]; pitches: number
   ownedParcels: string[]; builds: PlacedBuild[]
   personel?: Personel
+  /** ŞUBEYE ÖZEL yatırımlar — her tesis kendi ışığını/reklamını/kantinini alır */
+  flags?: Record<string, boolean | number>
 }
+
+/** şubeyle taşınan yatırım alanları (mağaza + evrak + reklam günleri) */
+const LOC_FIELDS = ['hasCanteen', 'hasFridge', 'hasTost', 'hasBaklava', 'hasKeeper', 'hasCleats',
+  'hasLights', 'hasShower', 'hasWC', 'hasSchoolDeal', 'hasTeaRoom', 'hasCorporate',
+  'hasBillboard', 'hasRoadSign', 'hasPhone2', 'docService', 'staff', 'docs', 'adDays'] as const
 
 export interface SaveData { [k: string]: unknown }
 
@@ -779,9 +786,11 @@ export class Game {
   locDef(): LocDef { return LOCATIONS.find(l => l.id === this.activeLoc)! }
   /** aktif şubenin canlı alanlarını depoya yaz */
   syncLoc() {
+    const flags: Record<string, boolean | number> = {}
+    for (const f of LOC_FIELDS) flags[f] = (this as unknown as Record<string, boolean | number>)[f]
     this.locStore[this.activeLoc] = {
       bookings: this.bookings, queue: this.queue, pitches: this.pitches,
-      ownedParcels: this.ownedParcels, builds: this.builds, personel: this.personel,
+      ownedParcels: this.ownedParcels, builds: this.builds, personel: this.personel, flags,
     }
   }
   private loadLocFields(id: LocId) {
@@ -790,6 +799,14 @@ export class Game {
     this.bookings = sn.bookings; this.queue = sn.queue; this.pitches = sn.pitches
     this.ownedParcels = sn.ownedParcels; this.builds = sn.builds
     this.personel = sn.personel ?? emptyPersonel()
+    // ŞUBEYE ÖZEL yatırımlar: kayıtta yoksa bu şube SIFIRDAN başlar ('zaten var' bug'ı bitti)
+    const self = this as unknown as Record<string, boolean | number>
+    const fl = sn.flags ?? {}
+    for (const f of LOC_FIELDS) {
+      if (f === 'docs') self[f] = (fl[f] as number) ?? 1
+      else if (f === 'staff' || f === 'adDays') self[f] = (fl[f] as number) ?? 0
+      else self[f] = (fl[f] as boolean) ?? false
+    }
   }
   switchLoc(id: LocId): { ok: boolean; msg: string } {
     if (!this.unlockedLocs.includes(id)) return { ok: false, msg: 'Bu şube henüz senin değil.' }

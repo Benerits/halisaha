@@ -48,6 +48,7 @@ function toast(msg: string, kind: '' | 'g' | 'b' = '') {
 // ---------- takvim (gün sekmeli tek şerit — 105 minik hücre yerine 15 büyük slot) ----------
 let viewDay = -1
 let viewWk = 0 // 0 = bu hafta, 1 = SONRAKİ hafta (2 haftalık takvim)
+let laneCat: 'full' | 'mini' | 'basket' | 'voley' = 'full' // takvim kategori sekmesi
 let tabsCache = '', calCache = '', pickCache = ''
 let flashUntil = 0
 const DAY_FULL = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
@@ -148,6 +149,7 @@ function renderCal() {
   const hintCls = game.placedCount < 12 ? 'hint' : 'hint calm'
   let calHtml = ''
   if (N === 1) {
+    $('lanetabs').classList.remove('show')
     calHtml = HOURS.map(hour => {
       const bs = game.bookingsAt(viewDay, hour, viewWk)
       const b = bs[0]
@@ -169,15 +171,33 @@ function renderCal() {
       </div>`
     }).join('')
   } else {
-    // sol şerit etiketleri + saat sütunları (satır = saha)
+    // KATEGORİ SEKMELERİ: Sahalar / Mini / Basket / Voley — 12+ şerit tek listede taşıyordu
+    const cats: ('full' | 'mini' | 'basket' | 'voley')[] = []
+    for (const k of ['full', 'mini', 'basket', 'voley'] as const) if (kinds.includes(k)) cats.push(k)
+    if (!cats.includes(laneCat)) laneCat = cats[0]
+    const lt = $('lanetabs')
+    lt.classList.toggle('show', cats.length > 1)
+    const ltHtml = cats.map(k2 => {
+      const cnt = kinds.filter(x => x === k2).length
+      const nm = k2 === 'full' ? t('Sahalar') : k2 === 'mini' ? 'Mini' : k2 === 'basket' ? 'Basket' : 'Voley'
+      return `<div class="ltab ${laneCat === k2 ? 'on' : ''}" data-cat="${k2}">${nm}<span class="n">${cnt}</span></div>`
+    }).join('')
+    if (lt.innerHTML !== ltHtml) {
+      lt.innerHTML = ltHtml
+      lt.querySelectorAll<HTMLElement>('.ltab').forEach(el => el.addEventListener('click', () => {
+        laneCat = el.dataset.cat as typeof laneCat; audio.click(); renderCal()
+      }))
+    }
+    const laneIdxs = kinds.map((k2, i) => i).filter(i => kinds[i] === laneCat)
+    // sol şerit etiketleri + saat sütunları (satır = seçili kategorinin sahaları)
     calHtml = `<div class="lanecol"><div class="lh"></div>` +
-      Array.from({ length: N }, (_, l) =>
+      laneIdxs.map(l =>
         `<div class="ll ${kinds[l] === 'full' ? '' : 'mini'}">${laneLbl(l)}</div>`).join('') + '</div>'
     calHtml += HOURS.map(hour => {
       const isPast = viewWk === 0 && viewDay === nowDay && hour < nowHour
       const nightLocked = hour >= NIGHT_START && !game.hasLights
       let col = `<div class="dcol"><div class="lh ${viewWk === 0 && viewDay === nowDay && hour === nowHour ? 'nowh' : ''}">${hour % 24}</div>`
-      for (let l = 0; l < N; l++) {
+      for (const l of laneIdxs) {
         const b = game.laneTakenBy(viewDay, hour, l, viewWk)
         const hint = cellHint(sel, hour, l)
         const part = sel && !hint && !b && game.canPlacePartial(sel, viewDay, hour, viewWk) && game.laneAllowed(sel, l)
@@ -247,7 +267,11 @@ function selectCard(id: number) {
   if (r) {
     // en iyi yerleştirilebilir slota atla — bugünün saati geçtiyse SONRAKİ HAFTA sekmesine götürür
     const best = game.bestSlot(r)
-    if (best) { viewDay = best.day; viewWk = best.wk }
+    if (best) {
+      viewDay = best.day; viewWk = best.wk
+      const lane = game.resolveLane(r, best.day, best.hour, undefined, best.wk)
+      if (lane !== null) laneCat = game.laneKinds()[lane] ?? 'full'
+    }
   }
   renderQueue(); renderCal()
 }
