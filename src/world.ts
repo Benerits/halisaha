@@ -1074,6 +1074,24 @@ export class World {
     let g: THREE.Object3D
     if (k?.cars.length) {
       g = fitModel(k.cars[(kind === 'polis' ? 3 : 1) % k.cars.length], 1.05)
+      // KENNEY GÖVDESİNİ BOYA: kaporta rengi palet TEXTURE'ından geliyor (materyal beyaz+map) —
+      // 'body' mesh'inde map kaldırılıp düz beyaz basılır; tekerlek/diğer parçalar dokunulmaz.
+      g.traverse(o => {
+        const m = o as THREE.Mesh
+        if (!(m as THREE.Mesh).isMesh || !m.material || !/body/i.test(o.name)) return
+        const mats = Array.isArray(m.material) ? m.material : [m.material]
+        const cloned = mats.map(mm => {
+          const c = (mm as THREE.MeshStandardMaterial).clone()
+          c.map = null; c.color?.set(0xf2f5f7); c.needsUpdate = true
+          return c
+        })
+        m.material = Array.isArray(m.material) ? cloned : cloned[0]
+      })
+      // kimlik şeridi: polis LACİVERT, ambulans KIRMIZI — gövdenin ortasına kuşak
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.06, 1.9, 0.16),
+        lam(kind === 'polis' ? 0x2b3b8f : 0xd64545))
+      stripe.position.set(0, 0, 0.52)
+      g.add(stripe)
     } else {
       const grp = new THREE.Group()
       const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 2.6, 0.95), lam(0xf4f6f8))
