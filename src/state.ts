@@ -593,21 +593,31 @@ export class Game {
   }
 
   /** PAZARLIK — bir kez. level 1 = ölçülü, 2 = sert. */
-  haggle(resId: number, level: 1 | 2): { ok: boolean; msg: string; walked?: boolean } {
+  /** SLIDER PAZARLIĞI: min = mevcut teklif, max = ×1.6. Matematik:
+   *  - istek ≤ gizli tavan (maxPay) → kabul; sadakat kaybı isteğin agresifliğiyle orantılı
+   *  - tavanı aşarsan: aşım oranı büyüdükçe 'ortada buluşma' şansı düşer, kaçma şansı artar */
+  haggleAsk(resId: number, askRaw: number): { ok: boolean; msg: string; walked?: boolean } {
     const i = this.queue.findIndex(x => x.id === resId)
     if (i < 0) return { ok: false, msg: 'İstek artık yok.' }
     const r = this.queue[i]
     if (r.haggled) return { ok: false, msg: 'Bu takımla zaten pazarlık ettin.' }
+    const maxAsk = Math.round(r.price * 1.6 / 10) * 10
+    const ask = Math.max(r.price, Math.min(maxAsk, Math.round(askRaw / 10) * 10))
     r.haggled = true
-    const ask = Math.round(r.price * (level === 1 ? 1.25 : 1.5) / 10) * 10
     const loyal = this.loyalty[r.team] ?? 0
+    const aggro = (ask - r.price) / r.price // 0..0.6
+    if (ask <= r.price * 1.02) { // fiyata dokunmadın — el sıkış, bedava iyi niyet
+      this.loyalty[r.team] = loyal + 0.3
+      return { ok: true, msg: r.team + t(' kabul etti — ') + '₺' + r.price.toLocaleString('tr-TR') }
+    }
     if (ask <= r.maxPay) {
       r.price = ask
-      if (r.weeks > 0 || loyal > 0) this.loyalty[r.team] = loyal - (level === 1 ? 0.5 : 1.2) // müdavimi sıkmanın bedeli
+      if (r.weeks > 0 || loyal > 0) this.loyalty[r.team] = loyal - aggro * 2 // müdavimi sıkmanın bedeli
       return { ok: true, msg: r.team + t(' kabul etti — ') + '₺' + ask.toLocaleString('tr-TR') }
     }
-    // tavanı aştın: ölçülüyse ortayı bulur, sertse çeker gider
-    const midChance = level === 1 ? 0.72 : 0.25
+    // tavanı aştın: aşım küçükse ortayı bulur, büyükse çeker gider
+    const over = (ask - r.maxPay) / r.maxPay
+    const midChance = Math.max(0.12, 0.8 - over * 2.6)
     if (Math.random() < midChance) {
       const mid = Math.round((r.price + r.maxPay) / 2 / 10) * 10
       r.price = mid
@@ -618,6 +628,12 @@ export class Game {
     this.rep = Math.max(0, this.rep - 0.06)
     this.loyalty[r.team] = loyal - 2
     return { ok: false, walked: true, msg: r.team + t(' "çok oldu abi" deyip kapattı.') }
+  }
+  /** eski iki-kademe API (testler + geri uyum): slider matematiğine delege eder */
+  haggle(resId: number, level: 1 | 2): { ok: boolean; msg: string; walked?: boolean } {
+    const r = this.queue.find(x => x.id === resId)
+    if (!r) return { ok: false, msg: 'İstek artık yok.' }
+    return this.haggleAsk(resId, Math.round(r.price * (level === 1 ? 1.25 : 1.5) / 10) * 10)
   }
 
   /** müdavim sadakati — sıkıştırdıkça düşer, aboneliği yenilemeyi belirler */
@@ -1135,9 +1151,17 @@ export class Game {
     return Math.round(parcelCost(c, r) * mult / 500) * 500
   }
 
+  /** bu arsa mevcut arazine BİTİŞİK mi (4 komşu) — kopuk ada satın alma yok */
+  parcelAdjacent(c: number, r: number): boolean {
+    return this.ownedParcels.some(k => {
+      const [pc, pr] = k.split(',').map(Number)
+      return Math.abs(pc - c) + Math.abs(pr - r) === 1
+    })
+  }
   buyParcel(c: number, r: number): { ok: boolean; msg: string } {
     if (c < 0 || c >= PARCEL_COLS || r < 0 || r >= PARCEL_ROWS) return { ok: false, msg: 'Geçersiz arsa.' }
     if (this.ownsParcel(c, r)) return { ok: false, msg: 'Bu arsa zaten senin.' }
+    if (!this.parcelAdjacent(c, r)) return { ok: false, msg: t('Bu arsa arazine bitişik değil — önce aradaki arsayı al.') }
     const cost = this.parcelPrice(c, r)
     if (this.money < cost) return { ok: false, msg: `₺${(cost - this.money).toLocaleString('tr-TR')} eksik.` }
     this.money -= cost

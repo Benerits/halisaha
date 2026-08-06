@@ -33,6 +33,15 @@ export class World {
   private kit: Kit | null = null
   /** Kenney kitleri sahneye uygulandığında çözülür — boot maskesi bunu bekler (tavanlı). */
   kitReady: Promise<void> = Promise.resolve()
+  // GECE PENCERE IŞIKLARI: evler + tesis binaları — setNight açar/kapar
+  private windowGlows: THREE.Mesh[] = []
+  private addWindowGlow(x: number, y: number, z: number, w = 1.5, h = 0.85) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0, depthWrite: false }))
+    m.position.set(x, y, z); m.rotation.x = Math.PI / 2
+    this.scene.add(m); this.windowGlows.push(m)
+    return m
+  }
   // SÜS ENVANTERİ: parsel alanına düşebilecek dekor (ağaç/şezlong/saksı). Oyuncu o parseli
   // sahiplenince pruneDecor kaldırır — yoksa kortun ortasında ağaç dikili kalıyordu.
   private decorItems: THREE.Object3D[] = []
@@ -51,7 +60,7 @@ export class World {
   /** yoldan akan araçlar */
   private traffic: { g: THREE.Group; sp: number; dir: 1 | -1; axis: 'x' | 'y' }[] = []
   /** maça yürüyen oyuncular (otoparktan sahaya) */
-  private walkers: { g: THREE.Group; t: number; from: THREE.Vector3; to: THREE.Vector3 }[] = []
+  private walkers: { g: THREE.Group; seg: number; pts: THREE.Vector3[]; sp: number; delay: number }[] = []
   private billboards: THREE.Group[] = []
   private signBoard: THREE.Group | null = null
   /** arsa ızgarası: tıklanabilir zeminler */
@@ -300,6 +309,8 @@ export class World {
     g.position.set(-14.5, 7.2, 0)
     this.scene.add(g)
     this.clubhouse = g
+    this.addWindowGlow(-15.2, 5.2, 1.1, 1.2, 0.7)
+    this.addWindowGlow(-13.6, 5.2, 1.1, 1.2, 0.7)
   }
 
   private signMat: THREE.MeshBasicMaterial | null = null
@@ -354,6 +365,8 @@ export class World {
     g.position.set(-14.5, 7.2, 0)
     this.scene.add(g)
     this.clubhouse = g
+    this.addWindowGlow(-15.2, 5.2, 1.1, 1.2, 0.7)
+    this.addWindowGlow(-13.6, 5.2, 1.1, 1.2, 0.7)
   }
 
   /** yazıhane (kulüp binası) tıklaması */
@@ -553,10 +566,8 @@ export class World {
       const turf = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
         new THREE.MeshLambertMaterial({ map: this.pitchTexture(w, d) }))
       turf.position.z = 0.09; turf.receiveShadow = true; g.add(turf)
-      for (const sgn of [-1, 1]) {
-        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, d * 0.34, 6), lam(0xfaf9f6))
-        bar.position.set(sgn * (w / 2 - 0.2), 0, 0.6); g.add(bar)
-      }
+      // KALELER: ana sahadaki gerçek fileli kaleler — 'yeni sahada kale yok' fixi
+      for (const sgn of [-1, 1] as const) this.buildGoalNet(g, sgn * (w / 2 - 0.55), sgn)
     } else if (kind === 'basket') {
       // turuncu saha + iki pota
       const court = new THREE.Mesh(new THREE.PlaneGeometry(10, 6.4), lam(0xc97a3d))
@@ -801,6 +812,9 @@ export class World {
         b.position.set(x, y, 0)
         b.rotation.z = (i % 4) * Math.PI / 2
         this.scene.add(b)
+        // gece penceresi: cephede sıcak ışık (her evde 1-2 pencere)
+        this.addWindowGlow(x - 1.2, y - 2.6, h * 0.42, 1.3, 0.8)
+        if (i % 2 === 0) this.addWindowGlow(x + 1.4, y - 2.6, h * 0.55, 1.1, 0.7)
         // BAHÇE: çitli, düzenli. KROKİ kuralı: yan koridor evlerinde (dikey sokaklar
         // |x|>25) bahçe YOLA DEĞİL, evin arkasına (dışa) bakar — asfalta çit kurulmaz
         const side = Math.abs(x) > 25 ? Math.sign(x) : 0
@@ -1040,12 +1054,16 @@ export class World {
     }
     for (let i = this.walkers.length - 1; i >= 0; i--) {
       const w = this.walkers[i]
-      w.t += dt * 0.32
-      if (w.t >= 1) { this.scene.remove(w.g); this.walkers.splice(i, 1); continue }
-      w.g.position.lerpVectors(w.from, w.to, w.t)
-      w.g.position.z = 0
-      const d = new THREE.Vector3().subVectors(w.to, w.from)
-      w.g.rotation.z = Math.atan2(d.y, d.x) + Math.PI / 2
+      if (w.delay > 0) { w.delay -= dt; continue }
+      w.g.visible = true
+      const tgt = w.pts[w.seg]
+      if (!tgt) { this.scene.remove(w.g); this.walkers.splice(i, 1); continue }
+      const dx = tgt.x - w.g.position.x, dy = tgt.y - w.g.position.y
+      const d = Math.hypot(dx, dy)
+      if (d < 0.12) { w.seg++; continue }
+      const st = Math.min(w.sp * dt, d)
+      w.g.position.x += (dx / d) * st; w.g.position.y += (dy / d) * st
+      w.g.rotation.z = Math.atan2(dy, dx) + Math.PI / 2
     }
   }
 
@@ -1147,13 +1165,21 @@ export class World {
   sendArrivals(n = 4) {
     const k = this.kit
     if (!k?.chars.length) return
+    // ROTA: otopark çıkışı → sahalar ARASINDAKİ koridor (x≈7.25, kolon boşluğu) →
+    // ana saha hizasına in → soldan sahaya gir. Kimsenin sahasının üstünden geçilmez.
+    const CORR_X = 7.25
     for (let i = 0; i < n; i++) {
       const fig = fitCharacter(k.chars[Math.floor(Math.random() * k.chars.length)], 0.78)
-      const from = new THREE.Vector3(11.5 + Math.random() * 4, 6.6 + Math.random() * 1.4, 0)
-      const to = new THREE.Vector3(PITCH_W / 2 + 1.4, PITCH_Y + (Math.random() - 0.5) * 3, 0)
-      fig.position.copy(from)
+      const endY = PITCH_Y + (Math.random() - 0.5) * 3
+      const pts = [
+        new THREE.Vector3(11.5 + Math.random() * 4, 6.6 + Math.random() * 1.4, 0), // otopark
+        new THREE.Vector3(CORR_X, 6.2 + Math.random() * 0.8, 0),                    // koridor girişi
+        new THREE.Vector3(CORR_X, endY, 0),                                         // koridordan aşağı
+        new THREE.Vector3(PITCH_W / 2 + 1.2, endY, 0),                              // saha kenarı
+      ]
+      fig.position.copy(pts[0]); fig.visible = false
       this.scene.add(fig)
-      this.walkers.push({ g: fig, t: -i * 0.12, from, to })
+      this.walkers.push({ g: fig, seg: 1, pts, sp: 1.9 + Math.random() * 0.5, delay: i * 0.5 })
     }
   }
 
@@ -1223,6 +1249,12 @@ export class World {
     for (const bm of this.beams) (bm.material as THREE.MeshBasicMaterial).opacity = on ? 0.07 * n : 0
     for (const gm of this.lampGlows) gm.opacity = n > 0.25 ? 0.85 * n : 0  // sokak lambaları gece yanar
     if (on) { this.hemi.intensity += 0.30; this.sun.intensity += 0.12 }
+    // PENCERELER: gece evlerin/binaların ışıkları yanar
+    for (const wgl of this.windowGlows)
+      (wgl.material as THREE.MeshBasicMaterial).opacity = n > 0.3 ? 0.28 + 0.5 * n : 0
+    // GÜN BATIMI: geçiş sırasında güneş turunculaşır, tam gecede soğuk beyaza döner
+    if (n > 0.05 && n < 0.75) this.sun.color.setHSL(0.08, 0.55 * Math.sin(Math.PI * (n / 0.75)), 0.62)
+    else this.sun.color.setHex(0xffffff)
   }
 
   zoomBy(f: number) {

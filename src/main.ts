@@ -103,22 +103,22 @@ function renderCal() {
     }
   }
 
-  // GÜN SEKMELERİ — 2 HAFTALIK takvim: bu hafta + sonraki hafta (önbellekli)
+  // GÜN SEKMELERİ — KAYAN 14 GÜN: ilk sekme HEP BUGÜN, geçmiş gün görünmez.
+  // (Sabit Pzt..Paz dizilimi 'geçmiş güne rezervasyon' gibi okunuyordu — yanlış histi.)
   const tabs = $('daytabs')
-  const tabHtml = (d: number, w: number) => {
-    const nm = DAY_NAMES[d]
-    const occ = game.bookings.filter(b => b.day === d && (b.sub || (b.wk ?? 0) === w)).length / HOURS.length
+  const tabsHtml = Array.from({ length: 14 }, (_, i) => {
+    const d = (nowDay + i) % 7
+    const w = i < 7 ? 0 : 1
+    const occ = game.bookings.filter(b => b.day === d && (b.sub || (b.wk ?? 0) === w)).length / (HOURS.length * game.pitches)
     const hasValid = sel ? HOURS.some(h => game.canPlaceAt(sel, d, h, w)) : false
-    return `<div class="dtab ${d === viewDay && w === viewWk ? 'on' : ''} ${w === 0 && d === nowDay ? 'today' : ''}" data-d="${d}" data-w="${w}">
+    return (i === 7 ? `<div class="wksep" title="${t('sonraki hafta')}">+7g ➜</div>` : '')
+      + `<div class="dtab ${d === viewDay && w === viewWk ? 'on' : ''} ${i === 0 ? 'today' : ''}" data-d="${d}" data-w="${w}">
       ${hasValid ? `<span class="dot ${game.placedCount < 12 ? '' : 'calm'}"></span>` : ''}
-      <b>${nm}</b>
+      <b>${DAY_NAMES[d]}</b>
       <div class="obar"><i style="width:${Math.round(occ * 100)}%"></i></div>
-      ${w === 0 && d === nowDay ? `<span class="bugun">${t('bugün')}</span>` : ''}
+      ${i === 0 ? `<span class="bugun">${t('bugün')}</span>` : ''}
     </div>`
-  }
-  const tabsHtml = DAY_NAMES.map((_, d) => tabHtml(d, 0)).join('')
-    + `<div class="wksep" title="${t('sonraki hafta')}">+7g ➜</div>`
-    + DAY_NAMES.map((_, d) => tabHtml(d, 1)).join('')
+  }).join('')
   if (tabsHtml !== tabsCache) {
     tabsCache = tabsHtml
     tabs.innerHTML = tabsHtml
@@ -247,6 +247,7 @@ function selectCard(id: number) {
   renderQueue(); renderCal()
 }
 const seenCards = new Set<number>()
+const askVals = new Map<number, number>() // slider konumu — kart yeniden çizilse de korunur
 const warned = new Set<number>()
 let qCache = ''
 function renderQueue() {
@@ -274,12 +275,14 @@ function renderQueue() {
       <div class="when">${when}${r.flexible ? `<span class="flex">${t('ESNEK')}</span>` : ''}${r.hours === 2 ? `<span class="flex" style="background:var(--clay)">${t('2 SAAT')}</span>` : ''}${r.needFull ? `<span class="flex" style="background:var(--green-deep)">${t('TAM SAHA')}</span>` : ''}</div>
       <div class="meta">${seg.label}</div>
       <div class="price"><span class="plab">${t('teklifi')}</span> ₺${tl(r.price)}${r.weeks ? ` <span class="pw">${t('/hafta')}</span>` : ''}</div>
-      ${r.haggled ? `<div class="hdone">${t('pazarlık yapıldı')}</div>` : `<div class="hgl">
-        <button data-hg="1" data-id="${r.id}" title="Ölçülü zam — genelde kabul eder">
-          <b>₺${tl(Math.round(r.price * 1.25 / 10) * 10)}</b><i>${t('iste · güvenli')}</i></button>
-        <button data-hg="2" data-id="${r.id}" title="Sert pazarlık — kalkıp gidebilir">
-          <b>₺${tl(Math.round(r.price * 1.5 / 10) * 10)}</b><i>${t('iste · riskli')}</i></button>
-      </div>`}
+      ${r.haggled ? `<div class="hdone">${t('pazarlık yapıldı')}</div>` : (() => {
+        const maxAsk = Math.round(r.price * 1.6 / 10) * 10
+        const cur = askVals.get(r.id) ?? Math.round(r.price * 1.2 / 10) * 10
+        return `<div class="hsl">
+        <input type="range" class="hrange" data-id="${r.id}" min="${r.price}" max="${maxAsk}" step="10" value="${cur}">
+        <div class="hrow"><b class="hval">₺${tl(cur)}</b><span class="hrisk"></span>
+        <button class="hask" data-id="${r.id}">${t('İSTE')}</button></div></div>`
+      })()}
       ${tip ? `<div class="hint2 ${lever ? 'up' : 'dn'}">${tip}</div>` : ''}
       <button class="rej" data-rej="${r.id}">${t('geri çevir ✕')}</button>
       <div class="bar"><i></i></div>
@@ -289,11 +292,35 @@ function renderQueue() {
     qCache = html
     list.innerHTML = html
     for (const r of game.queue) seenCards.add(r.id)
-    list.querySelectorAll<HTMLElement>('button[data-hg]').forEach(b => {
+    list.querySelectorAll<HTMLInputElement>('input.hrange').forEach(inp => {
+      const wrap = inp.closest('.hsl')!
+      const val = wrap.querySelector('.hval') as HTMLElement
+      const risk = wrap.querySelector('.hrisk') as HTMLElement
+      const paint = () => {
+        const id = Number(inp.dataset.id)
+        const r = game.queue.find(x => x.id === id); if (!r) return
+        const ask = Number(inp.value)
+        askVals.set(id, ask)
+        val.textContent = `₺${tl(ask)}`
+        const q = (ask - r.price) / r.price
+        const tier = q <= 0.02 ? 0 : q <= 0.18 ? 1 : q <= 0.35 ? 2 : q <= 0.5 ? 3 : 4
+        risk.textContent = t(['el sıkış', 'güvenli', 'dengeli', 'riskli', 'kumar'][tier])
+        risk.className = 'hrisk r' + tier
+        inp.style.accentColor = ['#8aa08d', '#2f9e57', '#e0a930', '#e07a4a', '#d64545'][tier]
+      }
+      paint()
+      inp.addEventListener('input', paint)
+      inp.addEventListener('pointerdown', ev => ev.stopPropagation()) // kart seçimini tetikleme
+      inp.addEventListener('click', ev => ev.stopPropagation())
+    })
+    list.querySelectorAll<HTMLElement>('button.hask').forEach(b => {
       b.addEventListener('click', ev => {
         ev.stopPropagation()
         const id = Number(b.dataset.id)
-        const res = game.haggle(id, Number(b.dataset.hg) as 1 | 2)
+        const ask = askVals.get(id) ?? 0
+        const r0 = game.queue.find(x => x.id === id)
+        const res = game.haggleAsk(id, ask || (r0 ? r0.price : 0))
+        askVals.delete(id)
         if (res.ok) audio.cash(); else audio.bad()
         toast(res.msg, res.ok ? 'g' : 'b')
         renderAll()
@@ -665,9 +692,12 @@ function openParcel(c: number, r: number) {
       <button class="buy" id="pdemol" style="background:var(--clay)">YIK · %40 iade</button>
       <span class="ds">${BUILDS[b.kind].desc} Yıkarsan arsa boşalır, yerine başka şey kurabilirsin.</span></div>`
   } else if (!owned) {
-    h += `<div class="srow"><span class="nm">Boş arsa</span>
-      <button class="buy" id="pbuy">₺${tl(game.parcelPrice(c, r))}</button>
-      <span class="ds">Merkeze yakın arsalar daha pahalı. Aldıktan sonra üstüne saha ya da tesis kurabilirsin.</span></div>`
+    const adj = game.parcelAdjacent(c, r)
+    h += `<div class="srow"><span class="nm">${t('Boş arsa')}</span>
+      ${adj ? `<button class="buy" id="pbuy">₺${tl(game.parcelPrice(c, r))}</button>`
+            : `<button class="buy" disabled>🔒 ${t('BİTİŞİK DEĞİL')}</button>`}
+      <span class="ds">${adj ? 'Merkeze yakın arsalar daha pahalı. Aldıktan sonra üstüne saha ya da tesis kurabilirsin.'
+            : t('Bu arsa arazine bitişik değil — önce aradaki arsayı al.')}</span></div>`
   } else {
     h += `<div class="srow" style="background:#eefaf0"><span class="ds" style="flex:1">Bu arsa senin — ne kuralım?</span></div>`
     for (const k of Object.keys(BUILDS) as BuildKind[]) {
@@ -1046,9 +1076,13 @@ function frame() {
   }
   for (const g of game.claimGoals()) { audio.cash(); toast(`${t('HEDEF TAMAM:')} ${g.label} · +₺${tl(g.reward)}`, 'g') }
 
-  // rezervasyon üretimi — TELEFON KAPALIYSA çalmaz (ceza da yok, moladasın)
+  // rezervasyon üretimi — TELEFON KAPALIYSA çalmaz (ceza da yok, moladasın).
+  // ÇAĞRI SIKLIĞI yatırımla artar: tabela/reklam/2. hat/itibar telefonu daha sık çaldırır
   if (!gateOpen && !phoneOff) spawnT -= dt
-  if (spawnT <= 0) { spawnT = 8 + Math.random() * 9
+  if (spawnT <= 0) {
+    const callMult = 1 + (game.hasRoadSign ? 0.25 : 0) + (game.adDays > 0 ? 0.5 : 0)
+      + game.rep * 0.06 + (game.hasPhone2 ? 0.15 : 0)
+    spawnT = (6 + Math.random() * 6) / callMult
     for (let k = 0; k < 6; k++) if (game.spawnReservation()) {
       renderQueue(); audio.ring()
       const hd = document.querySelector('#queue .desk-head') as HTMLElement | null
@@ -1058,7 +1092,7 @@ function frame() {
 
   // gün-gece
   const frac = game.t / DAY_SECONDS
-  const night = frac < 0.62 ? 0 : Math.min(1, (frac - 0.62) / 0.14)
+  const night = frac < 0.56 ? 0 : Math.min(1, (frac - 0.56) / 0.14) // 19:00 gün batımı → ~21:30 tam gece → 03:00
   world.setNight(night, game.hasLights)
 
   // o an maç var mı → botlar oynasın
