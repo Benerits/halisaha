@@ -9,15 +9,15 @@ import { t, dayName } from './i18n'
  */
 
 // ---- Zaman ----
-// 1 oyun saati = 15 gerçek sn → gün 3.75 dk; tempo yüksek, oturum başına daha çok gün
-// (30 sn denendi: ilk oyuncular günü uzun buldu — 15 sn'e indirildi, lansman kararı.)
-export const HOUR_SECONDS = 15
 export const OPEN_HOUR = 9
 // GECE SAATLERİ: 24-26 = 00:00-02:00 (LED Projektör ile açılır) — takvim 9:00→03:00
 export const NIGHT_START = 24
 export const CLOSE_HOUR = 27
 export const HOURS: number[] = Array.from({ length: CLOSE_HOUR - OPEN_HOUR }, (_, i) => OPEN_HOUR + i)
-export const DAY_SECONDS = HOUR_SECONDS * HOURS.length
+// 1 OYUN GÜNÜ = 20 GERÇEK SANİYE (lansman kararı: hiper tempo — 'büyümeden haz alsın,
+// oyun da kısa sürmesin'). 1 saat ≈ 1.1 sn; hafta ~2.3 dk, sezon (30 gün) ~10 dk.
+export const DAY_SECONDS = 20
+export const HOUR_SECONDS = DAY_SECONDS / HOURS.length
 /** iç saat → ekran etiketi (25 → '1:00') */
 export const hourLabel = (h: number): string => `${h % 24}:00`
 export const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'] as const
@@ -76,6 +76,10 @@ export interface Reservation {
   hours: number
   /** TAM SAHA şart mı (kurumsal 8v8 miniye sığmaz) */
   needFull: boolean
+  /** yalnız MİNİ sahaya oynar (küçük grup — mini tarifesi) */
+  forMini?: boolean
+  /** basket/voley kortu isteği — yalnız o kortun şeridine konur */
+  forCourt?: 'basket' | 'voley'
   /** kısmi (tek saat) teklifi reddetti mi */
   partialRefused?: boolean
   /** anlaşma sonrası geçen süre (nazik hatırlatma için) */
@@ -158,13 +162,13 @@ export function parcelCost(c: number, r: number): number {
 }
 
 export type BuildKind = 'pitch' | 'mini' | 'basket' | 'voley' | 'parking' | 'garden' | 'kantin' | 'dus' | 'wc'
-export interface PlacedBuild { kind: BuildKind; gx?: number; gy?: number; key?: string; wear?: number }
+export interface PlacedBuild { kind: BuildKind; gx?: number; gy?: number; key?: string; wear?: number; count?: number }
 
 export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: string; desc: string }> = {
   pitch:   { label: 'Halı Saha', cost: 45_000, gain: 'Aynı saate +1 maç', desc: 'Tam boy ikinci saha — prime-time çakışmaları biter.' },
-  mini:    { label: 'Mini Saha 5v5', cost: 22_000, gain: 'Aynı saate +1 maç', desc: 'Küçük ve ucuz; çocuk/genç grupları için hızlı devir.' },
-  basket:  { label: 'Basketbol Sahası', cost: 22_000, gain: 'Günde +₺800 kira', desc: 'Saatlik kiralanır; futbol takviminden bağımsız pasif gelir.' },
-  voley:   { label: 'Voleybol Sahası', cost: 16_000, gain: 'Günde +₺550 · itibar +0,2', desc: 'Kum zemin; yazın çok tutar, tesise çeşitlilik katar.' },
+  mini:    { label: 'Mini Saha 5v5', cost: 22_000, gain: 'Aynı saate +1 maç', desc: 'Küçük ve ucuz; bir arsaya DİKİNE 3 tane sığar, kendi mini istekleri gelir.' },
+  basket:  { label: 'Basketbol Sahası', cost: 22_000, gain: 'Kendi takvim şeridi + kira', desc: 'Basket grupları ayrı istek gönderir; takvimde kendi şeridi olur.' },
+  voley:   { label: 'Voleybol Sahası', cost: 16_000, gain: 'Kendi takvim şeridi · itibar +0,2', desc: 'Kum zemin; voleybol grupları ayrı istek gönderir, takvimde şeridi olur.' },
   parking: { label: 'Ek Otopark', cost: 14_000, gain: 'İtibar +0,3', desc: 'Araç sığmayınca müşteri kaçar; park yeri memnuniyeti artırır.' },
   garden:  { label: 'Yeşil Alan', cost: 9_000, gain: 'İtibar +0,2', desc: 'Oturma alanı ve peyzaj — tesis daha bakımlı görünür.' },
   kantin:  { label: 'Kantin Binası', cost: 9_000, gain: 'Her maçtan +₺120', desc: 'Çay, tost, ayran — maç sonrası oturulan yer. (Mağazadaki kantinle aynı etki, binalı.)' },
@@ -336,9 +340,31 @@ export class Game {
   }
   usedAt(day: number, hour: number, wk = 0): number { return this.bookingsAt(day, hour, wk).length }
   /** bu saatte hâlâ boş saha var mı */
-  freeAt(day: number, hour: number, wk = 0): boolean { return this.usedAt(day, hour, wk) < this.pitches }
+  freeAt(day: number, hour: number, wk = 0): boolean { return this.usedAt(day, hour, wk) < this.totalLanes() }
   /** tam boy saha sayısı (ana saha + parsel halı sahaları; mini hariç) */
-  fullPitchCount(): number { return this.pitches - this.builds.filter(b => b.kind === 'mini').length }
+  fullPitchCount(): number { return this.pitches - this.builds.reduce((n, b) => n + (b.kind === 'mini' ? (b.count ?? 1) : 0), 0) }
+  courtCount(kind: 'basket' | 'voley'): number { return this.builds.filter(b => b.kind === kind).length }
+  /** takvimdeki TOPLAM şerit: futbol sahaları + basket + voley kortları */
+  totalLanes(): number { return this.pitches + this.courtCount('basket') + this.courtCount('voley') }
+  /** şerit türleri sırayla: tam sahalar, miniler, basketler, voleyler */
+  laneKinds(): ('full' | 'mini' | 'basket' | 'voley')[] {
+    const out: ('full' | 'mini' | 'basket' | 'voley')[] = []
+    const fullN = this.fullPitchCount()
+    for (let i = 0; i < fullN; i++) out.push('full')
+    for (let i = fullN; i < this.pitches; i++) out.push('mini')
+    for (let i = 0; i < this.courtCount('basket'); i++) out.push('basket')
+    for (let i = 0; i < this.courtCount('voley'); i++) out.push('voley')
+    return out
+  }
+  /** bu istek bu şeride konabilir mi (tür eşleşmesi) */
+  laneAllowed(r: { needFull?: boolean; forMini?: boolean; forCourt?: 'basket' | 'voley' }, l: number): boolean {
+    const kind = this.laneKinds()[l]
+    if (!kind) return false
+    if (r.forCourt) return kind === r.forCourt
+    if (r.needFull) return kind === 'full'
+    if (r.forMini) return kind === 'mini'
+    return kind === 'full' || kind === 'mini' // normal futbol isteği kortlara konmaz
+  }
   fullUsedAt(day: number, hour: number, wk = 0): number {
     return this.bookingsAt(day, hour, wk).filter(b => b.needFull).length
   }
@@ -360,7 +386,7 @@ export class Game {
     }
     const used = new Set(peers.filter(x => x.lane !== undefined).map(x => x.lane))
     let lane = 0, skipped = 0
-    for (; lane < this.pitches; lane++) {
+    for (; lane < this.totalLanes(); lane++) {
       if (used.has(lane)) continue
       if (skipped === i) break
       skipped++
@@ -372,15 +398,17 @@ export class Game {
   resolveLane(r: Reservation, day: number, hour: number, wanted?: number, wk = 0): number | null {
     const fullN = this.fullPitchCount()
     const okLane = (l: number) => {
-      if (l < 0 || l >= this.pitches) return false
-      if (r.needFull && l >= fullN) return false
+      if (l < 0 || l >= this.totalLanes()) return false
+      if (!this.laneAllowed(r, l)) return false
       if (this.laneTakenBy(day, hour, l, wk)) return false
       if (r.hours === 2 && this.laneTakenBy(day, hour + 1, l, wk)) return false
       return true
     }
     if (wanted !== undefined && okLane(wanted)) return wanted
     const order: number[] = []
-    if (r.needFull) { for (let l = 0; l < fullN; l++) order.push(l) }
+    if (r.forCourt) { for (let l = this.pitches; l < this.totalLanes(); l++) order.push(l) }
+    else if (r.forMini) { for (let l = fullN; l < this.pitches; l++) order.push(l) }
+    else if (r.needFull) { for (let l = 0; l < fullN; l++) order.push(l) }
     else {
       for (let l = this.pitches - 1; l >= fullN; l--) order.push(l)  // önce miniler
       for (let l = fullN - 1; l >= 0; l--) order.push(l)
@@ -415,15 +443,25 @@ export class Game {
       * (this.adDays > 0 ? 1.5 : 1) * this.locDef().demandMult
     if (Math.random() > demand) return null
     if (!this.freeAt(day, hour)) return null
+    // MİNİ SEGMENTİ: mini saha varsa isteklerin bir kısmı SADECE mini ister (küçük gruplar, %72 tarife)
+    const miniCount = this.builds.reduce((n2, b2) => n2 + (b2.kind === 'mini' ? (b2.count ?? 1) : 0), 0)
+    const forMini = miniCount > 0 && seg.id !== 'kurumsal' && Math.random() < 0.35
+    // KORT İSTEKLERİ: basket/voley kortu varsa kendi istekleri ayrı gelir (kendi şeridine)
+    let forCourt: 'basket' | 'voley' | undefined
+    if (!forMini) {
+      if (this.courtCount('basket') > 0 && Math.random() < 0.22) forCourt = 'basket'
+      else if (this.courtCount('voley') > 0 && Math.random() < 0.18) forCourt = 'voley'
+    }
     const srNow = this.subRatio()
     // K6: takvim aboneye kilitlenirse çekirdek eylem ölür — tavan mekanikleri
-    const weeks = (srNow > 0.7 || Math.random() >= 0.28) ? 0 : (Math.random() < 0.5 ? 4 : 8)
+    const weeks = (forCourt || srNow > 0.7 || Math.random() >= 0.14) ? 0 : (Math.random() < 0.5 ? 4 : 8) // abonelik oranı düşürüldü (%28→%14: 'çok fazla abonelik geliyor')
     // 2 SAATLİK MAÇ (%18, aboneliksiz): '21-23 bizim olsun' — ardışık iki slot
-    const twoH = weeks === 0 && Math.random() < 0.18
+    const twoH = weeks === 0 && !forCourt && Math.random() < 0.18
     const subPenalty = srNow > 0.6 ? Math.max(0.7, 1 - (srNow - 0.6) * 0.75) : 1  // K6: aboneye boğulan tesiste tek maç ucuzlar
     const raw = this.basePrice() * seg.priceMult * (weeks > 0 ? 0.82 : 1) * this.locDef().priceMult
       * (twoH ? 1.9 : 1) * subPenalty * this.starMult()
       * (hour >= NIGHT_START ? 1.15 : 1) // gece tarifesi
+      * (forMini ? 0.72 : forCourt === 'basket' ? 0.55 : forCourt === 'voley' ? 0.45 : 1)
     // ESNEK İSTEK (%60): "hafta içi akşam olsun" → hangi slota koyacağına SEN karar verirsin
     const flexible = Math.random() < 0.6
     const flexDays: number[] = []
@@ -458,7 +496,9 @@ export class Game {
       maxPay: Math.round(raw * lever / 10) * 10,
       haggled: false,
       hours: twoH && baseHour + 1 < CLOSE_HOUR ? 2 : 1,
-      needFull: seg.id === 'kurumsal' ? Math.random() < 0.7 : Math.random() < 0.1,
+      needFull: (forMini || forCourt) ? false : (seg.id === 'kurumsal' ? Math.random() < 0.7 : Math.random() < 0.1),
+      forMini: forCourt ? undefined : forMini,
+      forCourt,
       weeks,
       patience: 34, maxPatience: 34,
     }
@@ -473,7 +513,7 @@ export class Game {
     const r = this.queue[i]
     if (!this.freeAt(day, hour, wk)) {
       const alt = this.bestSlot(r)
-      return { ok: false, msg: `${DAY_NAMES[day]} ${hour}:00 DOLU (${this.usedAt(day, hour, wk)}/${this.pitches} saha).`
+      return { ok: false, msg: `${DAY_NAMES[day]} ${hour}:00 DOLU (${this.usedAt(day, hour, wk)}/${this.totalLanes()} saha).`
         + (alt ? ` En yakın boş: ${DAY_NAMES[alt.day]} ${hourLabel(alt.hour)}.` : ' Uygun boş saat kalmamış.') }
     }
     if (hour < OPEN_HOUR || hour >= CLOSE_HOUR) return { ok: false, msg: 'Tesis o saatte kapalı.' }
@@ -542,7 +582,7 @@ export class Game {
   /** YERLEŞTİRİLEBİLİR Mİ: kural + kapasite (UI vurgusu ve bestSlot bunu kullanır) */
   /** 2 saatlik kart TEK saate sığar mı (tam yer yokken kısmi karşı-teklif) */
   canPlacePartial(r: Reservation, day: number, hour: number, wk = 0): boolean {
-    if (r.hours < 2 || r.partialRefused) return false
+    if (r.hours < 2 || r.partialRefused || r.forCourt) return false
     if (this.canPlaceAt(r, day, hour, wk)) return false // tam yer varsa kısmiye gerek yok
     if (wk === 0 && day === this.todayDow() && hour < this.hourNow()) return false
     if (!r.flexible) { if (r.day !== day || r.hour !== hour) return false }
@@ -578,6 +618,7 @@ export class Game {
     if (wk === 0 && day === this.todayDow() && hour < this.hourNow()) return false
     if (!this.freeAt(day, hour, wk)) return false
     if (r.needFull && !this.fullFreeAt(day, hour, wk)) return false
+    if (this.resolveLane(r, day, hour, undefined, wk) === null) return false
     if (r.hours < 2) return true
     return this.freeAt(day, hour + 1, wk) && (!r.needFull || this.fullFreeAt(day, hour + 1, wk))
   }
@@ -938,7 +979,7 @@ export class Game {
     // K4: kort MUSLUK değil — yıpranır (gelir düşer) + günlük bakım gideri;
     // 'Bakım Yenile' (arsa modalı) yeni tekrarlayan sink
     const courtRent = this.builds.reduce((sum, b) => {
-      const base = b.kind === 'basket' ? 800 : b.kind === 'voley' ? 550 : 0
+      const base = b.kind === 'basket' ? 300 : b.kind === 'voley' ? 200 : 0 // kortlar artık MAÇ geliri kazanıyor — pasif kira boş-saat payına indi
       if (!base) return sum
       b.wear = Math.min(1, (b.wear ?? 0) + 0.04)
       return sum + Math.round(base * (1 - (b.wear ?? 0) * 0.7) - 200)
@@ -989,7 +1030,7 @@ export class Game {
       const sn = this.locStore[id]
       if (!sn) continue
       subeIncome += sn.builds.reduce((sum, b) => {
-        const base = b.kind === 'basket' ? 800 : b.kind === 'voley' ? 550 : 0
+        const base = b.kind === 'basket' ? 300 : b.kind === 'voley' ? 200 : 0 // kortlar artık MAÇ geliri kazanıyor — pasif kira boş-saat payına indi
         if (!base) return sum
         b.wear = Math.min(1, (b.wear ?? 0) + 0.04)
         return sum + Math.round(base * (1 - (b.wear ?? 0) * 0.7) - 200)  // bakım gideri + yıpranma
@@ -1177,6 +1218,18 @@ export class Game {
         (kind === 'wc' && this.hasWC && this.buildAt(c, r)?.kind !== 'wc')) {
       return { ok: false, msg: 'Bundan zaten var.' }
     }
+    // MİNİ İSTİFİ: aynı parsele DİKİNE 3 mini saha sığar — mini üstüne mini = yenisini ekle
+    const exist = this.buildAt(c, r)
+    if (kind === 'mini' && exist?.kind === 'mini' && (exist.count ?? 1) < 3) {
+      const cost = this.buildCostFor('mini')
+      if (this.money < cost) return { ok: false, msg: `₺${(cost - this.money).toLocaleString('tr-TR')} eksik.` }
+      this.money -= cost
+      exist.count = (exist.count ?? 1) + 1
+      this.pitches++
+      this.events.push(`Mini saha eklendi (${exist.count}/3) — aynı arsada.`)
+      return { ok: true, msg: t('Mini saha eklendi — aynı arsada artık ') + exist.count + t(' saha var.') }
+    }
+    if (kind === 'mini' && exist?.kind === 'mini') return { ok: false, msg: t('Bu arsada 3 mini saha dolu.') }
     // SAHİPLİ ARSADA ESNEK İNŞA: eski yapı otomatik yıkılır (%40 iade), yenisi kurulur
     if (this.buildAt(c, r)) {
       const rem = this.removeBuild(c, r)
@@ -1238,10 +1291,11 @@ export class Game {
     const i = this.builds.findIndex(b => b.key === parcelKey(c, r))
     if (i < 0) return { ok: false, msg: 'Bu arsada yapı yok.' }
     const b = this.builds[i]
-    const refund = Math.round(BUILDS[b.kind].cost * 0.4 / 100) * 100
+    const cnt = b.kind === 'mini' ? (b.count ?? 1) : 1
+    const refund = Math.round(BUILDS[b.kind].cost * cnt * 0.4 / 100) * 100
     if (b.kind === 'pitch' || b.kind === 'mini') {
-      if (this.pitches <= 1) return { ok: false, msg: 'Son sahanı yıkamazsın.' }
-      this.pitches--
+      if (this.pitches - cnt < 1) return { ok: false, msg: 'Son sahanı yıkamazsın.' }
+      this.pitches -= cnt
     }
     if (b.kind === 'kantin') this.hasCanteen = false
     if (b.kind === 'dus') this.hasShower = false

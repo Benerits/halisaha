@@ -129,13 +129,18 @@ function renderCal() {
 
   // SEÇİLİ GÜNÜN ŞERİDİ (önbellekli) — çok sahada saha satırlı ızgara
   const cal = $('cal')
-  const N = game.pitches
+  const N = game.totalLanes()
   const fullN = game.fullPitchCount()
-  const laneLbl = (l: number) => l < fullN ? `Saha ${l + 1}` : `Mini ${l - fullN + 1}`
+  const kinds = game.laneKinds()
+  const laneLbl = (l: number) => {
+    const k = kinds[l]
+    const idx = kinds.slice(0, l).filter(x => x === k).length + 1
+    return k === 'full' ? `Saha ${idx}` : k === 'mini' ? `Mini ${idx}` : k === 'basket' ? `Basket ${idx}` : `Voley ${idx}`
+  }
   const cellHint = (r: typeof sel, hour: number, lane: number): boolean => {
     if (!r) return false
     if (!game.canPlaceAt(r, viewDay, hour, viewWk)) return false
-    if (r.needFull && lane >= fullN) return false
+    if (!game.laneAllowed(r, lane)) return false
     if (game.laneTakenBy(viewDay, hour, lane, viewWk)) return false
     if (r.hours === 2 && game.laneTakenBy(viewDay, hour + 1, lane, viewWk)) return false
     return true
@@ -167,7 +172,7 @@ function renderCal() {
     // sol şerit etiketleri + saat sütunları (satır = saha)
     calHtml = `<div class="lanecol"><div class="lh"></div>` +
       Array.from({ length: N }, (_, l) =>
-        `<div class="ll ${l < fullN ? '' : 'mini'}">${laneLbl(l)}</div>`).join('') + '</div>'
+        `<div class="ll ${kinds[l] === 'full' ? '' : 'mini'}">${laneLbl(l)}</div>`).join('') + '</div>'
     calHtml += HOURS.map(hour => {
       const isPast = viewWk === 0 && viewDay === nowDay && hour < nowHour
       const nightLocked = hour >= NIGHT_START && !game.hasLights
@@ -175,7 +180,7 @@ function renderCal() {
       for (let l = 0; l < N; l++) {
         const b = game.laneTakenBy(viewDay, hour, l, viewWk)
         const hint = cellHint(sel, hour, l)
-        const part = sel && !hint && !b && game.canPlacePartial(sel, viewDay, hour, viewWk) && (!sel.needFull || l < fullN)
+        const part = sel && !hint && !b && game.canPlacePartial(sel, viewDay, hour, viewWk) && game.laneAllowed(sel, l)
         const cls = ['dcell']
         if (b) cls.push(b.sub ? 'sub' : 'full')
         if (hint) cls.push(hintCls)
@@ -272,7 +277,7 @@ function renderQueue() {
       : pat < 0.4 ? t('acelesi var, üstüne gitme') : ''
     return `<div class="rcard ${selected === r.id ? 'sel' : ''} ${seenCards.has(r.id) ? '' : 'new'}" data-id="${r.id}">
       <div class="team">${r.team}</div>${r.weeks ? `<span class="tagsub">${r.weeks} ${t('HAFTA')}</span>` : ''}
-      <div class="when">${when}${r.flexible ? `<span class="flex">${t('ESNEK')}</span>` : ''}${r.hours === 2 ? `<span class="flex" style="background:var(--clay)">${t('2 SAAT')}</span>` : ''}${r.needFull ? `<span class="flex" style="background:var(--green-deep)">${t('TAM SAHA')}</span>` : ''}</div>
+      <div class="when">${when}${r.flexible ? `<span class="flex">${t('ESNEK')}</span>` : ''}${r.hours === 2 ? `<span class="flex" style="background:var(--clay)">${t('2 SAAT')}</span>` : ''}${r.needFull ? `<span class="flex" style="background:var(--green-deep)">${t('TAM SAHA')}</span>` : ''}${r.forMini ? `<span class="flex" style="background:#7a9e2f">${t('MİNİ')}</span>` : ''}${r.forCourt === 'basket' ? `<span class="flex" style="background:#c97a3d">BASKET</span>` : ''}${r.forCourt === 'voley' ? `<span class="flex" style="background:#b99b4a">VOLEY</span>` : ''}</div>
       <div class="meta">${seg.label}</div>
       <div class="price"><span class="plab">${t('teklifi')}</span> ₺${tl(r.price)}${r.weeks ? ` <span class="pw">${t('/hafta')}</span>` : ''}</div>
       ${r.haggled ? `<div class="hdone">${t('pazarlık yapıldı')}</div>` : (() => {

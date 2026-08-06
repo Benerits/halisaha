@@ -548,19 +548,23 @@ export class World {
       if (!builds.some(b => (b.key ?? '') === key)) { this.scene.remove(g); this.parcelBuilds.delete(key) }
     }
     for (const b of builds) {
-      if (this.parcelBuilds.has(b.key ?? '')) continue
-      const tile = this.parcelTiles.get(b.key ?? '')
+      const key = b.key ?? ''
+      const cur = this.parcelBuilds.get(key)
+      const cnt = (b as { count?: number }).count ?? 1
+      if (cur && cur.userData.count === cnt) continue
+      if (cur) { this.scene.remove(cur); this.parcelBuilds.delete(key) } // mini sayısı değişti → yeniden çiz
+      const tile = this.parcelTiles.get(key)
       if (!tile) continue
-      const g = this.makeBuild(b.kind, tile.position.x, tile.position.y)
-      this.parcelBuilds.set(b.key ?? '', g)
+      const g = this.makeBuild(b.kind, tile.position.x, tile.position.y, cnt)
+      g.userData.count = cnt
+      this.parcelBuilds.set(key, g)
     }
   }
 
-  private makeBuild(kind: BuildKind, x: number, y: number): THREE.Group {
+  private makeBuild(kind: BuildKind, x: number, y: number, count = 1): THREE.Group {
     const g = new THREE.Group()
-    if (kind === 'pitch' || kind === 'mini') {
-      const w = kind === 'pitch' ? PARCEL_W - 0.8 : PARCEL_W * 0.62
-      const d = kind === 'pitch' ? PARCEL_D - 0.8 : PARCEL_D * 0.62
+    if (kind === 'pitch') {
+      const w = PARCEL_W - 0.8, d = PARCEL_D - 0.8
       const skirt2 = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.5, d + 0.5), lam(0x2a6e35))
       skirt2.position.z = 0.075; g.add(skirt2)
       const turf = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
@@ -568,7 +572,24 @@ export class World {
       turf.position.z = 0.09; turf.receiveShadow = true; g.add(turf)
       // KALELER: ana sahadaki gerçek fileli kaleler — 'yeni sahada kale yok' fixi
       for (const sgn of [-1, 1] as const) this.buildGoalNet(g, sgn * (w / 2 - 0.55), sgn)
+    } else if (kind === 'mini') {
+      // DİKİNE İSTİF: bir arsaya yan yana 3 dikey mini saha (her biri kendi kaleleriyle)
+      const skirt2 = new THREE.Mesh(new THREE.PlaneGeometry(PARCEL_W - 0.3, PARCEL_D - 0.3), lam(0x2a6e35))
+      skirt2.position.z = 0.07; g.add(skirt2)
+      const fieldW = PARCEL_D - 1.4   // dikey saha: uzun eksen y (alt-grup döndürülür)
+      const fieldD = 3.9
+      for (let i = 0; i < count; i++) {
+        const sub = new THREE.Group()
+        const turf = new THREE.Mesh(new THREE.PlaneGeometry(fieldW, fieldD),
+          new THREE.MeshLambertMaterial({ map: this.pitchTexture(fieldW, fieldD) }))
+        turf.position.z = 0.09; turf.receiveShadow = true; sub.add(turf)
+        for (const sgn of [-1, 1] as const) this.buildGoalNet(sub, sgn * (fieldW / 2 - 0.5), sgn)
+        sub.rotation.z = Math.PI / 2
+        sub.position.x = (i - (count - 1) / 2) * (fieldD + 0.45)
+        g.add(sub)
+      }
     } else if (kind === 'basket') {
+      g.scale.set(1.3, 1.35, 1) // kort TEK PARSELİ kaplar ('küçük görünüyor' fixi)
       // turuncu saha + iki pota
       const court = new THREE.Mesh(new THREE.PlaneGeometry(10, 6.4), lam(0xc97a3d))
       court.position.z = 0.06; court.receiveShadow = true; g.add(court)
@@ -588,6 +609,7 @@ export class World {
         hoop.position.set(sgn * 4.7, 0, 2.05); g.add(hoop)
       }
     } else if (kind === 'voley') {
+      g.scale.set(1.42, 1.52, 1) // kort TEK PARSELİ kaplar
       // kum zemin + file
       const sand = new THREE.Mesh(new THREE.PlaneGeometry(9, 5.6), lam(0xdcc492))
       sand.position.z = 0.06; sand.receiveShadow = true; g.add(sand)

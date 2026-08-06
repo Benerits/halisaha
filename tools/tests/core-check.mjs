@@ -225,7 +225,7 @@ console.log('\n— ANLAŞMA DONDURMASI + SAAT —')
     t.tick(5)
     check('pazarlıksız kartın süresi normal akar', r2.patience < before)
   }
-  check('1 oyun günü = 270 sn (saat=15sn × 18 slot: 9:00→03:00)', DAY_SECONDS === 270)
+  check('1 oyun günü = 20 sn (hiper tempo)', DAY_SECONDS === 20)
 }
 
 console.log('\n— ADAPTİF VURGU SAYACI —')
@@ -615,6 +615,30 @@ console.log('\n— HEDEF SAYACI + KADEMELİ FİYAT —')
   check('3. ek saha +%80', g.buildCostFor('mini') === 39_500)
   const own = g.ownedParcels.length
   check('arsa taban (ilk bölge)', own <= 4 ? g.parcelPrice(0, 3) === Math.round((20000 - 3000 * 3) / 500) * 500 : true)
+}
+console.log('\n— MİNİ İSTİF + KORT ŞERİTLERİ —')
+{
+  const g = new Game(); g.money = 1_000_000
+  g.buyParcel(0, 1); g.placeBuild(0, 1, 'mini')
+  g.placeBuild(0, 1, 'mini'); g.placeBuild(0, 1, 'mini')
+  check('bir arsaya 3 mini istiflenir', g.buildAt(0, 1).count === 3 && g.pitches === 4)
+  check('4. mini AYNI arsaya giremez', !g.placeBuild(0, 1, 'mini').ok)
+  g.buyParcel(2, 1); g.placeBuild(2, 1, 'basket')
+  check('şerit sayısı: 1 tam + 3 mini + 1 basket = 5', g.totalLanes() === 5 && g.laneKinds().join() === 'full,mini,mini,mini,basket')
+  const basketReq = { id: 9, team: 'Basketçiler', segment: 'klasik', day: 1, hour: 20, price: 500, maxPay: 900,
+    patience: 120, maxPatience: 120, flexible: false, hours: 1, weeks: 0, needFull: false, forCourt: 'basket' }
+  g.queue.push(basketReq)
+  check('basket isteği futbol şeridine KONMAZ', !g.laneAllowed(basketReq, 0) && !g.laneAllowed(basketReq, 1))
+  check('basket isteği kendi şeridine konur', g.laneAllowed(basketReq, 4) && g.place(9, 1, 20).ok)
+  check('kayıt basket şeridinde', g.bookings.find(b => b.team === 'Basketçiler')?.lane === 4)
+  const futReq = { id: 10, team: 'Futbolcular', segment: 'klasik', day: 1, hour: 20, price: 500, maxPay: 900,
+    patience: 120, maxPatience: 120, flexible: false, hours: 1, weeks: 0, needFull: false }
+  g.queue.push(futReq)
+  check('futbol isteği kort şeridine düşmez', g.place(10, 1, 20).ok && g.bookings.find(b => b.team === 'Futbolcular')?.lane !== 4)
+  check('mini istif yıkımı toplu iade + saha sayısı düşer', (() => {
+    const m0 = g.money; const ok = g.removeBuild(0, 1).ok
+    return ok && g.pitches === 1 && g.money === m0 + Math.round(22000 * 3 * 0.4 / 100) * 100
+  })())
 }
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)
