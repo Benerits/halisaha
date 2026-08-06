@@ -1277,10 +1277,11 @@ async function handleVs(req, res, url) {
         const kind = b?.kind
         if (kind === 'balance') {
           const amt = Math.max(0, Math.round(Number(b.amount) || 0))
-          const cur = Math.round(Number(found.rows[0].save?.s?.money ?? found.rows[0].save?.money) || 0)
+          const cur = Math.round(Number(found.rows[0].save?.money ?? found.rows[0].save?.s?.money) || 0)
           const next = b.op === 'set' ? amt : b.op === 'add' ? cur + amt : cur - amt
           if (next < 0 || !['set', 'add', 'subtract'].includes(String(b.op))) return json(res, 400, { error: { code: 'invalid_request', message: 'op: set|add|subtract' } })
-          await pool.query(`UPDATE halisaha_player SET save = jsonb_set(coalesce(save, '{}'::jsonb), '{s,money}', to_jsonb($2::int)) WHERE id=$1`, [id, next])
+          // DÜZ ŞEMA: {s,money} zarfına yazınca oyuncu parayı GÖRMÜYORDU (BenelOil kalıntısı)
+          await pool.query(`UPDATE halisaha_player SET save = jsonb_set(coalesce(save, '{}'::jsonb), '{money}', to_jsonb($2::int)) WHERE id=$1`, [id, next])
           const live = pushToUser(id, { type: 'balance', money: next, toast: b.toast || 'Bakiye güncellendi' })
           return json(res, 200, { data: { coins: next, live } })
         }
@@ -1296,17 +1297,13 @@ async function handleVs(req, res, url) {
           return json(res, 200, { data: { live } })
         }
         if (kind === 'hotfix-fuel') {
-          // tek tık: tankları doldur + takılı siparişleri temizle (hem DB hem canlı)
-          const TANK_CAP = [800, 1500, 3000, 5000]
+          // HALI SAHA hot-fix (aynı buton): evrakları %100 yap + tüm kortların bakımını sıfırla
           const save = found.rows[0].save || {}
-          save.s = save.s || {}
-          const cap = TANK_CAP[Math.min(3, Number(save.s.tankLevel) || 0)]
-          save.s.tanks = { ...(save.s.tanks || {}), benzin: cap, dizel: cap, lpg: cap }
-          const clear = { pending: false, eta: 0, arrived: false, delivering: false }
-          save.s.orders = { benzin: { ...clear }, dizel: { ...clear }, lpg: { ...clear } }
+          save.docs = 1
+          if (Array.isArray(save.builds)) for (const bb of save.builds) if (bb && bb.wear) bb.wear = 0
           await pool.query('UPDATE halisaha_player SET save=$2 WHERE id=$1', [id, JSON.stringify(save)])
-          const live = pushToUser(id, { type: 'patch', patch: { tanks: save.s.tanks, orders: save.s.orders } })
-          return json(res, 200, { data: { live, tanks: save.s.tanks } })
+          const live = pushToUser(id, { type: 'patch', patch: { docs: 1 } })
+          return json(res, 200, { data: { live, docs: 1 } })
         }
         if (kind === 'reload') {
           return json(res, 200, { data: { live: pushToUser(id, { type: 'reload' }) } })
@@ -1335,12 +1332,12 @@ async function handleVs(req, res, url) {
       } else if (m[2] === 'balance' && req.method === 'POST') {
         const { op, amount } = await readBody(req)
         const amt = Math.max(0, Math.round(Number(amount) || 0))
-        const cur = Math.round(Number(found.rows[0].save?.s?.money ?? found.rows[0].save?.money) || 0)
+        const cur = Math.round(Number(found.rows[0].save?.money ?? found.rows[0].save?.s?.money) || 0)
         const next = op === 'set' ? amt : op === 'add' ? cur + amt : cur - amt
         if (next < 0 || !['set', 'add', 'subtract'].includes(String(op))) {
           return json(res, 400, { error: { code: 'invalid_request', message: 'Geçersiz işlem.' } })
         }
-        await pool.query(`UPDATE halisaha_player SET save = jsonb_set(coalesce(save, '{}'::jsonb), '{s,money}', to_jsonb($2::int)) WHERE id=$1`, [id, next])
+        await pool.query(`UPDATE halisaha_player SET save = jsonb_set(coalesce(save, '{}'::jsonb), '{money}', to_jsonb($2::int)) WHERE id=$1`, [id, next])
         return json(res, 200, { data: { coins: next } })
       } else if (req.method === 'DELETE' && !m[2]) {
         await pool.query('DELETE FROM halisaha_player WHERE id=$1', [id])

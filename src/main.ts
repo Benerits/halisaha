@@ -1435,7 +1435,7 @@ setInterval(() => {
     const tryPull = async (): Promise<boolean> => {
       try {
         const sv = await auth.pullSave()
-        if (sv) { game.load(sv as never); applyLocSwitch() }
+        if (sv) { game.load(sv as never); applyLocSwitch(); if (game.facilityName) world.setSignName(game.facilityName) }
         else await auth.pushSave(game.save())
         return true
       } catch { return false }
@@ -1449,7 +1449,7 @@ setInterval(() => {
       try {
         const sv = await auth.pullSave()
         $('verifylock').classList.remove('show')
-        if (sv) { game.load(sv as never); applyLocSwitch() }
+        if (sv) { game.load(sv as never); applyLocSwitch(); if (game.facilityName) world.setSignName(game.facilityName) }
         toast(t('Doğrulandı — hoş geldin!'), 'g'); audio.cash(); renderAll()
       } catch { toast(t('Henüz doğrulanmamış görünüyor — mailindeki linke tıkla.'), 'b') }
     })
@@ -1476,6 +1476,47 @@ setInterval(() => {
     applyLocSwitch()  // yenilemede doğru şube teması
   }
 })()
+
+// ---- CANLI KÖPRÜ (admin makroları): bakiye / bildirim / patch / reload / ban ----
+let liveWs: WebSocket | null = null
+let liveRetry = 0
+function connectLive() {
+  if (cloudBlocked || !auth.loggedIn()) return
+  const token = localStorage.getItem('halisaha-token')
+  if (!token) return
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  try { liveWs = new WebSocket(`${proto}//${location.host}/ws?token=${encodeURIComponent(token)}`) } catch { return }
+  liveWs.onopen = () => { liveRetry = 0 }
+  liveWs.onmessage = ev => {
+    let m: { type?: string; [k: string]: unknown }
+    try { m = JSON.parse(ev.data as string) } catch { return }
+    if (m.type === 'balance') {
+      game.money = Number(m.money) || game.money
+      toast(String(m.toast || t('Bakiye güncellendi')), 'g'); audio.cash(); save(); renderAll()
+    } else if (m.type === 'notify') {
+      const title = String(m.title || 'HALI SAHA'), body = String(m.body || '')
+      toast(body ? `${title} — ${body}` : title, 'g'); audio.cheer()
+    } else if (m.type === 'patch') {
+      const patch = (m.patch as Record<string, unknown>) || {}
+      if (typeof patch.money === 'number') game.money = patch.money
+      if (typeof patch.docs === 'number') game.docs = patch.docs
+      toast(t('Kayıt güncellendi ✓'), 'g'); save(); renderAll()
+    } else if (m.type === 'reload') {
+      toast(t('Güncelleme uygulanıyor…')); setTimeout(() => location.reload(), 800)
+    } else if (m.type === 'ban') {
+      toast(String(m.reason || 'Hesap askıya alındı'), 'b'); setTimeout(() => location.reload(), 1500)
+    }
+  }
+  const reconnect = () => {
+    liveWs = null
+    if (cloudBlocked || !auth.loggedIn()) return
+    liveRetry = Math.min(liveRetry + 1, 6)
+    setTimeout(connectLive, 1000 * liveRetry)
+  }
+  liveWs.onclose = reconnect
+  liveWs.onerror = () => { try { liveWs?.close() } catch { /* yut */ } }
+}
+connectLive()
 
 // YÜKLEME MASKESİ kaldırma: Kenney kitleri sahneye uygulanınca (yazıhane pop'u görünmesin)
 // VEYA 8 sn tavan — kit inmezse prosedürel yedek oynanabilir, maske oyunu rehin almasın
