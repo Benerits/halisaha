@@ -570,16 +570,16 @@ export class Game {
     if (!this.slotOk(r, day, hour)) {
       return r.flexible
         ? { ok: false, msg: `${r.team} bu saati kabul etmiyor — yanıp sönen slotlardan birini seç.` }
-        : { ok: false, msg: `${r.team} sadece ${DAY_NAMES[r.day]} ${r.hour}:00 istiyor.` }
+        : { ok: false, msg: `${r.team} sadece ${DAY_NAMES[r.day]} ${hourLabel(r.hour)} istiyor.` }
     }
     if (r.needFull && !this.fullFreeAt(day, hour, wk)) {
       return { ok: false, msg: `${r.team} TAM SAHA istiyor — bu saatte tam sahalar dolu (mini boş ama onlara küçük).` }
     }
     if (r.hours === 2 && !this.freeAt(day, hour + 1, wk)) {
-      return { ok: false, msg: `${r.team} 2 saat istiyor — ${hour + 1}:00 da boş olmalı.` }
+      return { ok: false, msg: `${r.team} 2 saat istiyor — ${hourLabel(hour + 1)} de boş olmalı.` }
     }
     if (r.hours === 2 && r.needFull && !this.fullFreeAt(day, hour + 1, wk)) {
-      return { ok: false, msg: `${r.team} TAM SAHA istiyor — ${hour + 1}:00'da tam sahalar dolu.` }
+      return { ok: false, msg: `${r.team} TAM SAHA istiyor — ${hourLabel(hour + 1)}'da tam sahalar dolu.` }
     }
     const lane = this.resolveLane(r, day, hour, wantedLane, wk)
     if (lane === null) return { ok: false, msg: 'Uygun saha şeridi yok — şeritler dolu.' }

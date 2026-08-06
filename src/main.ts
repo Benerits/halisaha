@@ -59,7 +59,7 @@ function confirmFlash(d: number, h: number, span = 1) {
   flashUntil = performance.now() + 1700
   pickCache = '__flash__'
   pickbar.className = 'show confirm'
-  pickbar.innerHTML = span === 2 ? `${dayFull(d)} ${h}:00-${h + 2}:00 ${t('seçildi ✓')}` : `${dayFull(d)} ${h}:00 ${t('seçildi ✓')}`
+  pickbar.innerHTML = span === 2 ? `${dayFull(d)} ${hourLabel(h)}-${hourLabel(h + 2)} ${t('seçildi ✓')}` : `${dayFull(d)} ${hourLabel(h)} ${t('seçildi ✓')}`
   setTimeout(() => { flashUntil = 0; pickbar.className = ''; renderCal() }, 1700)
 }
 
@@ -333,8 +333,8 @@ function renderQueue() {
   const html = game.queue.map(r => {
     const seg = SEGMENTS[r.segment]
     const when = r.flexible
-      ? `${r.flexDays.length > 5 ? t('Her gün') : r.flexDays[0] >= 5 ? t('Hafta sonu') : t('Hafta içi')} ${r.flexHours[0]}-${r.flexHours[r.flexHours.length - 1] + 1}`
-      : `${dayName(r.day)} ${r.hour}:00`
+      ? `${r.flexDays.length > 5 ? t('Her gün') : r.flexDays[0] >= 5 ? t('Hafta sonu') : t('Hafta içi')} ${r.flexHours[0] % 24}-${(r.flexHours[r.flexHours.length - 1] + 1) % 24}`
+      : `${dayName(r.day)} ${hourLabel(r.hour)}`
     const pat = r.patience / r.maxPatience
     const lever = pat > 0.55 && (r.hour >= 20 || r.segment === 'kurumsal')
     const tip = r.haggled ? t('pazarlık bitti')
@@ -1289,6 +1289,13 @@ async function afterAuth(mode: 'register' | 'login' | 'oauth') {
     // login: push YOK — hesaptan devam
   } catch { /* ağ hatası: yerel durur */ }
   localStorage.setItem(GUEST_OK, '1')
+  if (auth.needsVerify()) {
+    // doğrulama şart: reload yerine doğrudan doğrulama ekranı (gate kapanır, ekran ÜSTTE)
+    $('gate').classList.remove('show')
+    const ve = document.getElementById('vemail'); if (ve) ve.textContent = auth.currentEmail() ?? ''
+    $('verifylock').classList.add('show')
+    return
+  }
   location.reload()
 }
 
