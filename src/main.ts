@@ -252,7 +252,35 @@ function selectCard(id: number) {
   renderQueue(); renderCal()
 }
 const seenCards = new Set<number>()
-const askVals = new Map<number, number>() // slider konumu — kart yeniden çizilse de korunur
+const askVals = new Map<number, number>()
+const selUnplaceable = (_r: unknown) => false
+/** şerit adı (takvim + saha üstü etiket + modal ortak) */
+function laneLabel(l: number): string {
+  const kinds = game.laneKinds()
+  const k = kinds[l]
+  const idx = kinds.slice(0, l).filter(x => x === k).length + 1
+  return k === 'full' ? `Saha ${idx}` : k === 'mini' ? `Mini ${idx}` : k === 'basket' ? `Basket ${idx}` : `Voley ${idx}`
+}
+/** parselleri dünyaya bas + saha üstü NUMARA etiketlerini güncelle */
+function syncWorldParcels() {
+  world.syncParcels(game.ownedParcels, game.builds)
+  const labels: { key: string; sub: number; count: number; text: string }[] = []
+  for (let l = 1; l < game.totalLanes(); l++) {
+    const ref = game.laneBuildRef(l)
+    if (ref) labels.push({ key: ref.key, sub: ref.sub, count: ref.count, text: laneLabel(l) })
+  }
+  world.setFieldLabels(labels)
+}
+/** deterministik canlı skor: aynı maç aynı dakikada hep aynı skoru verir */
+function liveScore(team: string, day: number, hour: number, minute: number): [number, number] {
+  let h = 0; for (const ch of team) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  h = (h + day * 97 + hour * 13) >>> 0
+  const total = (h % 5) + 2                     // maç başına 2-6 gol
+  const done = Math.floor((minute / 60) * total)
+  let a = 0, b2 = 0
+  for (let i = 0; i < done; i++) { if (((h >> (i * 3)) & 7) % 2 === 0) a++; else b2++ }
+  return [a, b2]
+} // slider konumu — kart yeniden çizilse de korunur
 const warned = new Set<number>()
 let qCache = ''
 function renderQueue() {
@@ -289,6 +317,7 @@ function renderQueue() {
         <button class="hask" data-id="${r.id}">${t('İSTE')}</button></div></div>`
       })()}
       ${tip ? `<div class="hint2 ${lever ? 'up' : 'dn'}">${tip}</div>` : ''}
+      ${game.personel.mudur > 0 && !selUnplaceable(r) ? `<button class="mgr" data-mgr="${r.id}">🧑‍💼 ${t('Müdüre Sal')}</button>` : ''}
       <button class="rej" data-rej="${r.id}">${t('geri çevir ✕')}</button>
       <div class="bar"><i></i></div>
     </div>`
@@ -332,6 +361,15 @@ function renderQueue() {
         if (res.ok || (!res.walked && game.queue.some(x => x.id === id))) {
           selectCard(id)
         }
+      })
+    })
+    list.querySelectorAll<HTMLElement>('button[data-mgr]').forEach(b => {
+      b.addEventListener('click', ev => {
+        ev.stopPropagation()
+        const res = game.delegateToManager(Number(b.dataset.mgr))
+        if (res.ok) { audio.place() } else { audio.bad(); toast(res.msg, 'b') }
+        if (selected === Number(b.dataset.mgr)) selected = null
+        save(); renderAll()
       })
     })
     list.querySelectorAll<HTMLElement>('button[data-rej]').forEach(b => {
@@ -694,7 +732,33 @@ function openParcel(c: number, r: number) {
     h += `<div class="srow"><span class="nm">${BUILDS[b.kind].label}</span>
       <span class="gn">${BUILDS[b.kind].gain}${isCourt ? ` · ${t('yıpranma')} %${wearPct}` : ''}</span>
       ${isCourt ? `<button class="buy" id="pservice" ${wearPct < 10 ? 'disabled' : ''}>₺4.000</button>` : ''}
+      ${b.kind === 'mini' && (b.count ?? 1) < 3 ? `<button class="buy" id="pminiadd">${t('+ Mini Ekle')} (${b.count ?? 1}/3) ₺${tl(game.buildCostFor('mini'))}</button>` : ''}
       <button class="buy" id="pdemol" style="background:var(--clay)">YIK · %40 iade</button>
+      ${(() => {
+        if (!['pitch', 'mini', 'basket', 'voley'].includes(b.kind)) return ''
+        const key = `${c},${r}`
+        const nowD = (game.day - 1) % 7
+        const nowH = game.hourNow()
+        const minute = Math.min(59, Math.floor(((game.t / DAY_SECONDS) * HOURS.length % 1) * 60))
+        let rows = ''
+        for (let l = 0; l < game.totalLanes(); l++) {
+          const ref = game.laneBuildRef(l)
+          if (!ref || ref.key !== key) continue
+          const cur = game.laneTakenBy(nowD, nowH, l, 0)
+          if (cur) {
+            const [sa, sb] = liveScore(cur.team, nowD, cur.hour, minute)
+            rows += `<div class="srow" style="background:#eefaf0"><span class="nm">🔴 ${laneLabel(l)} · ${t('CANLI')}</span>
+              <span class="gn">${cur.team} ${sa}-${sb}</span>
+              <span class="ds">${minute}' · ${t('kalan')} ${60 - minute} dk · ₺${tl(cur.price)}${cur.sub ? ' · ' + t('abonelik') : ''}</span></div>`
+          } else {
+            const next = game.bookings.filter(x => x.day === nowD && (x.sub || (x.wk ?? 0) === 0) && x.hour > nowH && game.laneOf(x, nowD, x.hour) === l)
+              .sort((a2, b2) => a2.hour - b2.hour)[0]
+            rows += `<div class="srow"><span class="nm">${laneLabel(l)}</span>
+              <span class="ds">${next ? `${t('sıradaki')} ${hourLabel(next.hour)} · ${next.team} · ₺${tl(next.price)}` : t('Şu an boş — takvimden saat sat.')}</span></div>`
+          }
+        }
+        return rows
+      })()}
       <span class="ds">${BUILDS[b.kind].desc} Yıkarsan arsa boşalır, yerine başka şey kurabilirsin.</span></div>`
   } else if (!owned) {
     const adj = game.parcelAdjacent(c, r)
@@ -722,26 +786,33 @@ function openParcel(c: number, r: number) {
     toast(res.msg, res.ok ? 'g' : 'b')
     if (res.ok) { save(); openParcel(c, r); renderAll() }
   })
+  const pma = document.getElementById('pminiadd')
+  if (pma) pma.addEventListener('click', () => {
+    const res = game.placeBuild(c, r, 'mini')
+    if (res.ok) audio.build(); else audio.bad()
+    toast(res.msg, res.ok ? 'g' : 'b')
+    if (res.ok) { save(); syncWorldParcels(); openParcel(c, r); renderAll() }
+  })
   const pd = document.getElementById('pdemol')
   if (pd) pd.addEventListener('click', () => {
     const res = game.removeBuild(c, r)
     if (res.ok) audio.build(); else audio.bad()
     toast(res.msg, res.ok ? 'g' : 'b')
-    if (res.ok) { save(); world.syncParcels(game.ownedParcels, game.builds); openParcel(c, r); renderAll() }
+    if (res.ok) { save(); syncWorldParcels(); openParcel(c, r); renderAll() }
   })
   const pb = document.getElementById('pbuy')
   if (pb) pb.addEventListener('click', () => {
     const res = game.buyParcel(c, r)
     if (res.ok) audio.build(); else audio.bad()
     toast(res.msg, res.ok ? 'g' : 'b')
-    if (res.ok) { save(); world.syncParcels(game.ownedParcels, game.builds); openParcel(c, r) }
+    if (res.ok) { save(); syncWorldParcels(); openParcel(c, r) }
   })
   box.querySelectorAll<HTMLElement>('button[data-build]').forEach(btn =>
     btn.addEventListener('click', () => {
       const res = game.placeBuild(c, r, btn.dataset.build as BuildKind)
       if (res.ok) audio.build(); else audio.bad()
       toast(res.msg, res.ok ? 'g' : 'b')
-      if (res.ok) { save(); world.syncParcels(game.ownedParcels, game.builds); box.classList.remove('show'); renderAll() }
+      if (res.ok) { save(); syncWorldParcels(); box.classList.remove('show'); renderAll() }
     }))
 }
 
@@ -798,7 +869,7 @@ addEventListener('pointerup', e => {
       pendingBuild = null
       world.clearGhost()
       audio.build(); toast(res.msg, 'g')
-      save(); world.syncParcels(game.ownedParcels, game.builds); renderAll()
+      save(); syncWorldParcels(); renderAll()
     } else { audio.bad(); toast(res.msg, 'b') }
     return
   }
@@ -823,7 +894,7 @@ addEventListener('pointerup', e => {
           moveFrom = null
           world.clearGhost()
           audio.build(); toast(res.msg, 'g')
-          save(); world.syncParcels(game.ownedParcels, game.builds); renderAll()
+          save(); syncWorldParcels(); renderAll()
         } else { audio.bad(); toast(res.msg, 'b') }
         return
       }
@@ -932,7 +1003,7 @@ function applyLocSwitch() {
   const c2 = old.cloneNode(false) as HTMLCanvasElement
   old.replaceWith(c2)
   world = new World(c2, game.activeLoc as LocTheme)
-  world.syncParcels(game.ownedParcels, game.builds)
+  syncWorldParcels()
   save()
   renderAll()
 }
@@ -1108,6 +1179,16 @@ function frame() {
   if (nowMatch && !matchWasOn) { world.carArrival(() => world.sendArrivals(5)); audio.cheer() }
   matchWasOn = nowMatch
   world.updateMatch(dt, nowMatch)
+  // DİĞER SAHALAR: o an maçı olan her şeridin fiziksel sahasına oyuncu gelsin
+  {
+    const acts: { id: string; key: string; kind: 'pitch' | 'mini' | 'basket' | 'voley'; sub: number; count: number }[] = []
+    for (const b of game.bookingsAt(nowDay, hour)) {
+      const l = game.laneOf(b, nowDay, hour)
+      const ref = game.laneBuildRef(l)
+      if (ref) acts.push({ id: 'L' + l, ...ref })
+    }
+    world.setFieldActivity(acts)
+  }
   world.updateAmbient(dt)
   // MAÇ OLAYLARI: kavga → polis, sakatlanma → ambulans (siren + araç + toast)
   while (game.incidents.length) {
@@ -1121,7 +1202,7 @@ function frame() {
   }
   world.setBillboards(game.hasBillboard)
   world.setRoadSign(game.hasRoadSign)
-  world.syncParcels(game.ownedParcels, game.builds)
+  syncWorldParcels()
 
   uiT -= dt
   if (uiT <= 0) { uiT = 0.4; renderAll()

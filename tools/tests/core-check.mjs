@@ -225,7 +225,7 @@ console.log('\n— ANLAŞMA DONDURMASI + SAAT —')
     t.tick(5)
     check('pazarlıksız kartın süresi normal akar', r2.patience < before)
   }
-  check('1 oyun günü = 20 sn (hiper tempo)', DAY_SECONDS === 20)
+  check('1 oyun günü = 360 sn (saat=20sn × 18 slot)', DAY_SECONDS === 360)
 }
 
 console.log('\n— ADAPTİF VURGU SAYACI —')
@@ -504,9 +504,9 @@ console.log('\n— ANALİZ RAPORU P1 (K4/K5/K6 sink paketi) —')
   // K5: bina itibar bonusu tür başına TEK sefer
   const k5 = new Game(); k5.money = 900_000
   const rep0 = k5.rep
-  k5.buyParcel(0, 1); k5.placeBuild(0, 1, 'parking')
+  k5.placeBuild(0, 0, 'parking')  // üst sıra: yol bağlantılı (starter parsel)
   const rep1 = k5.rep
-  k5.buyParcel(2, 1); k5.placeBuild(2, 1, 'parking')
+  k5.placeBuild(2, 0, 'parking')  // üst sıra
   check('K5: 2. otopark itibar VERMEZ (sömürü kapandı)', k5.rep === rep1 && rep1 > rep0)
 
   // K6: abone oranı %70 üstünde yeni abonelik kartı gelmez

@@ -14,10 +14,10 @@ export const OPEN_HOUR = 9
 export const NIGHT_START = 24
 export const CLOSE_HOUR = 27
 export const HOURS: number[] = Array.from({ length: CLOSE_HOUR - OPEN_HOUR }, (_, i) => OPEN_HOUR + i)
-// 1 OYUN GÜNÜ = 20 GERÇEK SANİYE (lansman kararı: hiper tempo — 'büyümeden haz alsın,
-// oyun da kısa sürmesin'). 1 saat ≈ 1.1 sn; hafta ~2.3 dk, sezon (30 gün) ~10 dk.
-export const DAY_SECONDS = 20
-export const HOUR_SECONDS = DAY_SECONDS / HOURS.length
+// 1 SAAT = 20 GERÇEK SANİYE (gün=20sn hiper tempo fazla geldi — geri çıkarıldı).
+// Gün 18 saat × 20 sn = 6 dk; hafta ~42 dk, sezon ~3 saat.
+export const HOUR_SECONDS = 20
+export const DAY_SECONDS = HOUR_SECONDS * HOURS.length
 /** iç saat → ekran etiketi (25 → '1:00') */
 export const hourLabel = (h: number): string => `${h % 24}:00`
 export const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'] as const
@@ -116,7 +116,7 @@ const TEAM_NAMES = [
   'Yılmazlar', 'Kaptanlar', 'Mahalle FK', 'Şimşekler', 'Kartallar', 'Dostlar SK',
   'Gece Vardiyası', 'Beton Mikserleri', 'Emekliler', 'Çaycılar', 'Site Gençliği',
   'Ofis Ligi', 'Sanayi Spor', 'Kırmızı Kartlar', 'Ayaküstü FC', 'Kandilliler',
-  'Boğaz Boys', 'Orta Saha AŞ', 'Demir Yumruk', 'Halı Kaplanları', 'Son Dakika FK',
+  'Boğaz Boys', 'Orta Saha AŞ', 'Halı Kaplanları', 'Son Dakika FK',
   'Kalecisiz 5', 'Taksiciler', 'Fırıncılar SK', 'Berberler United', 'Komşular FC',
   'Efsaneler', 'Rövaşata', 'Ters Makas', 'Aut Çizgisi', 'Korner Bayrağı',
   'Devre Arası', 'Uzatma Dakikaları', 'Penaltıcılar', 'Direkten Döndü', 'Ofsayt Bekleyenler',
@@ -355,6 +355,34 @@ export class Game {
     for (let i = 0; i < this.courtCount('basket'); i++) out.push('basket')
     for (let i = 0; i < this.courtCount('voley'); i++) out.push('voley')
     return out
+  }
+  /** şerit → fiziksel yapı (ana saha lane 0 → null; parsel sahaları key+alt-indeks) */
+  laneBuildRef(l: number): { key: string; kind: 'pitch' | 'mini' | 'basket' | 'voley'; sub: number; count: number } | null {
+    const kinds = this.laneKinds()
+    const k = kinds[l]
+    if (!k) return null
+    if (k === 'full') {
+      if (l === 0) return null // ana saha — kendi maç animasyonu var
+      let idx = -1
+      for (let i = 1; i <= l; i++) if (kinds[i] === 'full') idx++
+      const b = this.builds.filter(b2 => b2.kind === 'pitch')[idx]
+      return b?.key ? { key: b.key, kind: 'pitch', sub: 0, count: 1 } : null
+    }
+    if (k === 'mini') {
+      let mi = 0
+      for (let i = 0; i < l; i++) if (kinds[i] === 'mini') mi++
+      let acc = 0
+      for (const b of this.builds) if (b.kind === 'mini') {
+        const cnt = b.count ?? 1
+        if (mi < acc + cnt) return b.key ? { key: b.key, kind: 'mini', sub: mi - acc, count: cnt } : null
+        acc += cnt
+      }
+      return null
+    }
+    let ci = 0
+    for (let i = 0; i < l; i++) if (kinds[i] === k) ci++
+    const b = this.builds.filter(b2 => b2.kind === k)[ci]
+    return b?.key ? { key: b.key, kind: k, sub: 0, count: 1 } : null
   }
   /** bu istek bu şeride konabilir mi (tür eşleşmesi) */
   laneAllowed(r: { needFull?: boolean; forMini?: boolean; forCourt?: 'basket' | 'voley' }, l: number): boolean {
@@ -675,6 +703,18 @@ export class Game {
     const r = this.queue.find(x => x.id === resId)
     if (!r) return { ok: false, msg: 'İstek artık yok.' }
     return this.haggleAsk(resId, Math.round(r.price * (level === 1 ? 1.25 : 1.5) / 10) * 10)
+  }
+
+  /** MÜDÜRE SAL: kartı müdür en iyi slota kendisi koyar (müdür şart) */
+  delegateToManager(resId: number): { ok: boolean; msg: string } {
+    if (this.personel.mudur < 1) return { ok: false, msg: t('Önce bir müdür işe al (Yazıhane → Personel).') }
+    const r = this.queue.find(x => x.id === resId)
+    if (!r) return { ok: false, msg: 'İstek artık yok.' }
+    const slot = this.bestSlot(r)
+    if (!slot) return { ok: false, msg: r.team + t(' için uygun boş slot yok — müdür çaresiz.') }
+    const res = this.place(resId, slot.day, slot.hour, undefined, slot.wk)
+    if (res.ok) this.notices.push(t('Müdür yerleştirdi: ') + `${r.team} → ${dayName(slot.day)} ${hourLabel(slot.hour)}`)
+    return res
   }
 
   /** müdavim sadakati — sıkıştırdıkça düşer, aboneliği yenilemeyi belirler */
@@ -1217,6 +1257,16 @@ export class Game {
         (kind === 'dus' && this.hasShower && this.buildAt(c, r)?.kind !== 'dus') ||
         (kind === 'wc' && this.hasWC && this.buildAt(c, r)?.kind !== 'wc')) {
       return { ok: false, msg: 'Bundan zaten var.' }
+    }
+    // OTOPARK YOL ŞARTI: üst sıra (yola cepheli) YA DA mevcut bir otoparkın bitişiği
+    if (kind === 'parking') {
+      const nearParking = this.builds.some(b2 => {
+        if (b2.kind !== 'parking' || !b2.key) return false
+        const [bc, br] = b2.key.split(',').map(Number)
+        return Math.abs(bc - c) + Math.abs(br - r) === 1
+      })
+      if (r !== 0 && !nearParking)
+        return { ok: false, msg: t('Otopark için yol bağlantısı şart — üst sıradaki (yola cepheli) arsaya ya da mevcut otoparkın bitişiğine kur.') }
     }
     // MİNİ İSTİFİ: aynı parsele DİKİNE 3 mini saha sığar — mini üstüne mini = yenisini ekle
     const exist = this.buildAt(c, r)
