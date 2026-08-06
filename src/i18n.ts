@@ -36,6 +36,8 @@ const EN: Record<string, string> = {
   'slotun abonelikte — yüksek ücretli tek maçlara yer kalmıyor.': 'of your slots are subscriptions — no room left for premium one-off matches.',
   'İşler yolunda': 'All good',
   'sonraki hafta': 'next week',
+  'gece saatleri': 'night hours',
+  'Gece maçı için LED Projektör gerekli — Yazıhane → Yatırım.': 'Night matches need LED Floodlights — Office → Investments.',
   'Denetim cezası yedin! Kalıcı çözüm: Yazıhane → Yatırım → Belge Takip Servisi.': 'You got fined by an inspection! Permanent fix: Office → Investments → Permit Tracking Service.',
   'Aşağıdaki butonla hemen çöz:': 'Fix it now with the button below:',
   'Telefon KAPALI — yeni istek gelmez, bekleyenler küsmez.': 'Phone is OFF — no new requests, waiting teams stay patient.',

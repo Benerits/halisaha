@@ -7,7 +7,7 @@ import { World, type LocTheme } from './world'
 import { audio } from './audio'
 import { t, lang, setLang, dayName, dayFull } from './i18n'
 import * as auth from './auth'
-import { Game, LOCATIONS, type LocId, MAAS, ISE_ALIM, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, SEGMENTS, BUILDS, parcelCost, type BuyId, type BuildKind } from './state'
+import { Game, LOCATIONS, type LocId, MAAS, ISE_ALIM, DAY_NAMES, HOURS, OPEN_HOUR, DAY_SECONDS, NIGHT_START, hourLabel, SEGMENTS, BUILDS, parcelCost, type BuyId, type BuildKind } from './state'
 
 const SAVE_KEY = 'halisaha-save-v1'
 const canvas = document.getElementById('c') as HTMLCanvasElement
@@ -76,7 +76,7 @@ function renderCal() {
       head.textContent = todayMatches.length === 0
         ? `${t('Bugün')} ${dayFull(nowDay)} — ${t('maç yok, telefonu bekle')}`
         : `${t('Bugün')} ${dayFull(nowDay)} · ${todayMatches.length} ${t('maç')}` +
-          (next ? ` · ${t('sıradaki')} ${next.hour}:00 ${next.team}` : ' · ' + t('bugünkü maçlar bitti'))
+          (next ? ` · ${t('sıradaki')} ${hourLabel(next.hour)} ${next.team}` : ' · ' + t('bugünkü maçlar bitti'))
     }
   }
   const desk = document.getElementById('desk')!
@@ -149,6 +149,7 @@ function renderCal() {
       const free = game.freeAt(viewDay, hour, viewWk)
       const hint = sel && free && game.canPlaceAt(sel, viewDay, hour, viewWk)
       const part = sel && !hint && game.canPlacePartial(sel, viewDay, hour, viewWk)
+      const nightLocked = hour >= NIGHT_START && !game.hasLights
       const cls = ['dslot']
       if (b) cls.push(b.sub ? 'sub' : 'full')
       if (hint) cls.push(hintCls)
@@ -156,9 +157,10 @@ function renderCal() {
       if (viewWk === 0 && viewDay === nowDay && hour === nowHour) cls.push('now')
       if (viewWk === 0 && viewDay === nowDay && hour < nowHour) cls.push('past')
       if (!b && hour >= 20 && hour <= 22) cls.push('prime')
+      if (hour >= NIGHT_START) cls.push(nightLocked ? 'night lock' : 'night')
       return `<div class="${cls.join(' ')}" data-h="${hour}" data-l="0"
-        title="${b ? b.team + ' · ₺' + tl(b.price) : DAY_NAMES[viewDay] + ' ' + hour + ':00 — boş'}">
-        <span class="h">${hour}:00</span><span class="t">${b ? b.team.slice(0, 6) : ''}</span>
+        title="${nightLocked ? 'Gece maçı için LED Projektör gerekli' : b ? b.team + ' · ₺' + tl(b.price) : DAY_NAMES[viewDay] + ' ' + hourLabel(hour) + ' — boş'}">
+        <span class="h">${nightLocked ? '🔒' : hourLabel(hour)}</span><span class="t">${b ? b.team.slice(0, 6) : ''}</span>
       </div>`
     }).join('')
   } else {
@@ -168,7 +170,8 @@ function renderCal() {
         `<div class="ll ${l < fullN ? '' : 'mini'}">${laneLbl(l)}</div>`).join('') + '</div>'
     calHtml += HOURS.map(hour => {
       const isPast = viewWk === 0 && viewDay === nowDay && hour < nowHour
-      let col = `<div class="dcol"><div class="lh ${viewWk === 0 && viewDay === nowDay && hour === nowHour ? 'nowh' : ''}">${hour}</div>`
+      const nightLocked = hour >= NIGHT_START && !game.hasLights
+      let col = `<div class="dcol"><div class="lh ${viewWk === 0 && viewDay === nowDay && hour === nowHour ? 'nowh' : ''}">${hour % 24}</div>`
       for (let l = 0; l < N; l++) {
         const b = game.laneTakenBy(viewDay, hour, l, viewWk)
         const hint = cellHint(sel, hour, l)
@@ -179,8 +182,9 @@ function renderCal() {
         if (part) cls.push('part')
         if (isPast) cls.push('past')
         if (!b && hour >= 20 && hour <= 22) cls.push('prime')
+        if (hour >= NIGHT_START) cls.push(nightLocked ? 'night lock' : 'night')
         col += `<div class="${cls.join(' ')}" data-h="${hour}" data-l="${l}"
-          title="${b ? b.team + ' · ₺' + tl(b.price) : laneLbl(l) + ' · ' + hour + ':00 — boş'}">${b ? b.team.slice(0, 5) : ''}</div>`
+          title="${nightLocked ? 'Gece maçı için LED Projektör gerekli' : b ? b.team + ' · ₺' + tl(b.price) : laneLbl(l) + ' · ' + hourLabel(hour) + ' — boş'}">${nightLocked ? '🔒' : b ? b.team.slice(0, 5) : ''}</div>`
       }
       return col + '</div>'
     }).join('')
@@ -197,8 +201,12 @@ function renderCal() {
       firstHint.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
     cal.querySelectorAll<HTMLElement>('.dslot, .dcell').forEach(el => {
       el.addEventListener('click', () => {
+        const hourN = Number(el.dataset.h)
+        if (hourN >= NIGHT_START && !game.hasLights) {
+          toast(t('Gece maçı için LED Projektör gerekli — Yazıhane → Yatırım.'), 'b'); audio.bad(); return
+        }
         if (selected === null) { toast('Önce soldan bir istek seç.'); return }
-        const day = viewDay, hour = Number(el.dataset.h), lane = Number(el.dataset.l)
+        const day = viewDay, hour = hourN, lane = Number(el.dataset.l)
         const selR = game.queue.find(x => x.id === selected)
         const span = selR?.hours ?? 1
         if (selR && !game.canPlaceAt(selR, day, hour, viewWk) && game.canPlacePartial(selR, day, hour, viewWk)) {
@@ -658,14 +666,14 @@ function openParcel(c: number, r: number) {
       <span class="ds">${BUILDS[b.kind].desc} Yıkarsan arsa boşalır, yerine başka şey kurabilirsin.</span></div>`
   } else if (!owned) {
     h += `<div class="srow"><span class="nm">Boş arsa</span>
-      <button class="buy" id="pbuy">₺${tl(parcelCost(c, r))}</button>
+      <button class="buy" id="pbuy">₺${tl(game.parcelPrice(c, r))}</button>
       <span class="ds">Merkeze yakın arsalar daha pahalı. Aldıktan sonra üstüne saha ya da tesis kurabilirsin.</span></div>`
   } else {
     h += `<div class="srow" style="background:#eefaf0"><span class="ds" style="flex:1">Bu arsa senin — ne kuralım?</span></div>`
     for (const k of Object.keys(BUILDS) as BuildKind[]) {
       const it = BUILDS[k]
       h += `<div class="srow"><span class="nm">${it.label}</span><span class="gn">${it.gain}</span>
-        <button class="buy" data-build="${k}">₺${tl(it.cost)}</button>
+        <button class="buy" data-build="${k}">₺${tl(game.buildCostFor(k))}</button>
         <span class="ds">${it.desc}</span></div>`
     }
   }

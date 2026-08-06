@@ -12,15 +12,21 @@ import { t, dayName } from './i18n'
 // 1 oyun saati = 15 gerçek sn → gün 3.75 dk; tempo yüksek, oturum başına daha çok gün
 // (30 sn denendi: ilk oyuncular günü uzun buldu — 15 sn'e indirildi, lansman kararı.)
 export const HOUR_SECONDS = 15
-export const DAY_SECONDS = HOUR_SECONDS * 15
 export const OPEN_HOUR = 9
-export const CLOSE_HOUR = 24
+// GECE SAATLERİ: 24-26 = 00:00-02:00 (LED Projektör ile açılır) — takvim 9:00→03:00
+export const NIGHT_START = 24
+export const CLOSE_HOUR = 27
 export const HOURS: number[] = Array.from({ length: CLOSE_HOUR - OPEN_HOUR }, (_, i) => OPEN_HOUR + i)
+export const DAY_SECONDS = HOUR_SECONDS * HOURS.length
+/** iç saat → ekran etiketi (25 → '1:00') */
+export const hourLabel = (h: number): string => `${h % 24}:00`
 export const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'] as const
 
 /** Saatin talep katsayısı — prime time 20-23 arası zaten dolu, asıl mesele gündüz. */
 export function hourDemand(hour: number, dayIdx: number): number {
   const weekend = dayIdx >= 5
+  // GECE (00-02): gece ligi kültürü — LED şart (spawn/yerleştirme ayrıca kilitli)
+  if (hour >= 24) return (weekend ? 0.62 : 0.5) - (hour - 24) * 0.12
   if (hour >= 20 && hour <= 22) return weekend ? 0.85 : 1.0
   if (hour >= 18 && hour < 20) return weekend ? 0.8 : 0.65
   if (hour === 23) return 0.5
@@ -155,8 +161,8 @@ export type BuildKind = 'pitch' | 'mini' | 'basket' | 'voley' | 'parking' | 'gar
 export interface PlacedBuild { kind: BuildKind; gx?: number; gy?: number; key?: string; wear?: number }
 
 export const BUILDS: Record<BuildKind, { label: string; cost: number; gain: string; desc: string }> = {
-  pitch:   { label: 'Halı Saha', cost: 52_000, gain: 'Aynı saate +1 maç', desc: 'Tam boy ikinci saha — prime-time çakışmaları biter.' },
-  mini:    { label: 'Mini Saha 5v5', cost: 28_000, gain: 'Aynı saate +1 maç', desc: 'Küçük ve ucuz; çocuk/genç grupları için hızlı devir.' },
+  pitch:   { label: 'Halı Saha', cost: 45_000, gain: 'Aynı saate +1 maç', desc: 'Tam boy ikinci saha — prime-time çakışmaları biter.' },
+  mini:    { label: 'Mini Saha 5v5', cost: 22_000, gain: 'Aynı saate +1 maç', desc: 'Küçük ve ucuz; çocuk/genç grupları için hızlı devir.' },
   basket:  { label: 'Basketbol Sahası', cost: 22_000, gain: 'Günde +₺800 kira', desc: 'Saatlik kiralanır; futbol takviminden bağımsız pasif gelir.' },
   voley:   { label: 'Voleybol Sahası', cost: 16_000, gain: 'Günde +₺550 · itibar +0,2', desc: 'Kum zemin; yazın çok tutar, tesise çeşitlilik katar.' },
   parking: { label: 'Ek Otopark', cost: 14_000, gain: 'İtibar +0,3', desc: 'Araç sığmayınca müşteri kaçar; park yeri memnuniyeti artırır.' },
@@ -398,7 +404,10 @@ export class Game {
     const seg = SEGMENTS[open[Math.floor(Math.random() * open.length)]]
     const day = Math.floor(Math.random() * 7)
     const [h0, h1] = seg.hours
-    const hour = h0 + Math.floor(Math.random() * Math.max(1, h1 - h0))
+    let hour = h0 + Math.floor(Math.random() * Math.max(1, h1 - h0))
+    // LED varsa: klasik isteklerin ~%28'i GECE (00-02) ister — 'geceleri için çağrı gelsin'
+    if (this.hasLights && seg.id === 'klasik' && Math.random() < 0.28)
+      hour = NIGHT_START + Math.floor(Math.random() * 3)
     // o saatte talep var mı?
     const demand = hourDemand(hour, day) * (0.65 + this.rep * 0.12)
       * (this.hasLights && hour >= 19 ? 1.25 : 1) * (this.hasRoadSign ? 1.2 : 1)
@@ -413,6 +422,7 @@ export class Game {
     const subPenalty = srNow > 0.6 ? Math.max(0.7, 1 - (srNow - 0.6) * 0.75) : 1  // K6: aboneye boğulan tesiste tek maç ucuzlar
     const raw = this.basePrice() * seg.priceMult * (weeks > 0 ? 0.82 : 1) * this.locDef().priceMult
       * (twoH ? 1.9 : 1) * subPenalty * this.starMult()
+      * (hour >= NIGHT_START ? 1.15 : 1) // gece tarifesi
     // ESNEK İSTEK (%60): "hafta içi akşam olsun" → hangi slota koyacağına SEN karar verirsin
     const flexible = Math.random() < 0.6
     const flexDays: number[] = []
@@ -421,7 +431,7 @@ export class Game {
       const weekendOnly = Math.random() < 0.25
       for (let d = 0; d < 7; d++) if (weekendOnly ? d >= 5 : d < 5) flexDays.push(d)
       const span = 2 + Math.floor(Math.random() * 2)
-      for (let k = 0; k < span; k++) { const hh = hour + k; if (hh < CLOSE_HOUR) flexHours.push(hh) }
+      for (let k = 0; k < span; k++) { const hh = hour + k; if (hh < CLOSE_HOUR && (this.hasLights || hh < NIGHT_START)) flexHours.push(hh) }
     }
     // TUTARLILIK: esnek kartın temel gün/saati kendi kümesinin İÇİNDE olmalı
     let baseDay = day, baseHour = hour
@@ -463,9 +473,12 @@ export class Game {
     if (!this.freeAt(day, hour, wk)) {
       const alt = this.bestSlot(r)
       return { ok: false, msg: `${DAY_NAMES[day]} ${hour}:00 DOLU (${this.usedAt(day, hour, wk)}/${this.pitches} saha).`
-        + (alt ? ` En yakın boş: ${DAY_NAMES[alt.day]} ${alt.hour}:00.` : ' Uygun boş saat kalmamış.') }
+        + (alt ? ` En yakın boş: ${DAY_NAMES[alt.day]} ${hourLabel(alt.hour)}.` : ' Uygun boş saat kalmamış.') }
     }
     if (hour < OPEN_HOUR || hour >= CLOSE_HOUR) return { ok: false, msg: 'Tesis o saatte kapalı.' }
+    if (hour >= NIGHT_START && !this.hasLights) {
+      return { ok: false, msg: t('Gece maçı için LED Projektör gerekli — Yazıhane → Yatırım.') }
+    }
     if (wk === 0 && day === this.todayDow() && hour < this.hourNow()) {
       return { ok: false, msg: t('Bu saat geçti — aynı güne SONRAKİ HAFTA sekmesinden verebilirsin.') }
     }
@@ -499,7 +512,7 @@ export class Game {
     }
     if (r.weeks > 0) { if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] } this.gSubs++ }
     this.placedCount++
-    return { ok: true, msg: r.hours === 2 ? `${r.team} 2 saatlik maç aldı (${hour}:00-${hour + 2}:00)!`
+    return { ok: true, msg: r.hours === 2 ? `${r.team} 2 saatlik maç aldı (${hourLabel(hour)}-${hourLabel(hour + 2)})!`
       : r.weeks > 0 ? `${r.team} ${r.weeks}` + t(' hafta abone oldu!') : r.team + t(' rezervasyonu alındı.') }
   }
 
@@ -559,6 +572,7 @@ export class Game {
 
   canPlaceAt(r: Reservation, day: number, hour: number, wk = 0): boolean {
     if (!this.slotOk(r, day, hour)) return false
+    if (hour >= NIGHT_START && !this.hasLights) return false // gece LED ister
     // BUGÜNÜN geçmiş saati bu hafta oynatılamaz — gelecek hafta sekmesinden verilir
     if (wk === 0 && day === this.todayDow() && hour < this.hourNow()) return false
     if (!this.freeAt(day, hour, wk)) return false
@@ -815,6 +829,9 @@ export class Game {
       b.paid = true
       this.money += amt
       this.paidToday += amt
+      // GÜNÜN HEDEFLERİ maç bitiminde işler (eskiden gün sonundaydı → '0/3 takılı' bug'ı)
+      if (this.goalDay !== this.day) { this.goalDay = this.day; this.gMatches = 0; this.gEarned = 0; this.gSubs = 0; this.goalsDone = [] }
+      this.gMatches += 1
       this.gEarned += amt
       this.payouts.push({ team: b.team, amt })
     }
@@ -841,7 +858,7 @@ export class Game {
         const hours = r.flexible ? r.flexHours : [r.hour]
         outer: for (const d of days) for (const h of hours) {
           if (this.place(r.id, d, h).ok) {
-            this.notices.push(t('Çırak telefona baktı: ') + `${r.team} → ${dayName(d)} ${h}:00`)
+            this.notices.push(t('Çırak telefona baktı: ') + `${r.team} → ${dayName(d)} ${hourLabel(h)}`)
             break outer
           }
         }
@@ -898,6 +915,7 @@ export class Game {
     let bestRun = 0, run = 0
     for (const h of HOURS) { if (hoursSet.has(h)) { run++; bestRun = Math.max(bestRun, run) } else run = 0 }
     const runBonus = bestRun >= 3 ? 1 + Math.min(0.3, (bestRun - 2) * 0.1) : 1
+    const unpaidCount = todays.filter(b => !b.paid).length // abonelik paid-reset'inden ÖNCE ölç
     let income = 0
     // ek sahaların günlük kirası (futbol takviminden bağımsız)
     // K4: kort MUSLUK değil — yıpranır (gelir düşer) + günlük bakım gideri;
@@ -936,7 +954,7 @@ export class Game {
         this.bookings = this.bookings.filter(x => x !== b)
       }
     }
-    this.gMatches += todays.length
+    this.gMatches += unpaidCount // anında ödenenler zaten sayıldı
     this.gEarned += income
     const upkeep = this.dailyUpkeep()
     this.money += income - upkeep
@@ -1039,7 +1057,7 @@ export class Game {
         desc: '"Kalecimiz yok abi" derdine son — tesisin kadrolu kalecisi maça girer.', owned: this.hasKeeper, locked: null },
       { id: 'cleats', label: 'Krampon Kiralama', gain: 'Her maçtan +₺45', cost: 4_200, upkeep: 0,
         desc: '“Abi kramponu unuttum” geliri. Zamanla eskir, yenilemek gerekir.', owned: this.hasCleats, locked: null },
-      { id: 'lights', label: 'LED Projektör', gain: 'Akşam talebi +%25', cost: 11_000, upkeep: 140,
+      { id: 'lights', label: 'LED Projektör', gain: 'Akşam talebi +%25 · GECE (00-02) açılır', cost: 11_000, upkeep: 140,
         desc: 'Işık kalitesi akşam maçlarını çeker; elektrik gideri artar.', owned: this.hasLights, locked: null },
       { id: 'shower', label: 'Duş & Soyunma', gain: 'İtibar +0,5', cost: 14_000, upkeep: 70,
         desc: 'Kalite algısını yükseltir, abonelikler daha uzun sürer.', owned: this.hasShower, locked: null },
@@ -1102,10 +1120,24 @@ export class Game {
   buildAt(c: number, r: number): PlacedBuild | undefined {
     return this.builds.find(b => b.key === parcelKey(c, r))
   }
+  /** KADEMELİ BÜYÜME FRENİ: ilk ek saha taban fiyat, her yenisi +%40 —
+   *  'başta hızlı kazansın, sonra yavaşlasın; exponansiyel büyümesin' (lansman kararı) */
+  buildCostFor(kind: BuildKind): number {
+    const base = BUILDS[kind].cost
+    if (kind !== 'pitch' && kind !== 'mini') return base
+    const mult = 1 + 0.4 * Math.max(0, this.pitches - 1) // 2. saha ×1.0, 3. ×1.4, 4. ×1.8…
+    return Math.round(base * mult / 500) * 500
+  }
+  /** arsa da kademeli: ilk 4 (başlangıç bölgesi) sonrası her arsa +%35 */
+  parcelPrice(c: number, r: number): number {
+    const mult = 1 + 0.35 * Math.max(0, this.ownedParcels.length - 4)
+    return Math.round(parcelCost(c, r) * mult / 500) * 500
+  }
+
   buyParcel(c: number, r: number): { ok: boolean; msg: string } {
     if (c < 0 || c >= PARCEL_COLS || r < 0 || r >= PARCEL_ROWS) return { ok: false, msg: 'Geçersiz arsa.' }
     if (this.ownsParcel(c, r)) return { ok: false, msg: 'Bu arsa zaten senin.' }
-    const cost = parcelCost(c, r)
+    const cost = this.parcelPrice(c, r)
     if (this.money < cost) return { ok: false, msg: `₺${(cost - this.money).toLocaleString('tr-TR')} eksik.` }
     this.money -= cost
     this.ownedParcels.push(parcelKey(c, r))
@@ -1126,8 +1158,9 @@ export class Game {
       if (!rem.ok) return rem   // 'son sahanı yıkamazsın' gibi korumalar geçerli kalır
     }
     const b = BUILDS[kind]
-    if (this.money < b.cost) return { ok: false, msg: `₺${(b.cost - this.money).toLocaleString('tr-TR')} eksik.` }
-    this.money -= b.cost
+    const cost = this.buildCostFor(kind)
+    if (this.money < cost) return { ok: false, msg: `₺${(cost - this.money).toLocaleString('tr-TR')} eksik.` }
+    this.money -= cost
     this.builds.push({ key: parcelKey(c, r), kind })
     if (kind === 'pitch') this.pitches++
     if (kind === 'mini') this.pitches++
@@ -1261,7 +1294,7 @@ export class Game {
     // 2. boş prime-time varsa: ışık
     if (!this.hasLights && this.day >= 3) {
       out.push({ title: t('Akşam saatlerin boş kalıyor'), why: t('Işık kalitesi düşük olduğu için akşam takımları başka sahaya gidiyor.'),
-        action: 'lights', cta: `${t('LED Projektör')} ₺11.000 → ${t('akşam talebi')} +%25`, urgent: false })
+        action: 'lights', cta: `${t('LED Projektör')} ₺11.000 → ${t('akşam talebi')} +%25 · ${t('gece saatleri')}`, urgent: false })
     }
     // 3. gündüz boş: segment aç
     const dayEmpty = this.bookings.filter(b => b.hour < 18).length
@@ -1280,7 +1313,7 @@ export class Game {
     }
     // 5. doluluk yüksekse ikinci saha (arsa yoluyla)
     if (this.pitches < 2 && this.occupancy() > 0.35) {
-      out.push({ title: t('Saha yetmiyor'), why: `${t('Doluluk')} %${Math.round(this.occupancy() * 100)}. ${t('Boş arsaya tıkla: arsa al + mini saha kur')} (₺${(parcelCost(0, 1) + BUILDS.mini.cost).toLocaleString('tr-TR')}).`,
+      out.push({ title: t('Saha yetmiyor'), why: `${t('Doluluk')} %${Math.round(this.occupancy() * 100)}. ${t('Boş arsaya tıkla: arsa al + mini saha kur')} (₺${(this.parcelPrice(0, 1) + this.buildCostFor('mini')).toLocaleString('tr-TR')}).`,
         urgent: false })
     }
     // 6. abonelik dengesi

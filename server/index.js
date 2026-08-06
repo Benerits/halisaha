@@ -388,7 +388,7 @@ function auditCheat(email, kind, info) {
 }
 
 // ---- HALI SAHA ekonomi tabloları (src/state.ts ile BİREBİR senkron) ----
-const HS_BUILD_COST = { pitch: 52000, mini: 28000, basket: 22000, voley: 16000, parking: 14000, garden: 9000, kantin: 9000, dus: 14000, wc: 4000 }
+const HS_BUILD_COST = { pitch: 45000, mini: 22000, basket: 22000, voley: 16000, parking: 14000, garden: 9000, kantin: 9000, dus: 14000, wc: 4000 }
 const HS_SHOP = [['hasCanteen',9000],['hasFridge',3500],['hasCleats',4200],['hasKeeper',5000],['hasTost',3000],['hasBaklava',4500],['hasLights',11000],['hasShower',14000],['hasSchoolDeal',9000],['hasTeaRoom',7500],['hasCorporate',12000],['hasBillboard',8500],['hasRoadSign',12500],['docService',6000],['hasPhone2',5500],['hasWC',4000]]
 const HS_LOC_COST = { sanayi: 120000, sahil: 300000 }
 function hsLocValue(sn) {

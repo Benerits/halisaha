@@ -225,7 +225,7 @@ console.log('\n— ANLAŞMA DONDURMASI + SAAT —')
     t.tick(5)
     check('pazarlıksız kartın süresi normal akar', r2.patience < before)
   }
-  check('1 oyun günü = 225 sn (saat=15sn, lansman temposu)', DAY_SECONDS === 225)
+  check('1 oyun günü = 270 sn (saat=15sn × 18 slot: 9:00→03:00)', DAY_SECONDS === 270)
 }
 
 console.log('\n— ADAPTİF VURGU SAYACI —')
@@ -464,7 +464,7 @@ console.log('\n— ANALİZ RAPORU P0 (K3/K9) —')
   check('K3: occupancy sahaları sayar (%100 tavanını aşamaz)', g.occupancy() <= 1.0)
   const tek = new Game()
   tek.bookings.push({ day: 0, hour: 20, team: 'T', segment: 'klasik', price: 1, sub: false, weeksLeft: 0 })
-  check('K3: tek sahada oran hâlâ doğru', Math.abs(tek.occupancy() - 1 / 105) < 1e-9)
+  check('K3: tek sahada oran hâlâ doğru', Math.abs(tek.occupancy() - 1 / (7 * HOURS.length)) < 1e-9)
 
   // K9: müdür çoklu yerleştirmeyi TEK bildirimde toplar
   const m = new Game(); m.money = 200_000
@@ -539,7 +539,7 @@ console.log('\n— 2 HAFTALIK TAKVİM + ANINDA ÖDEME —')
 {
   const g = new Game()
   // Pazartesi 22:00: gün 1 (dow 0), saat 22 → t = (13/15) * DAY_SECONDS
-  g.t = (13 / 15) * DAY_SECONDS
+  g.t = (13 / 18) * DAY_SECONDS
   check('saat doğru hesaplanır (22)', g.hourNow() === 22)
   g.queue.push({ id: 7777, team: 'Pazartesici', segment: 'klasik', day: 0, hour: 17, price: 900, maxPay: 2000,
     patience: 120, maxPatience: 120, flexible: false, hours: 1, weeks: 0, needFull: false })
@@ -560,7 +560,7 @@ console.log('\n— 2 HAFTALIK TAKVİM + ANINDA ÖDEME —')
 {
   const g = new Game()
   g.bookings.push({ day: g.todayDow(), hour: 10, team: 'Erkenciler', segment: 'klasik', price: 1000, sub: false, weeksLeft: 0, lane: 0 })
-  g.t = (3 / 15) * DAY_SECONDS   // saat 12 — 10:00 maçı bitti
+  g.t = (3 / 18) * DAY_SECONDS   // saat 12 — 10:00 maçı bitti
   const before = g.money
   g.tick(0.1)
   const b = g.bookings.find(x => x.team === 'Erkenciler')
@@ -585,5 +585,37 @@ console.log('\n— 2 HAFTALIK TAKVİM + ANINDA ÖDEME —')
   check('telefon açılınca sabır yeniden işler', g.queue.length === 0)
 }
 
+console.log('\n— GECE SAATLERİ (LED) —')
+{
+  const g = new Game()
+  const r = { id: 5, team: 'Gececiler', segment: 'klasik', day: 1, hour: 24, price: 900, maxPay: 2000,
+    patience: 120, maxPatience: 120, flexible: false, hours: 1, weeks: 0, needFull: false }
+  g.queue.push(r)
+  check('LED yokken gece (00:00) KİLİTLİ', !g.canPlaceAt(r, 1, 24, 0))
+  check('LED yokken gece yerleştirme reddedilir', !g.place(5, 1, 24).ok)
+  g.hasLights = true
+  check('LED alınca gece açılır', g.canPlaceAt(r, 1, 24, 0))
+  check('gece maçı yerleşir', g.place(5, 1, 24).ok)
+  check('takvim 18 slot (9:00→03:00)', HOURS.length === 18 && HOURS[17] === 26)
+}
+console.log('\n— HEDEF SAYACI + KADEMELİ FİYAT —')
+{
+  const g = new Game()
+  g.bookings.push({ day: g.todayDow(), hour: 10, team: 'Hedefçiler', segment: 'klasik', price: 1000, sub: false, weeksLeft: 0, lane: 0 })
+  g.t = (3 / 18) * DAY_SECONDS
+  g.tick(0.1)
+  check('GÜN İÇİNDE maç sayacı işler (0/3 bug fixi)', g.gMatches === 1)
+  check('kazanç hedefi de işler', g.gEarned >= 1000)
+}
+{
+  const g = new Game(); g.money = 1_000_000
+  check('ilk ek saha TABAN fiyat', g.buildCostFor('mini') === 22_000)
+  g.buyParcel(0, 1); g.placeBuild(0, 1, 'mini')          // pitches=2
+  check('2. ek saha +%40', g.buildCostFor('mini') === 31_000)
+  g.buyParcel(2, 1); g.placeBuild(2, 1, 'mini')          // pitches=3
+  check('3. ek saha +%80', g.buildCostFor('mini') === 39_500)
+  const own = g.ownedParcels.length
+  check('arsa taban (ilk bölge)', own <= 4 ? g.parcelPrice(0, 3) === Math.round((20000 - 3000 * 3) / 500) * 500 : true)
+}
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

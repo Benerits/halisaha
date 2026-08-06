@@ -198,6 +198,10 @@
   .dslot.deny { animation:shake .4s; border-color:#d64545 !important; background:#fbe0e0; }
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 50%{transform:translateX(4px)} 75%{transform:translateX(-3px)} }
   .dslot.sub .h, .dslot.sub .t { color:#4a3208; }
+  .dslot.night, .dcell.night { background:#243247; }
+  .dslot.night .h, .dslot.night .t, .dcell.night { color:#cfe2ff; }
+  .dslot.night.full, .dcell.night.full { background:var(--green); }
+  .dslot.night.lock, .dcell.night.lock { background:#2a3140; opacity:.55; cursor:not-allowed; }
   .dslot.hint { background:#c9efd4; border:2px solid var(--sun); animation:pulse .7s infinite; }
   .dslot.hint .h, .dslot.hint.calm .h, .dslot.part .h { color:var(--green-deep); }
   .dcell.hint, .dcell.hint.calm, .dcell.part { color:var(--green-deep); }
