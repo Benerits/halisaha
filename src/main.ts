@@ -1189,3 +1189,10 @@ setInterval(() => {
     applyLocSwitch()  // yenilemede doğru şube teması
   }
 })()
+
+// YÜKLEME MASKESİ kaldırma: Kenney kitleri sahneye uygulanınca (yazıhane pop'u görünmesin)
+// VEYA 8 sn tavan — kit inmezse prosedürel yedek oynanabilir, maske oyunu rehin almasın
+// (BenelOil dersi: kit'e koşulsuz bağlanan maske ağ hatasında hiç kalkmıyordu).
+Promise.race([world.kitReady, new Promise(r => setTimeout(r, 8000))])
+  .then(() => document.getElementById('boot')?.remove())
+  .catch(() => document.getElementById('boot')?.remove())

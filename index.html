@@ -410,6 +410,28 @@
 </style>
 </head>
 <body>
+<!-- YÜKLEME MASKESİ (BenelOil A5 kalıbı): bundle+Kenney kitleri inerken prosedürel yazıhane
+     "pop" yapıyordu. Statik HTML/CSS — script beklemez; main.ts kit hazır olunca kaldırır. -->
+<div id="boot" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:#f6faf2;font-family:system-ui,sans-serif">
+  <img src="/icon-192.png" alt="" width="84" height="84" style="border-radius:20px" />
+  <div style="font-weight:800;font-size:17px;color:#1e2f24">Halı Saha</div>
+  <div style="width:180px;height:8px;border-radius:6px;background:#e2ecdb;overflow:hidden"><div style="width:40%;height:100%;border-radius:6px;background:#1d7c45;animation:bootslide 1.1s ease-in-out infinite alternate"></div></div>
+  <div style="font-size:12.5px;font-weight:650;color:#6d8073">Saha hazırlanıyor…</div>
+  <!-- BEKÇİ: deploy geçişi/ağ hatasında script hiç çalışmazsa maske sonsuza dek kalmasın.
+       Inline — bundle'a BAĞIMLI DEĞİL. -->
+  <div id="boot-stuck" style="display:none;flex-direction:column;align-items:center;gap:10px;margin-top:6px">
+    <div style="font-size:12px;font-weight:650;color:#b3402f;text-align:center;max-width:260px">Yükleme beklenenden uzun sürdü — bağlantı yavaş olabilir ya da yeni sürüm dağıtılıyor.</div>
+    <button onclick="location.reload()" style="padding:10px 22px;border:0;border-bottom:3px solid #145c33;border-radius:12px;background:#1d7c45;color:#fff;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit">Yenile</button>
+  </div>
+  <style>@keyframes bootslide{from{margin-left:-10%}to{margin-left:70%}}</style>
+  <script>
+    (function () {
+      var show = function () { var s = document.getElementById('boot-stuck'); if (s && document.getElementById('boot')) s.style.display = 'flex' }
+      setTimeout(show, 12000)
+      window.addEventListener('error', function (e) { if (e && e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) show() }, true)
+    })()
+  </script>
+</div>
 <canvas id="c"></canvas>
 
 <div id="hud">

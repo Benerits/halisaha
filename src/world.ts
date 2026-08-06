@@ -31,6 +31,12 @@ export class World {
   sun: THREE.DirectionalLight
   hemi: THREE.HemisphereLight
   private kit: Kit | null = null
+  /** Kenney kitleri sahneye uygulandığında çözülür — boot maskesi bunu bekler (tavanlı). */
+  kitReady: Promise<void> = Promise.resolve()
+  // SÜS ENVANTERİ: parsel alanına düşebilecek dekor (ağaç/şezlong/saksı). Oyuncu o parseli
+  // sahiplenince pruneDecor kaldırır — yoksa kortun ortasında ağaç dikili kalıyordu.
+  private decorItems: THREE.Object3D[] = []
+  private ownedKeys = new Set<string>()
   private players: Ply[] = []
   private ball!: THREE.Mesh
   private bvx = 0; private bvy = 0
@@ -94,7 +100,9 @@ export class World {
     this.spawnPlayers()
     this.buildParcelGrid()
 
-    loadKit().then(k => { this.kit = k; this.buildRoadNetwork(); this.upgradeClubhouse(); this.dressScene() })
+    this.kitReady = loadKit()
+      .then(k => { this.kit = k; this.buildRoadNetwork(); this.upgradeClubhouse(); this.dressScene() })
+      .catch(() => { /* kit inmezse prosedürel yedek zaten sahnede — boot maskesini bloklama */ })
     addEventListener('resize', () => this.onResize())
   }
 
@@ -493,7 +501,26 @@ export class World {
   }
 
   /** arsa durumlarını güncelle: sahipli = biçilmiş çim + köşe kazıkları; boş = dümdüz çimen */
+  private addDecor(o: THREE.Object3D) { this.decorItems.push(o); this.scene.add(o) }
+  /** sahiplenilen parsellerin üstünde kalan süsleri kaldır (satın alma VE geç kit yüklemesi sonrası) */
+  private pruneDecor() {
+    if (!this.decorItems.length || !this.ownedKeys.size) return
+    const keep: THREE.Object3D[] = []
+    for (const o of this.decorItems) {
+      let hit = false
+      for (const key of this.ownedKeys) {
+        const t = this.parcelTiles.get(key)
+        if (t && Math.abs(o.position.x - t.position.x) < PARCEL_W / 2 + 0.7
+              && Math.abs(o.position.y - t.position.y) < PARCEL_D / 2 + 0.7) { hit = true; break }
+      }
+      if (hit) this.scene.remove(o); else keep.push(o)
+    }
+    this.decorItems = keep
+  }
+
   syncParcels(owned: string[], builds: { key?: string; kind: BuildKind }[]) {
+    this.ownedKeys = new Set(owned)
+    this.pruneDecor()
     for (const [key, tile] of this.parcelTiles) {
       const mat = tile.material as THREE.MeshLambertMaterial
       if (owned.includes(key)) {
@@ -749,7 +776,7 @@ export class World {
       for (const [x, y, h] of (this.theme === 'sanayi' ? spots.filter((_, i) => i % 2 === 0) : spots)) {
         const t = fitModel(k.trees[Math.floor(Math.random() * k.trees.length)], h)
         t.position.set(x, y, 0); t.rotation.z = Math.random() * Math.PI
-        this.scene.add(t)
+        this.addDecor(t) // parsel sahiplenilince temizlenebilsin
       }
     }
     // UZAK YOL DOKUSU: uzakta seyrek ağaçlar — yol boşlukta yüzmesin
@@ -876,13 +903,13 @@ export class World {
         back.position.set(-0.65, 0, 0.5); back.rotation.y = -0.7; back.castShadow = true; g2.add(back)
         const seat = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.56, 0.06), lam(i % 2 ? 0xe4633f : 0x3f8fe4))
         seat.position.set(0.15, 0, 0.37); g2.add(seat)
-        g2.position.set(bx, by, 0); this.scene.add(g2)
+        g2.position.set(bx, by, 0); this.addDecor(g2)
         // şemsiye
         const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2, 8), lam(0xf1ede0))
-        pole.rotation.x = Math.PI / 2; pole.position.set(bx + 1.2, by - 0.6, 1); this.scene.add(pole)
+        pole.rotation.x = Math.PI / 2; pole.position.set(bx + 1.2, by - 0.6, 1); this.addDecor(pole)
         const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.1, 0.5, 10), lam(i % 2 ? 0xe4b23f : 0x3fb2e4))
         canopy.rotation.x = Math.PI / 2; canopy.position.set(bx + 1.2, by - 0.6, 2.1)
-        canopy.castShadow = true; this.scene.add(canopy)
+        canopy.castShadow = true; this.addDecor(canopy)
       }
     }
     if (this.theme === 'sanayi') {
@@ -899,9 +926,11 @@ export class World {
     // SAKSILAR — giriş süsü
     if (k.planter) {
       for (const [x, y] of [[-4.2, 3.2], [4.2, 3.2], [-5.2, 10.6], [5.2, 10.6]] as [number, number][]) {
-        const p = fitModel(k.planter, 0.8); p.position.set(x, y, 0); this.scene.add(p)
+        const p = fitModel(k.planter, 0.8); p.position.set(x, y, 0); this.addDecor(p)
       }
     }
+    // kit geç indi: sahiplenilmiş parsele düşen süsler hemen kalksın
+    this.pruneDecor()
   }
 
   /** maç simülasyonu — izometrikten "futbol" gibi okunur */
