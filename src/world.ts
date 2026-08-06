@@ -557,6 +557,7 @@ export class World {
       const g = this.makeBuild(b.kind, tile.position.x, tile.position.y, cnt)
       g.userData.count = cnt
       this.parcelBuilds.set(key, g)
+      if (b.kind === 'parking') this.setLot(tile.position.x, tile.position.y)
     }
   }
 
@@ -693,17 +694,12 @@ export class World {
           l.position.set(-w / 2 + 0.9 + i * slotW, ry, 0.075); g.add(l)
         }
       }
-      if (this.kit?.cars.length) {
-        const picks = [0, 2, 4, 1]
-        picks.forEach((pi, i) => {
-          if (i >= 4 || Math.random() < 0.2) return
-          const car = fitModel(this.kit!.cars[pi % this.kit!.cars.length], 1.0)
-          const row = i % 2
-          car.position.set(-w / 2 + 0.9 + slotW / 2 + (i % 3) * slotW * (1 + (i > 2 ? 1 : 0)), rows[row], 0)
-          car.rotation.z = row === 0 ? Math.PI : 0  // cebe DİK park, burnu bordüre
-          g.add(car)
-        })
-      }
+      // GİRİŞ/ÇIKIŞ AĞZI: kuzey (yol) kenarında bordür kesiği + apron şeridi
+      const gate = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 4.6), lam(0x454c54))
+      gate.position.set(0, d / 2 + 2.0, 0.052); gate.receiveShadow = true; g.add(gate)
+      const gateDash = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 3.6), lam(0xe9e4d6))
+      gateDash.position.set(0, d / 2 + 2.0, 0.062); g.add(gateDash)
+      // statik araba YOK — otopark DİNAMİK: gelenler cebe park eder, işi bitince çıkar
     } else {
       // BAKIMLI PARK: çim + kavisli yollar + orta meydan + banklar + çiçek tarhları + ağaçlar
       const w = PARCEL_W - 0.7, d = PARCEL_D - 0.7
@@ -1138,6 +1134,7 @@ export class World {
   updateAmbient(dt: number) {
     this.updateMissions(dt)
     this.updateFieldPlays(dt)
+    this.updateParking(dt)
     // devriye: sahne canlı kalsın — görev araçları meşgul değilse
     this.patrolT -= dt
     if (this.patrolT <= 0) {
@@ -1170,6 +1167,70 @@ export class World {
     }
   }
 
+  // ---- DİNAMİK OTOPARK: kapıdan gir → cebe park → yolcular insin → kapıdan çık ----
+  private lot: { cx: number; cy: number; slots: { x: number; y: number; row: 0 | 1; busy: boolean }[] } | null = null
+  private parkCars: { g: THREE.Object3D; slot: number; phase: number; wait: number; onParked?: () => void }[] = []
+  private visitT = 14
+  /** cep merkezleri BOYALI ÇİZGİLERLE birebir (slotW=1.95, x0=-w/2+0.9, satırlar ±d/4) */
+  private setLot(cx: number, cy: number) {
+    const w = PARCEL_W, d = PARCEL_D, slotW = 1.95, x0 = -w / 2 + 0.9
+    const slots: { x: number; y: number; row: 0 | 1; busy: boolean }[] = []
+    for (const row of [0, 1] as const) {
+      for (let i = 0; i < 5; i++) slots.push({ x: cx + x0 + slotW * (i + 0.5), y: cy + (row === 0 ? d / 4 : -d / 4), row, busy: false })
+    }
+    this.lot = { cx, cy, slots }
+  }
+  /** araçla gelen ziyaretçi: kapıdan girer, boş cebe TAM oturur, (varsa) yolcular iner, sonra çıkar */
+  carVisit(waitSec: number, onParked?: () => void): boolean {
+    const k = this.kit
+    if (!this.lot || !k?.cars.length) return false
+    const si = this.lot.slots.findIndex(sl => !sl.busy)
+    if (si < 0) return false
+    this.lot.slots[si].busy = true
+    const g = fitModel(k.cars[Math.floor(Math.random() * k.cars.length)], 1.0)
+    g.position.set(-70, 16.6, 0); g.rotation.z = Math.PI / 2
+    this.scene.add(g)
+    this.parkCars.push({ g, slot: si, phase: 0, wait: waitSec, onParked })
+    return true
+  }
+  private updateParking(dt: number) {
+    if (!this.lot) return
+    const L = this.lot
+    const AISLE = L.cy, GATE = L.cx, ROAD = 16.6
+    for (let i = this.parkCars.length - 1; i >= 0; i--) {
+      const c = this.parkCars[i]
+      const sl = L.slots[c.slot]
+      const targets: [number, number, number][] = [
+        [GATE, ROAD, 14], [GATE, AISLE, 5], [sl.x, AISLE, 4.5], [sl.x, sl.y, 3],
+        [sl.x, sl.y, 0], [sl.x, AISLE, 3], [GATE, AISLE, 4.5], [GATE, ROAD, 5], [85, ROAD, 15],
+      ]
+      if (c.phase === 4) {
+        c.g.position.set(sl.x, sl.y, 0)
+        c.g.rotation.z = sl.row === 0 ? Math.PI : 0 // cebe DİK, burnu bordüre — çizgiyle hizalı
+        if (c.onParked) { c.onParked(); c.onParked = undefined }
+        c.wait -= dt
+        if (c.wait <= 0) c.phase = 5
+        continue
+      }
+      const [tx, ty, sp] = targets[c.phase]
+      const dx = tx - c.g.position.x, dy = ty - c.g.position.y
+      const dd = Math.hypot(dx, dy)
+      if (dd < 0.12) {
+        c.phase++
+        if (c.phase >= targets.length) { this.scene.remove(c.g); L.slots[c.slot].busy = false; this.parkCars.splice(i, 1) }
+        continue
+      }
+      const st = Math.min(sp * dt, dd)
+      c.g.position.x += (dx / dd) * st; c.g.position.y += (dy / dd) * st
+      if (c.phase !== 5) c.g.rotation.z = Math.atan2(dy, dx) + Math.PI / 2 // faz 5: geri geri çıkış
+    }
+    this.visitT -= dt
+    if (this.visitT <= 0) {
+      this.visitT = 26 + Math.random() * 38
+      this.carVisit(14 + Math.random() * 20)
+    }
+  }
+
   // --- GÖREV ARAÇLARI: maç öncesi gelen araba + acil araçlar (polis/ambulans) ---
   // yol şeridi y=16.6; araç yoldan girer, hedefte bekler, işi bitince çekip gider.
   private missions: { g: THREE.Object3D; seg: number; wait: number; waited: boolean
@@ -1177,6 +1238,7 @@ export class World {
 
   /** maç öncesi: araba yoldan gelip otoparka park eder; kapılar açılır (callback) → oyuncular iner */
   carArrival(onOut?: () => void) {
+    if (this.carVisit(24, onOut)) return // dinamik otopark varsa: kapıdan gir, cebe park
     const k = this.kit
     if (!k?.cars.length) { onOut?.(); return }
     const g = fitModel(k.cars[Math.floor(Math.random() * k.cars.length)], 1.0)

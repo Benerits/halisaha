@@ -317,7 +317,7 @@ function renderQueue() {
         <button class="hask" data-id="${r.id}">${t('İSTE')}</button></div></div>`
       })()}
       ${tip ? `<div class="hint2 ${lever ? 'up' : 'dn'}">${tip}</div>` : ''}
-      ${game.personel.mudur > 0 && !selUnplaceable(r) ? `<button class="mgr" data-mgr="${r.id}">🧑‍💼 ${t('Müdüre Sal')}</button>` : ''}
+      ${game.personel.mudur > 0 && !selUnplaceable(r) ? `<button class="mgr" data-mgr="${r.id}">${t('Müdüre Sal')}</button>` : ''}
       <button class="rej" data-rej="${r.id}">${t('geri çevir ✕')}</button>
       <div class="bar"><i></i></div>
     </div>`
@@ -749,7 +749,7 @@ function openParcel(c: number, r: number) {
           const cur = game.laneTakenBy(nowD, nowH, l, 0)
           if (cur) {
             const [sa, sb] = liveScore(cur.team, nowD, cur.hour, minute)
-            rows += `<div class="srow" style="background:#eefaf0"><span class="nm">🔴 ${laneLabel(l)} · ${t('CANLI')}</span>
+            rows += `<div class="srow" style="background:#eefaf0"><span class="nm">${laneLabel(l)} · ${t('CANLI')}</span>
               <span class="gn">${cur.team} ${sa}-${sb}</span>
               <span class="ds">${minute}' · ${t('kalan')} ${60 - minute} dk · ₺${tl(cur.price)}${cur.sub ? ' · ' + t('abonelik') : ''}</span></div>`
           } else {
@@ -766,7 +766,7 @@ function openParcel(c: number, r: number) {
     const adj = game.parcelAdjacent(c, r)
     h += `<div class="srow"><span class="nm">${t('Boş arsa')}</span>
       ${adj ? `<button class="buy" id="pbuy">₺${tl(game.parcelPrice(c, r))}</button>`
-            : `<button class="buy" disabled>🔒 ${t('BİTİŞİK DEĞİL')}</button>`}
+            : `<button class="buy" disabled>${t('BİTİŞİK DEĞİL')}</button>`}
       <span class="ds">${adj ? 'Merkeze yakın arsalar daha pahalı. Aldıktan sonra üstüne saha ya da tesis kurabilirsin.'
             : t('Bu arsa arazine bitişik değil — önce aradaki arsayı al.')}</span></div>`
   } else {

@@ -14,10 +14,10 @@ export const OPEN_HOUR = 9
 export const NIGHT_START = 24
 export const CLOSE_HOUR = 27
 export const HOURS: number[] = Array.from({ length: CLOSE_HOUR - OPEN_HOUR }, (_, i) => OPEN_HOUR + i)
-// 1 SAAT = 20 GERÇEK SANİYE (gün=20sn hiper tempo fazla geldi — geri çıkarıldı).
-// Gün 18 saat × 20 sn = 6 dk; hafta ~42 dk, sezon ~3 saat.
-export const HOUR_SECONDS = 20
-export const DAY_SECONDS = HOUR_SECONDS * HOURS.length
+// 1 GÜN = TAM 20 GERÇEK SANİYE (kesin lansman kararı). Saat ≈1.1 sn;
+// hafta ~2.3 dk, sezon (30 gün) ~10 dk — hiper tempo.
+export const DAY_SECONDS = 20
+export const HOUR_SECONDS = DAY_SECONDS / HOURS.length
 /** iç saat → ekran etiketi (25 → '1:00') */
 export const hourLabel = (h: number): string => `${h % 24}:00`
 export const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'] as const

@@ -225,7 +225,7 @@ console.log('\n— ANLAŞMA DONDURMASI + SAAT —')
     t.tick(5)
     check('pazarlıksız kartın süresi normal akar', r2.patience < before)
   }
-  check('1 oyun günü = 360 sn (saat=20sn × 18 slot)', DAY_SECONDS === 360)
+  check('1 oyun günü = TAM 20 sn (hiper tempo, kesin karar)', DAY_SECONDS === 20)
 }
 
 console.log('\n— ADAPTİF VURGU SAYACI —')
