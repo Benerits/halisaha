@@ -1021,6 +1021,12 @@ export class World {
   /** yol trafiği + maça yürüyen oyuncular — sahne hep canlı */
   updateAmbient(dt: number) {
     this.updateMissions(dt)
+    // devriye: sahne canlı kalsın — görev araçları meşgul değilse
+    this.patrolT -= dt
+    if (this.patrolT <= 0) {
+      this.patrolT = 140 + Math.random() * 140
+      if (this.missions.length === 0 && this.kit) this.emergency('polis')
+    }
     for (const t of this.traffic) {
       if (t.axis === 'x') {
         t.g.position.x += t.sp * t.dir * dt
@@ -1061,33 +1067,36 @@ export class World {
              { x: slotX, y: 16.6, sp: 4 }, { x: 85, y: 16.6, sp: 15 }] })
   }
 
-  /** ACİL ARAÇ: kavga → polis, sakatlanma → ambulans. Tesis önünde yanıp sönerek bekler. */
+  /** ACİL ARAÇ: kavga → polis, sakatlanma → ambulans. Kenney aracı + çakar bar —
+   *  prosedürel kutu gövde yan gidiyordu (yerel eksen farkı); gerçek araç modeli düzgün döner. */
   emergency(kind: 'polis' | 'ambulans') {
-    const g = new THREE.Group()
-    const bodyCol = kind === 'polis' ? 0xf4f6f8 : 0xffffff
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.15, 0.95), lam(bodyCol))
-    body.position.z = 0.62; body.castShadow = true; g.add(body)
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.62, 1.17, 0.22), lam(kind === 'polis' ? 0x2b3b8f : 0xd64545))
-    stripe.position.z = 0.62; g.add(stripe)
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.05, 0.5), lam(0xbcd6e8))
-    cab.position.set(0.55, 0, 1.25); g.add(cab)
-    for (const sx of [-0.8, 0.8]) for (const sy of [-0.62, 0.62]) {
-      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.18, 10), lam(0x2b2f33))
-      wh.rotation.x = Math.PI / 2; wh.position.set(sx, sy, 0.24); g.add(wh)
+    const k = this.kit
+    let g: THREE.Object3D
+    if (k?.cars.length) {
+      g = fitModel(k.cars[(kind === 'polis' ? 3 : 1) % k.cars.length], 1.05)
+    } else {
+      const grp = new THREE.Group()
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 2.6, 0.95), lam(0xf4f6f8))
+      body.position.z = 0.62; body.castShadow = true; grp.add(body)
+      g = grp
     }
+    // ÇAKAR: aracın tepesine — genişlik ekseni X (model önü -Y)
     const lights: THREE.Mesh[] = []
     const mkLight = (x: number, col: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.22),
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.46, 0.2),
         new THREE.MeshBasicMaterial({ color: col }))
-      m.position.set(x, 0, 1.62); g.add(m); lights.push(m)
+      m.position.set(x, 0, 1.18); g.add(m); lights.push(m)
     }
-    mkLight(-0.25, 0xff2f2f); mkLight(0.25, kind === 'polis' ? 0x2f6fff : 0xff2f2f)
+    mkLight(-0.22, 0xff2f2f); mkLight(0.22, kind === 'polis' ? 0x2f6fff : 0xff2f2f)
     g.position.set(-70, 16.6, 0); g.rotation.z = Math.PI / 2
     this.scene.add(g)
     this.missions.push({ g, seg: 0, wait: 7, waited: false, lights,
       path: [{ x: 1.5, y: 16.6, sp: 22 }, { x: 1.5, y: 14.2, sp: 6 },
              { x: 1.5, y: 16.6, sp: 6 }, { x: 85, y: 16.6, sp: 22 }] })
   }
+
+  // AMBİYANS DEVRİYESİ: ara ara polis gelip tesise yanaşır, etrafı kolaçan eder, gider
+  private patrolT = 50 + Math.random() * 70
 
   private updateMissions(dt: number) {
     const blink = Math.floor(performance.now() / 220) % 2
