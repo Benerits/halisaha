@@ -365,6 +365,8 @@
     font-weight:800; font-size:11px; letter-spacing:.3px; padding:10px 14px; border-radius:8px;
     box-shadow:0 4px 14px rgba(214,69,69,.35); border-bottom:3px solid #b45c33; }
   #fbbtn:hover { filter:brightness(1.08); }
+  #verifylock { position:fixed; inset:0; z-index:45; background:rgba(20,45,30,.55); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; }
+  #verifylock.show { display:flex; }
   #cloudlock { position:fixed; inset:0; z-index:90; display:none; align-items:center; justify-content:center;
     background:rgba(20,40,25,.65); backdrop-filter:blur(3px); }
   #cloudlock.show { display:flex; }
@@ -556,6 +558,20 @@
 </div>
 
 <button id="fbbtn" data-i18n="Sorun / Öneri Bildir">Sorun / Öneri Bildir</button>
+<div id="verifylock">
+  <div class="gcard">
+    <div class="ghead" style="background:var(--sun);color:#3d2a06" data-i18n="E-POSTANI DOĞRULA">E-POSTANI DOĞRULA</div>
+    <div class="gbody">
+      <div class="gsub"><span data-i18n="Sana bir doğrulama linki gönderdik:">Sana bir doğrulama linki gönderdik:</span> <b id="vemail"></b><br>
+      <span data-i18n="Linke tıkladıktan sonra buradan devam et.">Linke tıkladıktan sonra buradan devam et.</span></div>
+      <button id="vcheck" class="gprimary" data-i18n="Doğruladım — Kontrol Et">Doğruladım — Kontrol Et</button>
+      <div style="text-align:center; margin-top:8px; display:flex; gap:14px; justify-content:center">
+        <button id="vresend" class="glink" data-i18n="Maili Tekrar Gönder">Maili Tekrar Gönder</button>
+        <button id="vlogout" class="glink" data-i18n="Çıkış yap">Çıkış yap</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="cloudlock">
   <div class="gcard">
     <div class="ghead" style="background:var(--clay)" data-i18n="BULUTA ULAŞILAMIYOR">BULUTA ULAŞILAMIYOR</div>

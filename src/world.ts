@@ -129,10 +129,11 @@ export class World {
     g.receiveShadow = true; this.scene.add(g)
     if (this.theme === 'sahil') {
       // güneyde kumsal + deniz
+      // parsel ızgarası y≈-48'e kadar iniyor — kumsal/deniz genişleme alanının ALTINDA kalmalı
       const sand = new THREE.Mesh(new THREE.PlaneGeometry(340, 14), lam(0xe8d5a0))
-      sand.position.set(0, -27, 0.012); this.scene.add(sand)
+      sand.position.set(0, -57, 0.012); this.scene.add(sand)
       const sea = new THREE.Mesh(new THREE.PlaneGeometry(340, 140), lam(0x4fa8cf))
-      sea.position.set(0, -104, 0.01); this.scene.add(sea)
+      sea.position.set(0, -134, 0.01); this.scene.add(sea)
     }
     // AVLU: yalnız giriş parseli (1,0) beton — kalan her yer çimen
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 9.0), lam(0xb6b0a1))

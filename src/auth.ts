@@ -107,11 +107,18 @@ export function lastUpdatedAt(): string | null { return _lastUpdatedAt }
 export function setLastUpdatedAt(v: string | null) { _lastUpdatedAt = v }
 
 export async function pullSave(): Promise<unknown | null> {
-  const d = await api('/api/save', 'GET')
-  _verifyRequired = !!d.verifyRequired
-  _emailVerified = !!d.emailVerified
-  _lastUpdatedAt = (d.updatedAt as string) ?? _lastUpdatedAt
-  return d.save ?? null
+  try {
+    const d = await api('/api/save', 'GET')
+    _verifyRequired = !!d.verifyRequired
+    _emailVerified = !!d.emailVerified
+    _lastUpdatedAt = (d.updatedAt as string) ?? _lastUpdatedAt
+    return d.save ?? null
+  } catch (e) {
+    // 403 verify_required: bayrakları işle ki UI doğrulama ekranını gösterebilsin
+    const data = (e as Error & { data?: Record<string, unknown> }).data
+    if (data?.verifyRequired) { _verifyRequired = true; _emailVerified = false }
+    throw e
+  }
 }
 /** sunucudaki güncel zaman damgasını çek (odakta senkron kontrolü için) */
 export async function fetchUpdatedAt(): Promise<string | null> {

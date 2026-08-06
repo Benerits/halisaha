@@ -1145,7 +1145,7 @@ function frame() {
     ;($('gguest') as HTMLElement).style.display = 'none'
     $('gate').classList.add('show')
   }
-  const gateOpen = $('gate').classList.contains('show')
+  const gateOpen = $('gate').classList.contains('show') || $('verifylock').classList.contains('show')
   if (!gateOpen) game.tick(Math.min(rawDt, 1))
   // ANINDA ÖDEME bildirimi: maç bitti → "+₺X · takım" (çoksa tek toplu toast)
   if (game.payouts.length) {
@@ -1424,7 +1424,27 @@ setInterval(() => {
         return true
       } catch { return false }
     }
+    // E-POSTA DOĞRULAMA KAPISI: doğrulanmamış hesap OYNAYAMAZ (Resend maili + kontrol)
+    const showVerify = () => {
+      const ve = document.getElementById('vemail'); if (ve) ve.textContent = auth.currentEmail() ?? ''
+      $('verifylock').classList.add('show')
+    }
+    $('vcheck').addEventListener('click', async () => {
+      try {
+        const sv = await auth.pullSave()
+        $('verifylock').classList.remove('show')
+        if (sv) { game.load(sv as never); applyLocSwitch() }
+        toast(t('Doğrulandı — hoş geldin!'), 'g'); audio.cash(); renderAll()
+      } catch { toast(t('Henüz doğrulanmamış görünüyor — mailindeki linke tıkla.'), 'b') }
+    })
+    $('vresend').addEventListener('click', async () => {
+      try { await auth.sendVerify(); toast(t('Doğrulama maili yeniden gönderildi.'), 'g') }
+      catch { toast(t('Gönderilemedi — birazdan tekrar dene.'), 'b') }
+    })
+    $('vlogout').addEventListener('click', () => { auth.logout(); location.reload() })
     if (!(await tryPull())) {
+      if (auth.needsVerify()) { showVerify() }
+      else {
       cloudBlocked = true
       $('cloudlock').classList.add('show')
       $('cloudretry').addEventListener('click', async () => {
@@ -1432,6 +1452,7 @@ setInterval(() => {
         else toast(t('Hâlâ ulaşılamıyor.'), 'b')
       })
       $('cloudlogout').addEventListener('click', () => { auth.logout(); location.reload() })
+      }
     }
   } else if (!localStorage.getItem(GUEST_OK)) {
     $('gate').classList.add('show')

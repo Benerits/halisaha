@@ -955,6 +955,9 @@ async function handleApi(req, res, url) {
       const email = auth(); if (!email) return
       const r = await pool.query('SELECT save, updated_at, banned_at, ban_reason, email_verified FROM halisaha_player WHERE email=$1', [email])
       if (r.rows[0]?.banned_at) return bannedJson(res, email, r.rows[0].ban_reason)
+      if (requireVerify() && !r.rows[0]?.email_verified) {
+        return json(res, 403, { error: 'E-posta doğrulanmadı — gelen kutunu kontrol et.', verifyRequired: true })
+      }
       // tek-cihaz kilidi: yükleyen cihaz oturumu DEVRALIR (session_id claim) → eski cihaz kick olur
       const sess = String(req.headers['x-session'] || '')
       if (sess) await pool.query('UPDATE halisaha_player SET last_seen_at=now(), session_id=$2 WHERE email=$1', [email, sess])
@@ -970,8 +973,11 @@ async function handleApi(req, res, url) {
       const { save, baseUpdatedAt } = await readBody(req)
       const clean = sanitizeSave(save)
       if (clean === undefined) return json(res, 400, { error: 'Geçersiz kayıt verisi.' })
-      const prev = await pool.query('SELECT save, updated_at, created_at, banned_at, session_id, save_session FROM halisaha_player WHERE email=$1', [email])
+      const prev = await pool.query('SELECT save, updated_at, created_at, banned_at, session_id, save_session, email_verified FROM halisaha_player WHERE email=$1', [email])
       if (prev.rows[0]?.banned_at) return json(res, 403, { error: 'Bu hesap askıya alınmış.' })
+      if (requireVerify() && !prev.rows[0]?.email_verified) {
+        return json(res, 403, { error: 'E-posta doğrulanmadı — gelen kutunu kontrol et.', verifyRequired: true })
+      }
       // tek-cihaz kilidi: başka cihaz oturumu devraldıysa bu (eski) cihaz YAZMASIN → kicked.
       // Bağlantı kopması yanlış kick yapmaz: session yalnız BAŞKA cihaz GET/POST yapınca değişir.
       const sess = String(req.headers['x-session'] || '')
