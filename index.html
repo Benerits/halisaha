@@ -178,7 +178,8 @@
   .ltab:hover { border-bottom-color:var(--green); }
   .ltab.on { background:var(--green); color:#fff; border-bottom-color:var(--green-dark); }
   .ltab .n { opacity:.7; font-weight:700; margin-left:3px; }
-  #calwrap { padding:6px 8px 8px; }
+  #calwrap { padding:6px 8px 8px; max-height:238px; overflow-y:auto; overscroll-behavior:contain;
+    scrollbar-width:thin; scrollbar-color:#bcd4bb transparent; } /* 12+ şerit ekranı yutmasın */
   #cal { display:flex; gap:4px; }
   /* ÇOK SAHA: saha satırlı ızgara */
   #cal.multi { gap:3px; }

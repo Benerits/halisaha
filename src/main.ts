@@ -176,7 +176,7 @@ function renderCal() {
     for (const k of ['full', 'mini', 'basket', 'voley'] as const) if (kinds.includes(k)) cats.push(k)
     if (!cats.includes(laneCat)) laneCat = cats[0]
     const lt = $('lanetabs')
-    lt.classList.toggle('show', cats.length > 1)
+    lt.classList.toggle('show', cats.length > 1 || N > 6) // tek kategoride bile çok şeritte bağlam ver
     const ltHtml = cats.map(k2 => {
       const cnt = kinds.filter(x => x === k2).length
       const nm = k2 === 'full' ? t('Sahalar') : k2 === 'mini' ? 'Mini' : k2 === 'basket' ? 'Basket' : 'Voley'
