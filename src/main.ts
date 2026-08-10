@@ -1067,10 +1067,14 @@ function cloudPush(force = false, keepalive = false) {
   auth.pushSave(snap, keepalive).then(r => {
     if (r.kicked) return // onKicked bildirimi zaten gösterildi; bu cihaz artık yazmaz
     if (r.conflict) {
+      lastPushHash = '' // reddedilen içerik "gönderildi" sayılmasın — sonraki tur yeniden dener
       if (r.save) { game.load(r.save as never); applyLocSwitch(); toast('Diğer cihazdaki güncel kayıt yüklendi.') }
       else toast('Sunucu bu kaydı kabul etmedi — ilerleme buluta yazılamıyor.', 'b')
     }
   }).catch(() => {
+    // HASH ZEHRİ FİXİ: hash istekten ÖNCE set ediliyor; hata yutulursa aynı içerik bir
+    // daha asla denenmiyordu (oyun duraksadıysa çıkış push'u da atlanır → ilerleme kaybı)
+    lastPushHash = ''
     // sessiz yutma YOK (denetim K7): dakikada en çok bir kez uyar
     if (Date.now() - lastPushErrAt > 60_000) { lastPushErrAt = Date.now(); toast('Buluta kaydedilemedi — bağlantını kontrol et.', 'b') }
   })

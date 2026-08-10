@@ -1005,7 +1005,10 @@ async function handleApi(req, res, url) {
         const firstSave = !prevSave
         const sinceTs = prev.rows[0]?.updated_at || prev.rows[0]?.created_at
         const elapsed = sinceTs ? Math.max(1, (Date.now() - new Date(sinceTs).getTime()) / 1000) : 1
-        const gameDays = (typeof clean.day === 'number') ? Math.min(Math.max(0, clean.day), 8) : 0
+        // MİSAFİR TAŞIMA (madlen vakası): gün tavanı 8 → 30. Kapı "tüm ilerlemen aynen
+        // taşınır" diyor; 8 tavanı gün-25 misafirin ilk push'unda servet payını kısıp
+        // meşru taşımayı eziyordu. 30 gün = tavan ödenek 1,26M; inject 409 barajı yine işler.
+        const gameDays = (typeof clean.day === 'number') ? Math.min(Math.max(0, clean.day), 30) : 0
         const rate = maxIncomeRate(clean)
         const prevAb = (prevSave && prevSave._ab) || null
         const abT = prevAb && typeof prevAb.t === 'number' ? prevAb.t : 0
@@ -1050,9 +1053,12 @@ async function handleApi(req, res, url) {
         }
         clean._ab = { t: nowMs, b: Math.round(bucket) }
         // gün hız freni: 1 oyun günü = 450 sn (HOUR_SECONDS=30 x 15 saat)
-        if (typeof clean.day === 'number') {
+        // İLK SAVE'DE GÜN KIRPILMAZ: misafir→hesap taşımasında gün 25 gelen kayıt 8'e
+        // iniyordu ("Gün 8'e düşmüşüm" şikâyeti — oyuncu her şeyi kayboldu sanıyor).
+        // Gün tek başına para vermez; servet zaten yukarıdaki ödenekle sınırlı.
+        if (typeof clean.day === 'number' && !firstSave) {
           const prevDay = (prevSave && typeof prevSave.day === 'number') ? prevSave.day : 1
-          const maxDay = firstSave ? Math.max(prevDay + 3, 8) : prevDay + Math.ceil(elapsed / 450) + 3
+          const maxDay = prevDay + Math.ceil(elapsed / 450) + 3
           if (clean.day > maxDay) clean.day = maxDay
         }
       }
