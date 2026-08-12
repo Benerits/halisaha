@@ -11,7 +11,64 @@ import { Game, LOCATIONS, type LocId, MAAS, ISE_ALIM, DAY_NAMES, HOURS, OPEN_HOU
 
 const SAVE_KEY = 'halisaha-save-v1'
 const canvas = document.getElementById('c') as HTMLCanvasElement
-let world = new World(canvas, 'mahalle')
+
+/**
+ * WEBGL GUARD — 12 Ağu: "WebGL oluşturma hatası, oyun açılmıyor" şikâyetlerinin kökü.
+ * three r178 WebGL1 fallback'ini KALDIRDI: context alınamazsa WebGLRenderer throw eder.
+ * World constructor'ı renderer'ı kurduğu için throw buraya, MODÜL ÜST SEVİYESİNE çıkıyor
+ * ve tüm oyun sessizce ölüyordu → kullanıcı bomboş ekran görüyor, hata sunucuya da
+ * ulaşmıyordu (ölçemiyorduk). Tetikleyenler: donanım hızlandırma kapalı, eski/kara
+ * listedeki GPU, tarayıcının WebGL context limiti (çok sekme), uzak masaüstü/VM.
+ */
+function showWebGLFailure(err: unknown): void {
+  try {
+    fetch('/api/metric', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ k: 'webgl_fail' }),
+    }).catch(() => {})
+  } catch { /* ölçüm asla ekranı engellemesin */ }
+  const tr = String(navigator.language || '').toLowerCase().startsWith('tr')
+  const msg = tr ? {
+    h: 'Oyun bu cihazda açılamadı',
+    p: 'Tarayıcın 3D grafik (WebGL) başlatamadı. Bu genellikle donanım hızlandırma kapalıyken ya da çok fazla sekme açıkken olur — cihazın yetersiz demek değil.',
+    a: 'Diğer sekmeleri kapatıp sayfayı yenile',
+    b: 'Tarayıcı ayarlarından donanım hızlandırmayı aç (Chrome: Ayarlar → Sistem)',
+    c: 'Tarayıcını güncelle, ya da Chrome/Edge/Safari son sürümünü dene',
+    r: 'Yeniden dene',
+  } : {
+    h: 'The game could not start on this device',
+    p: 'Your browser could not start 3D graphics (WebGL). This usually happens when hardware acceleration is off or too many tabs are open — it does not mean your device is too old.',
+    a: 'Close other tabs and reload the page',
+    b: 'Turn on hardware acceleration (Chrome: Settings → System)',
+    c: 'Update your browser, or try the latest Chrome/Edge/Safari',
+    r: 'Try again',
+  }
+  const box = document.createElement('div')
+  box.setAttribute('role', 'alert')
+  box.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:#0f1613;color:#eef4ef;font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;overflow:auto'
+  const esc = (t2: string) => t2.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string))
+  box.innerHTML = `<div style="max-width:520px">
+    <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;letter-spacing:-.01em">${esc(msg.h)}</h1>
+    <p style="margin:0 0 16px;color:#b6c4bb">${esc(msg.p)}</p>
+    <ul style="margin:0 0 20px;padding-left:20px;color:#b6c4bb">
+      <li style="margin-bottom:6px">${esc(msg.a)}</li>
+      <li style="margin-bottom:6px">${esc(msg.b)}</li>
+      <li>${esc(msg.c)}</li>
+    </ul>
+    <button id="wglretry" style="padding:11px 20px;border:0;border-radius:8px;background:#2e7d4f;color:#fff;font:inherit;font-weight:600;cursor:pointer">${esc(msg.r)}</button>
+  </div>`
+  document.body.appendChild(box)
+  box.querySelector('#wglretry')?.addEventListener('click', () => location.reload())
+  console.error('[webgl] renderer oluşturulamadı:', err)
+}
+
+let world!: World
+try {
+  world = new World(canvas, 'mahalle')
+} catch (err) {
+  showWebGLFailure(err)
+  throw err // modül burada durur; ekran artık boş değil, sebebi yazıyor
+}
 const game = new Game()
 
 // kayıt yükle

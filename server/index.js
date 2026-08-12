@@ -74,6 +74,9 @@ async function initDb() {
   await pool.query(`ALTER TABLE halisaha_stat_hourly ADD COLUMN IF NOT EXISTS gate_converted int NOT NULL DEFAULT 0`)
   await pool.query(`ALTER TABLE halisaha_stat_hourly ADD COLUMN IF NOT EXISTS ad_views int NOT NULL DEFAULT 0`)
   await pool.query(`ALTER TABLE halisaha_stat_hourly ADD COLUMN IF NOT EXISTS session_minutes int NOT NULL DEFAULT 0`)
+  // webgl_fail: 3D bağlamı açılamayan oturum sayısı (istemci showWebGLFailure'da bump'lar).
+  // Bu olay ÖLÇÜLMÜYORDU: World constructor throw edince modül ölüyor, hiçbir sayaç çalışmıyordu.
+  await pool.query(`ALTER TABLE halisaha_stat_hourly ADD COLUMN IF NOT EXISTS webgl_fail int NOT NULL DEFAULT 0`)
   await pool.query(`CREATE TABLE IF NOT EXISTS halisaha_notification (
     id serial PRIMARY KEY, user_id int, title text, body text, created_at timestamptz NOT NULL DEFAULT now()
   )`)
@@ -707,7 +710,7 @@ async function handleApi(req, res, url) {
       // Hafif huni/oturum sayacı — yalnız BEYAZ LİSTEDEKİ kolonlar (bumpStat kolon adı
       // enterpolasyonu yapıyor; whitelist dışı girdi ASLA geçmez). IP başına saatlik tavan.
       const mb = await readBody(req).catch(() => ({}))
-      const ALLOWED = new Set(['gate_shown', 'gate_converted', 'ad_views', 'session_minutes', 'hb'])
+      const ALLOWED = new Set(['gate_shown', 'gate_converted', 'ad_views', 'session_minutes', 'hb', 'webgl_fail'])
       const k = String((mb && mb.k) || '')
       if (ALLOWED.has(k) && rateLimit('metric:' + k + ':' + clientIp(req), 90, 3600_000)) bumpStat(k)
       return json(res, 200, { ok: true })
