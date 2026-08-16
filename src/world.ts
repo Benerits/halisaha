@@ -111,7 +111,15 @@ export class World {
     this.kitReady = loadKit()
       .then(k => { this.kit = k; this.buildRoadNetwork(); this.upgradeClubhouse(); this.dressScene() })
       .catch(() => { /* kit inmezse prosedürel yedek zaten sahnede — boot maskesini bloklama */ })
-    addEventListener('resize', () => this.onResize())
+    addEventListener('resize', this._onWinResize)
+  }
+
+  /** şube değişiminde çağrılır: pencere dinleyicisi + GPU kaynakları bırakılır.
+   *  Eskiden her yeni World bir resize dinleyicisi daha ekliyor, ölü handler birikiyordu. */
+  private _onWinResize = () => this.onResize()
+  destroy() {
+    removeEventListener('resize', this._onWinResize)
+    this.renderer.dispose()
   }
 
   onResize() {

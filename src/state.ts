@@ -358,6 +358,13 @@ export class Game {
   miniCount(): number { return this.builds.reduce((n, b) => n + (b.kind === 'mini' ? (b.count ?? 1) : 0), 0) }
   /** pitches sayacını yapı gerçeğine eşitle — bozuk kayıtları kendiliğinden onarır */
   healPitches() { this.pitches = this.fullPitchCount() + this.miniCount() }
+  /** bayrak-yapı tutarlılığı: bina sahnede duruyorsa bayrağı geri yak — bayrak düşen
+   *  eski kayıt/şube snapshot'ı oyuncuya AYNI tuvaleti ikinci kez satın aldırıyordu */
+  healFlags() {
+    if (this.builds.some(b => b.kind === 'wc')) this.hasWC = true
+    if (this.builds.some(b => b.kind === 'kantin')) this.hasCanteen = true
+    if (this.builds.some(b => b.kind === 'dus')) this.hasShower = true
+  }
   courtCount(kind: 'basket' | 'voley'): number { return this.builds.filter(b => b.kind === kind).length }
   /** takvimdeki TOPLAM şerit: futbol sahaları + basket + voley kortları */
   totalLanes(): number { return this.fullPitchCount() + this.miniCount() + this.courtCount('basket') + this.courtCount('voley') }
@@ -460,10 +467,14 @@ export class Game {
     for (const l of order) if (okLane(l)) return l
     return null
   }
-  /** doluluk yüzdesi */
+  /** doluluk yüzdesi — pay ve payda AYNI evreni sayar:
+   *  şeritler (kortlar dahil), LED yoksa gece saatleri hariç, yalnız BU haftanın kayıtları.
+   *  Eski hali gelecek hafta (wk=1) kayıtlarını da sayıp %109 gösterebiliyordu. */
   occupancy(): number {
-    const usable = 7 * HOURS.length * Math.max(1, this.pitches)  // K3: sahaları saymıyordu → %1658 doluluk + 10x pazarlık tavanı
-    return usable === 0 ? 0 : this.bookings.length / usable
+    const bookableHours = HOURS.filter(h => h < NIGHT_START || this.hasLights).length
+    const usable = 7 * bookableHours * Math.max(1, this.totalLanes())
+    const used = this.bookings.filter(b => b.sub || (b.wk ?? 0) === 0).length
+    return usable === 0 ? 0 : Math.min(1, used / usable)
   }
   subRatio(): number {
     return this.bookings.length === 0 ? 0 : this.bookings.filter(b => b.sub).length / this.bookings.length
@@ -557,7 +568,7 @@ export class Game {
     const r = this.queue[i]
     if (!this.freeAt(day, hour, wk)) {
       const alt = this.bestSlot(r)
-      return { ok: false, msg: `${DAY_NAMES[day]} ${hour}:00 DOLU (${this.usedAt(day, hour, wk)}/${this.totalLanes()} saha).`
+      return { ok: false, msg: `${DAY_NAMES[day]} ${hourLabel(hour)} DOLU (${this.usedAt(day, hour, wk)}/${this.totalLanes()} saha).`
         + (alt ? ` En yakın boş: ${DAY_NAMES[alt.day]} ${hourLabel(alt.hour)}.` : ' Uygun boş saat kalmamış.') }
     }
     if (hour < OPEN_HOUR || hour >= CLOSE_HOUR) return { ok: false, msg: 'Tesis o saatte kapalı.' }
@@ -817,6 +828,7 @@ export class Game {
       else if (f === 'staff' || f === 'adDays') self[f] = (fl[f] as number) ?? 0
       else self[f] = (fl[f] as boolean) ?? false
     }
+    this.healFlags() // snapshot bayrak kaybettiyse binadan geri türet (çifte satın alma fixi)
   }
   switchLoc(id: LocId): { ok: boolean; msg: string } {
     if (!this.unlockedLocs.includes(id)) return { ok: false, msg: 'Bu şube henüz senin değil.' }
@@ -998,14 +1010,24 @@ export class Game {
       let lastPlaced = ''
       for (const r of [...this.queue]) {
         const slot = this.bestSlot(r)
-        if (!slot) continue
+        if (!slot) {
+          // ÇIKIŞ KAPISI: yeri olmayan el-sıkışılmış kart sonsuza dek kuyruğu tıkıyordu
+          // (sabrı donuk olduğundan hiç ölmüyordu) — müdür 30 sn sonra kibarca geri çevirir
+          if (r.haggled && (r.dealWait ?? 0) > 30) {
+            this.decline(r.id)
+            this.notices.push(t('Müdür geri çevirdi (yer yok): ') + r.team)
+          }
+          continue
+        }
         if (this.personel.mudur === 2 && !r.haggled && Math.random() < 0.5) {
           const bump = Math.round(r.price * 0.1 / 10) * 10
           if (r.price + bump <= r.maxPay) r.price += bump  // usta müdür ufak zam koparır
         }
-        if (this.place(r.id, slot.day, slot.hour).ok) {
+        // slot.wk GEÇİRİLMİYORDU: bestSlot gelecek haftayı önerince place wk=0 ile
+        // "DOLU" deyip düşüyordu → kart her tick'te takılı kalıyordu ("müdür atamıyor")
+        if (this.place(r.id, slot.day, slot.hour, undefined, slot.wk).ok) {
           placedByMgr++
-          lastPlaced = `${r.team} → ${dayName(slot.day)} ${slot.hour}:00`
+          lastPlaced = `${r.team} → ${dayName(slot.day)} ${hourLabel(slot.hour)}`
         }
       }
       // K9: bildirim SELİ yok — tek tick'in tüm yerleştirmeleri tek bildirimde
@@ -1099,7 +1121,8 @@ export class Game {
       if (id === this.activeLoc) continue
       const sn = this.locStore[id]
       if (!sn) continue
-      subeIncome += sn.builds.reduce((sum, b) => {
+      let one = 0 // ŞUBE BAŞINA defter — rozetlere birikimli toplam yazılıyordu (2. şube 1.'nin gelirini de gösteriyordu)
+      one += sn.builds.reduce((sum, b) => {
         const base = b.kind === 'basket' ? 300 : b.kind === 'voley' ? 200 : 0 // kortlar artık MAÇ geliri kazanıyor — pasif kira boş-saat payına indi
         if (!base) return sum
         b.wear = Math.min(1, (b.wear ?? 0) + 0.04)
@@ -1107,11 +1130,11 @@ export class Game {
       }, 0)
       const pp = sn.personel ?? emptyPersonel()
       const mult = pp.mudur === 2 ? 1.1 : pp.mudur === 1 ? 1 : 0.7  // müdürsüz şube gelir kaçırır
-      subeIncome -= (pp.mudur === 1 ? MAAS.mudur1 : pp.mudur === 2 ? MAAS.mudur2 : 0)
+      one -= (pp.mudur === 1 ? MAAS.mudur1 : pp.mudur === 2 ? MAAS.mudur2 : 0)
         + (pp.cirak ? MAAS.cirak : 0) + (pp.kantinci ? MAAS.kantinci : 0)
       const played = sn.bookings.filter(b => b.day === dayIdx)
       for (const b of played) {
-        subeIncome += Math.round((b.price + this.extraPerMatch()) * mult)
+        one += Math.round((b.price + this.extraPerMatch()) * mult)
         if (b.sub) {
           b.weeksLeft--
           if (b.weeksLeft <= 0) {
@@ -1121,15 +1144,32 @@ export class Game {
         } else sn.bookings = sn.bookings.filter(x => x !== b)
       }
       this.gMatches += played.length
-      this.locIncome[id] = subeIncome
+      // MÜDÜR YENİ MAÇ SATAR: pasif şube yalnız mevcut abonelikle dönüyordu; havuz
+      // eriyince şube ölü maaş giderine dönüşüyordu ("şube açmak zarar" kümesi).
+      // Müdür günde seviyesi kadar tek maç bağlar — bölge çarpanı ve yıldız işler.
+      if (pp.mudur >= 1) {
+        const def = LOCATIONS.find(l => l.id === id)
+        one += Math.round(pp.mudur * 850 * (def?.priceMult ?? 1) * this.starMult())
+      }
+      // pasif şubenin reklam sayacı da işlesin — "2 gün kaldı" donup kilitleniyordu
+      const fl = sn.flags
+      if (fl && typeof fl.adDays === 'number' && fl.adDays > 0) fl.adDays = fl.adDays - 1
+      this.locIncome[id] = one
+      subeIncome += one
     }
-    if (subeIncome > 0) {
+    if (subeIncome !== 0) {
+      // negatif toplam da İŞLER: maaşlar bedavaya gelmesin, defter dürüst kalsın
       this.money += subeIncome
-      this.incomeToday += subeIncome
       this.lastDayProfit += subeIncome
-      this.gEarned += subeIncome
-      this.events.push(`Şubelerden gelir: ₺${subeIncome.toLocaleString('tr-TR')}`)
-      this.notices.push(`Şube müdürlerinden rapor: +₺${subeIncome.toLocaleString('tr-TR')}`)
+      if (subeIncome > 0) {
+        this.incomeToday += subeIncome
+        this.gEarned += subeIncome
+        this.events.push(`Şubelerden gelir: ₺${subeIncome.toLocaleString('tr-TR')}`)
+        this.notices.push(`Şube müdürlerinden rapor: +₺${subeIncome.toLocaleString('tr-TR')}`)
+      } else {
+        this.expenseToday += -subeIncome
+        this.events.push(`Şubeler zarar yazdı: -₺${(-subeIncome).toLocaleString('tr-TR')} (personel maaşları)`)
+      }
     }
     if (this.adDays > 0) {
       this.adDays--
@@ -1217,7 +1257,7 @@ export class Game {
     if (!it) return { ok: false, msg: 'Bilinmeyen kalem.' }
     if (it.owned) return { ok: false, msg: 'Zaten var.' }
     if (it.locked) return { ok: false, msg: it.locked }
-    if (this.money < it.cost) return { ok: false, msg: `₺${(it.cost - this.money).toLocaleString('tr-TR')} eksik.` }
+    if (this.money < it.cost) return { ok: false, msg: `${it.label} ₺${it.cost.toLocaleString('tr-TR')} — ₺${Math.round(it.cost - this.money).toLocaleString('tr-TR')} eksik.` }
     this.money -= it.cost
     switch (id) {
       case 'canteen': this.hasCanteen = true; break
@@ -1280,12 +1320,17 @@ export class Game {
     this.events.push(`Arsa alındı (${c + 1},${r + 1}) — ₺${cost.toLocaleString('tr-TR')}`)
     return { ok: true, msg: `Arsa senin! Üstüne saha ya da tesis kurabilirsin.` }
   }
+  /** tesisin sabit yapılarının oturduğu parseller — üstüne inşaat YASAK
+   *  (ana sahanın içine mini saha kurulabiliyordu) */
+  static RESERVED_PARCELS = ['1,1'] // ana saha
   placeBuild(c: number, r: number, kind: BuildKind): { ok: boolean; msg: string } {
     if (!this.ownsParcel(c, r)) return { ok: false, msg: 'Önce arsayı satın al.' }
+    if (Game.RESERVED_PARCELS.includes(parcelKey(c, r)))
+      return { ok: false, msg: t('Bu arsada tesisin kendi yapısı var — boş bir arsana kur.') }
     // TEKİL İŞLETMELER: para kesilmeden ÖNCE kontrol (geç kontrol para yutuyordu — denetim bulgusu)
-    if ((kind === 'kantin' && this.hasCanteen && this.buildAt(c, r)?.kind !== 'kantin') ||
-        (kind === 'dus' && this.hasShower && this.buildAt(c, r)?.kind !== 'dus') ||
-        (kind === 'wc' && this.hasWC && this.buildAt(c, r)?.kind !== 'wc')) {
+    if ((kind === 'kantin' && this.hasCanteen) ||
+        (kind === 'dus' && this.hasShower) ||
+        (kind === 'wc' && this.hasWC)) {
       return { ok: false, msg: 'Bundan zaten var.' }
     }
     // OTOPARK YOL ŞARTI: üst sıra (yola cepheli) YA DA mevcut bir otoparkın bitişiği
@@ -1310,30 +1355,28 @@ export class Game {
       return { ok: true, msg: t('Mini saha eklendi — aynı arsada artık ') + exist.count + t(' saha var.') }
     }
     if (kind === 'mini' && exist?.kind === 'mini') return { ok: false, msg: t('Bu arsada 3 mini saha dolu.') }
-    // SAHİPLİ ARSADA ESNEK İNŞA: eski yapı otomatik yıkılır (%40 iade), yenisi kurulur
-    if (this.buildAt(c, r)) {
+    // SAHİPLİ ARSADA ESNEK İNŞA: eski yapı yıkılır (%40 iade), yenisi kurulur.
+    // SIRALAMA FİXİ: yeni maliyet YIKIMDAN ÖNCE doğrulanır — eskiden parası yetmeyen
+    // oyuncu yapısını kaybedip eli boş kalabiliyordu. (UI ayrıca onay sorar.)
+    if (exist) {
+      const cnt = exist.kind === 'mini' ? (exist.count ?? 1) : 1
+      const refund = Math.round(BUILDS[exist.kind].cost * cnt * 0.4 / 100) * 100
+      const need = this.buildCostFor(kind)
+      if (this.money + refund < need)
+        return { ok: false, msg: `₺${Math.round(need - refund - this.money).toLocaleString('tr-TR')} eksik.` }
       const rem = this.removeBuild(c, r)
       if (!rem.ok) return rem   // 'son sahanı yıkamazsın' gibi korumalar geçerli kalır
     }
     const b = BUILDS[kind]
     const cost = this.buildCostFor(kind)
-    if (this.money < cost) return { ok: false, msg: `₺${(cost - this.money).toLocaleString('tr-TR')} eksik.` }
+    if (this.money < cost) return { ok: false, msg: `₺${Math.round(cost - this.money).toLocaleString('tr-TR')} eksik.` }
     this.money -= cost
     this.builds.push({ key: parcelKey(c, r), kind })
     if (kind === 'pitch') this.pitches++
     if (kind === 'mini') this.pitches++
-    if (kind === 'kantin') {
-      if (this.hasCanteen) return { ok: false, msg: 'Kantin zaten var.' }
-      this.hasCanteen = true
-    }
-    if (kind === 'dus') {
-      if (this.hasShower) return { ok: false, msg: 'Duş & soyunma zaten var.' }
-      this.hasShower = true; this.rep = Math.min(5, this.rep + 0.5)
-    }
-    if (kind === 'wc') {
-      if (this.hasWC) return { ok: false, msg: 'Tuvalet zaten var.' }
-      this.hasWC = true; this.rep = Math.min(5, this.rep + 0.2)
-    }
+    if (kind === 'kantin') this.hasCanteen = true
+    if (kind === 'dus') { this.hasShower = true; this.rep = Math.min(5, this.rep + 0.5) }
+    if (kind === 'wc') { this.hasWC = true; this.rep = Math.min(5, this.rep + 0.2) }
     if (kind === 'basket') this.giveRepOnce('basket', 0.1)
     if (kind === 'voley') this.giveRepOnce('voley', 0.2)
     if (kind === 'parking') this.giveRepOnce('parking', 0.3)
@@ -1360,6 +1403,7 @@ export class Game {
     if (!b) return { ok: false, msg: 'Burada taşınacak yapı yok.' }
     if (fc === tc && fr === tr) return { ok: false, msg: 'Aynı yer.' }
     if (!this.ownsParcel(tc, tr)) return { ok: false, msg: 'Hedef arsa senin değil.' }
+    if (Game.RESERVED_PARCELS.includes(parcelKey(tc, tr))) return { ok: false, msg: t('Orada tesisin kendi yapısı var.') }
     if (this.buildAt(tc, tr)) return { ok: false, msg: 'Hedef arsa dolu.' }
     b.key = parcelKey(tc, tr)
     this.events.push(`${BUILDS[b.kind].label} taşındı.`)
@@ -1378,8 +1422,18 @@ export class Game {
       this.pitches -= cnt
     }
     if (b.kind === 'kantin') this.hasCanteen = false
-    if (b.kind === 'dus') this.hasShower = false
-    if (b.kind === 'wc') this.hasWC = false
+    // İTİBAR SİMETRİSİ: kur/yık döngüsüyle bedava itibar farmlanıyordu
+    // (₺2.400'e +0,2 rep — fiyat formülüne doğrudan giriyor). Yıkım verdiğini geri alır.
+    if (b.kind === 'dus') { this.hasShower = false; this.rep = Math.max(0, this.rep - 0.5) }
+    if (b.kind === 'wc') { this.hasWC = false; this.rep = Math.max(0, this.rep - 0.2) }
+    const ONCE_REP: Partial<Record<BuildKind, number>> = { basket: 0.1, voley: 0.2, parking: 0.3, garden: 0.2 }
+    if (ONCE_REP[b.kind] !== undefined && this.repGiven.includes(b.kind)
+        && this.builds.filter(x => x.kind === b.kind).length === 1) {
+      // türün SON yapısı gidiyor: verilen bonus geri alınır + tekrar kurulursa yeniden verilebilsin
+      // (repGiven şartı: başlangıç otoparkı gibi bonus almamış yapılar ceza yemez)
+      this.rep = Math.max(0, this.rep - ONCE_REP[b.kind]!)
+      this.repGiven = this.repGiven.filter(k => k !== b.kind)
+    }
     this.builds.splice(i, 1)
     this.money += refund
     this.events.push(`${BUILDS[b.kind].label} yıkıldı — ₺${refund.toLocaleString('tr-TR')} iade.`)
@@ -1426,14 +1480,17 @@ export class Game {
     return out
   }
 
+  /** mağaza kaleminin GÜNCEL fiyatı — CTA/hedef metinleri fiyatı BURADAN alır.
+   *  Elle yazılan rakamlar gerçek fiyattan kopmuştu ("₺9.000 diyor, 12.000 çekiyor"). */
+  shopCost(id: BuyId): number { return this.shop().find(x => x.id === id)?.cost ?? 0 }
   /** SIRADAKİ BÜYÜK HEDEF — uzun döngü (D11 kalıbı: ne kadar kaldı görünsün) */
   nextMilestone(): { label: string; have: number; need: number } | null {
-    if (!this.hasCanteen) return { label: 'Kantin kur', have: this.money, need: 9_000 }
-    if (!this.hasLights) return { label: 'LED projektör tak', have: this.money, need: 14_000 }
-    if (!this.hasSchoolDeal) return { label: 'Okul anlaşması yap', have: this.money, need: 12_000 }
-    if (!this.hasBillboard) return { label: 'Reklam panolarını as', have: this.money, need: 11_000 }
-    if (!this.hasRoadSign) return { label: 'Yol tabelası dik', have: this.money, need: 16_000 }
-    if (!this.hasShower) return { label: 'Duş & soyunma yenile', have: this.money, need: 18_000 }
+    if (!this.hasCanteen) return { label: 'Kantin kur', have: this.money, need: this.shopCost('canteen') }
+    if (!this.hasLights) return { label: 'LED projektör tak', have: this.money, need: this.shopCost('lights') }
+    if (!this.hasSchoolDeal) return { label: 'Okul anlaşması yap', have: this.money, need: this.shopCost('schooldeal') }
+    if (!this.hasBillboard) return { label: 'Reklam panolarını as', have: this.money, need: this.shopCost('billboard') }
+    if (!this.hasRoadSign) return { label: 'Yol tabelası dik', have: this.money, need: this.shopCost('roadsign') }
+    if (!this.hasShower) return { label: 'Duş & soyunma yenile', have: this.money, need: this.shopCost('shower') }
     if (this.pitches < 2) return { label: 'Arsa al + mini saha kur', have: this.money, need: parcelCost(0, 1) + BUILDS.mini.cost }
     return null
   }
@@ -1448,27 +1505,27 @@ export class Game {
     // 1. acil: evrak
     if (!this.docService && this.docs < 0.5) {
       out.push({ title: t('Evrakların eskiyor'), why: `${t('Geçerlilik')} %${Math.round(this.docs * 100)}. ${t('Denetim gelirse ceza yersin.')} ${t('Aşağıdaki butonla hemen çöz:')}`,
-        action: 'docs', cta: `${t('Belge Takip Servisi')} ₺6.000`, urgent: true })
+        action: 'docs', cta: `${t('Belge Takip Servisi')} ₺${this.shopCost('docs').toLocaleString('tr-TR')}`, urgent: true })
     }
     // 2. boş prime-time varsa: ışık
     if (!this.hasLights && this.day >= 3) {
       out.push({ title: t('Akşam saatlerin boş kalıyor'), why: t('Işık kalitesi düşük olduğu için akşam takımları başka sahaya gidiyor.'),
-        action: 'lights', cta: `${t('LED Projektör')} ₺11.000 → ${t('akşam talebi')} +%25 · ${t('gece saatleri')}`, urgent: false })
+        action: 'lights', cta: `${t('LED Projektör')} ₺${this.shopCost('lights').toLocaleString('tr-TR')} → ${t('akşam talebi')} +%25 · ${t('gece saatleri')}`, urgent: false })
     }
     // 3. gündüz boş: segment aç
     const dayEmpty = this.bookings.filter(b => b.hour < 18).length
     if (dayEmpty < 3 && !this.hasSchoolDeal) {
       out.push({ title: t('Gündüz saatlerin bomboş'), why: t('Öğleden sonra (14-18) hiç müşterin yok. Okul takımları bu saati doldurur.'),
-        action: 'schooldeal', cta: `${t('Okul Anlaşması')} ₺9.000 → ${t('gençlik segmenti')}`, urgent: false })
+        action: 'schooldeal', cta: `${t('Okul Anlaşması')} ₺${this.shopCost('schooldeal').toLocaleString('tr-TR')} → ${t('gençlik segmenti')}`, urgent: false })
     }
     if (dayEmpty < 3 && this.hasSchoolDeal && !this.hasTeaRoom) {
       out.push({ title: t('Sabahlar hâlâ ölü'), why: t('Emekli grupları sabah oynar ama çay ocağı olmayan sahaya gelmezler.'),
-        action: 'tearoom', cta: `${t('Çay Ocağı')} ₺7.500 → ${t('veteran segmenti')}`, urgent: false })
+        action: 'tearoom', cta: `${t('Çay Ocağı')} ₺${this.shopCost('tearoom').toLocaleString('tr-TR')} → ${t('veteran segmenti')}`, urgent: false })
     }
     // 4. kantin yoksa
     if (!this.hasCanteen && this.bookings.length >= 3) {
       out.push({ title: t('Maç sonrası herkes dağılıyor'), why: t('Kantin yok; her maçtan ₺120 ek gelir kaçırıyorsun.'),
-        action: 'canteen', cta: `${t('Kantin')} ₺9.000`, urgent: false })
+        action: 'canteen', cta: `${t('Kantin')} ₺${this.shopCost('canteen').toLocaleString('tr-TR')}`, urgent: false })
     }
     // 5. doluluk yüksekse ikinci saha (arsa yoluyla)
     if (this.pitches < 2 && this.occupancy() > 0.35) {
@@ -1559,5 +1616,6 @@ export class Game {
     if (!this.builds.some(b2 => b2.kind === 'parking') && !this.builds.some(b2 => b2.key === '2,0'))
       this.builds.push({ key: '2,0', kind: 'parking' })
     this.healPitches() // yükleme sonrası sayaç-yapı tutarlılığı
+    this.healFlags()   // bayrak-yapı tutarlılığı (çifte satın alma fixi)
   }
 }

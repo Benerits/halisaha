@@ -1,7 +1,7 @@
 // Ekonomi çekirdeği testleri — three.js'siz, saf mantık.
 globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
 
-const { Game, SEGMENTS, hourDemand, HOURS, DAY_SECONDS } =
+const { Game, SEGMENTS, hourDemand, HOURS, DAY_SECONDS, hourLabel } =
   await import('../../src/state.ts')
 
 let pass = 0, fail = 0
@@ -464,7 +464,9 @@ console.log('\n— ANALİZ RAPORU P0 (K3/K9) —')
   check('K3: occupancy sahaları sayar (%100 tavanını aşamaz)', g.occupancy() <= 1.0)
   const tek = new Game()
   tek.bookings.push({ day: 0, hour: 20, team: 'T', segment: 'klasik', price: 1, sub: false, weeksLeft: 0 })
-  check('K3: tek sahada oran hâlâ doğru', Math.abs(tek.occupancy() - 1 / (7 * HOURS.length)) < 1e-9)
+  // LED'siz tesiste gece saatleri (24-26) rezerve EDİLEMEZ → paydada da yoklar
+  const bookable = HOURS.filter(h => h < 24).length
+  check('K3: tek sahada oran hâlâ doğru', Math.abs(tek.occupancy() - 1 / (7 * bookable)) < 1e-9)
 
   // K9: müdür çoklu yerleştirmeyi TEK bildirimde toplar
   const m = new Game(); m.money = 200_000
@@ -639,6 +641,43 @@ console.log('\n— MİNİ İSTİF + KORT ŞERİTLERİ —')
     const m0 = g.money; const ok = g.removeBuild(0, 1).ok
     return ok && g.pitches === 1 && g.money === m0 + Math.round(22000 * 3 * 0.4 / 100) * 100
   })())
+}
+console.log('\n— LANSMAN GERİ BİLDİRİM FİXLERİ (Ağu 2026) —')
+{
+  // itibar simetrisi: kur/yık döngüsüyle bedava itibar farmı kapandı
+  const g = new Game(); g.money = 500_000
+  const rep0 = g.rep
+  g.buyParcel(0, 1); g.placeBuild(0, 1, 'wc')
+  g.removeBuild(0, 1)
+  check('WC kur+yık itibar NÖTR (farm kapandı)', Math.abs(g.rep - rep0) < 1e-9)
+  g.placeBuild(0, 1, 'garden')
+  const repG = g.rep
+  g.removeBuild(0, 1)
+  check('tek-seferlik bonus yıkımda geri alınır', g.rep < repG)
+  g.placeBuild(0, 1, 'garden')
+  check('yeniden kurunca bonus yeniden verilebilir', Math.abs(g.rep - repG) < 1e-9)
+
+  // ana saha parseline inşaat yasak
+  const r = new Game(); r.money = 500_000
+  check('ana saha parseline (1,1) inşaat YASAK', !r.placeBuild(1, 1, 'mini').ok)
+
+  // bayrak-yapı onarımı: binası duran şube bayrağını kaybetmez (çifte satın alma fixi)
+  const h = new Game(); h.money = 500_000
+  h.buyParcel(0, 1); h.placeBuild(0, 1, 'wc')
+  const snap = h.save()
+  delete snap.hasWC
+  const h2 = new Game(); h2.load(snap)
+  check('healFlags: wc binası varsa hasWC geri yanar', h2.hasWC === true)
+
+  // esnek inşa: para yetmiyorsa YIKIM da olmaz (yapı+para birlikte yutulmuyordu)
+  const p = new Game(); p.money = 300_000
+  p.buyParcel(0, 1); p.placeBuild(0, 1, 'basket')
+  p.money = 100
+  const rr = p.placeBuild(0, 1, 'voley')
+  check('parasız esnek inşada yapı YERİNDE kalır', !rr.ok && p.buildAt(0, 1)?.kind === 'basket')
+
+  // dolu (25:00 değil 1:00) — saat etiketi
+  check('25:00 etiketi yok: hourLabel(25)=1:00', hourLabel(25) === '1:00')
 }
 console.log(`\nSONUÇ: ${pass} geçti, ${fail} kaldı\n`)
 process.exit(fail ? 1 : 0)

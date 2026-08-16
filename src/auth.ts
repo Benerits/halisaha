@@ -144,11 +144,18 @@ export async function requestReset(email: string): Promise<void> {
 /** Save'i sunucuya yaz. Çoklu cihaz guard: yüklediğimizden beri başka cihaz yazmışsa
  *  sunucu 409 + yeni save döner → çağıran yeniyi uygular (clobber yok, ilerleme karışmaz). */
 export async function pushSave(save: unknown, keepalive = false): Promise<{ conflict: boolean; kicked?: boolean; save?: unknown; updatedAt?: string }> {
+  const body = JSON.stringify({ save, baseUpdatedAt: _lastUpdatedAt })
+  // KRİTİK: keepalive fetch 64KB gövde limitinde ANINDA reject eder. Orta oyun save'i
+  // ~90KB+ → çıkış push'u hiç gitmiyordu ("çıktığımda kaydetmemiş" şikâyet kümesi).
+  // Büyük gövdede keepalive'sız dene: sekme kapanırken garanti değil ama gizlenme /
+  // bfcache durumlarında çoğunlukla tamamlanır; ana güvence artık açılıştaki
+  // yerel-önde kurtarma (main.ts) — bu push sadece en iyi çaba.
+  const ka = keepalive && body.length < 60_000
   const res = await fetch('/api/save', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-auth': localStorage.getItem(TOKEN_KEY) ?? '', 'x-session': SESSION_ID },
-    body: JSON.stringify({ save, baseUpdatedAt: _lastUpdatedAt }),
-    keepalive, // pagehide çıkış push'u: sekme kapanırken istek yaşasın
+    body,
+    keepalive: ka, // pagehide çıkış push'u: sekme kapanırken istek yaşasın
   })
   const data = await res.json().catch(() => ({}))
   if ((data as { kicked?: boolean }).kicked) { triggerKicked(); return { conflict: false, kicked: true } }

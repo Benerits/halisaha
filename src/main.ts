@@ -569,7 +569,7 @@ function doBuy(id: BuyId) {
   if (r.ok) audio.build(); else audio.bad()
   toast(r.msg, r.ok ? 'g' : 'b')
   if (r.ok) {
-    save(); renderAll(); renderOffice()
+    saveNow(); renderAll(); renderOffice() // yatırım kritik an — anında buluta
   }
 }
 
@@ -593,6 +593,15 @@ const THUMB: Record<BuildKind, string> = {
 const buildDone = (k: BuildKind): boolean =>
   k === 'kantin' ? game.hasCanteen : k === 'dus' ? game.hasShower : k === 'wc' ? game.hasWC : false
 
+/** dolu arsaya inşaat: yıkılacak yapıyı SÖYLEYEREK onay al — sessiz yıkım
+ *  "tıkladım mini saham gitti" şikâyetinin kaynağıydı. Boş arsa / mini istifi = onaysız. */
+function confirmReplace(c: number, r: number, kind: BuildKind): boolean {
+  const ex = game.buildAt(c, r)
+  if (!ex) return true
+  if (kind === 'mini' && ex.kind === 'mini') return true // istif — yıkım yok
+  const cnt = ex.kind === 'mini' ? (ex.count ?? 1) : 1
+  return confirm(`${BUILDS[ex.kind].label}${cnt > 1 ? ` (${cnt} adet)` : ''} yıkılıp yerine ${BUILDS[kind].label} kurulacak (%40 iade). Devam edilsin mi?`)
+}
 function startPlacing(k: BuildKind) {
   pendingBuild = k
   $('office').classList.remove('show')
@@ -661,9 +670,9 @@ function renderOffice() {
       const r = game.closeSeason()
       if (r.ok) {
         audio.cheer(); toast(r.msg, 'g')
-        save(); $('office').classList.remove('show')
-        world.setSignName(game.facilityName)
-        applyLocSwitch()
+        $('office').classList.remove('show')
+        applyLocSwitch() // tabelayı da doğru isimle kurar
+        saveNow() // sezon kapanışı ANINDA buluta — "yıldızım geri alındı" kümesi
       } else { audio.bad(); toast(r.msg, 'b') }
     })
   } else if (officeTab === 'personel') {
@@ -698,7 +707,7 @@ function renderOffice() {
         const res = already ? game.fire(role) : game.hire(role)
         if (res.ok) audio.build(); else audio.bad()
         toast(res.msg, res.ok ? 'g' : 'b')
-        save(); renderOffice(); renderAll()
+        saveNow(); renderOffice(); renderAll() // personel değişimi kritik an — 20sn diyeti beklemez
       }))
   } else if (officeTab === 'insaat') {
     body.innerHTML = `<div class="srow" style="background:#eefaf0"><span class="ds" style="flex:1">
@@ -711,7 +720,7 @@ function renderOffice() {
           <div class="bi"><div class="bn">${b.label}</div>
             <div class="bg2">${b.gain}</div>
             <div class="bd">${b.desc}</div></div>
-          <button data-place="${k}" ${done ? 'disabled' : ''}>${done ? t('VAR ✓') : '₺' + tl(b.cost)}</button>
+          <button data-place="${k}" ${done ? 'disabled' : ''}>${done ? t('VAR ✓') : '₺' + tl(game.buildCostFor(k))}</button>
         </div>`
       }).join('')}</div>`
     body.querySelectorAll<HTMLElement>('button[data-place]').forEach(b =>
@@ -741,7 +750,7 @@ function renderOffice() {
       b.addEventListener('click', () => {
         const id = b.dataset.locbuy as LocId
         const r = game.buyLoc(id)
-        if (r.ok) { audio.build(); toast(r.msg, 'g'); game.switchLoc(id); $('office').classList.remove('show'); applyLocSwitch() }
+        if (r.ok) { audio.build(); toast(r.msg, 'g'); game.switchLoc(id); $('office').classList.remove('show'); applyLocSwitch(); saveNow() } // şube alımı ANINDA buluta — "şubem kayboldu" kümesi
         else { audio.bad(); toast(r.msg, 'b') }
       }))
   } else if (officeTab === 'ayarlar') {
@@ -801,13 +810,16 @@ function renderOffice() {
     const lo = document.getElementById('alogout')
     if (lo) lo.addEventListener('click', () => { auth.logout(); location.reload() })
     const li = document.getElementById('alogin')
-    if (li) li.addEventListener('click', () => { $('office').classList.remove('show'); $('gate').classList.add('show') })
+    if (li) li.addEventListener('click', () => { $('office').classList.remove('show'); $('namemodal').classList.remove('show'); $('gate').classList.add('show') })
     const del = document.getElementById('adelete')
     if (del) del.addEventListener('click', async () => {
-      if (!confirm('Hesabın ve TÜM ilerlemen kalıcı olarak silinecek. Emin misin?')) return
-      if (!confirm('Son kez: bu işlem GERİ ALINAMAZ. Silinsin mi?')) return
-      try { await auth.deleteAccount(); localStorage.clear(); location.reload() }
-      catch (e) { toast((e as Error).message, 'b') }
+      // ÇİFT confirm() bazı webview'larda ikincisinde sessizce false dönüyordu
+      // ("kalıcı sil çalışmıyor") — tek prompt + yazılı onay daha sağlam
+      const v = prompt(t('Hesabın ve TÜM ilerlemen GERİ ALINAMAZ şekilde silinecek. Onaylamak için SIL yaz:'))
+      if ((v ?? '').trim().toUpperCase() !== 'SIL' && (v ?? '').trim() !== '0') return
+      try { await auth.deleteAccount() }
+      catch (e) { toast((e as Error).message, 'b'); return }
+      localStorage.clear(); location.reload()
     })
   } else {
     body.innerHTML = game.events.slice(-14).reverse()
@@ -880,35 +892,43 @@ function openParcel(c: number, r: number) {
     const res = game.serviceBuild(c, r)
     if (res.ok) audio.build(); else audio.bad()
     toast(res.msg, res.ok ? 'g' : 'b')
-    if (res.ok) { save(); openParcel(c, r); renderAll() }
+    if (res.ok) { saveNow(); openParcel(c, r); renderAll() }
   })
   const pma = document.getElementById('pminiadd')
   if (pma) pma.addEventListener('click', () => {
     const res = game.placeBuild(c, r, 'mini')
     if (res.ok) audio.build(); else audio.bad()
     toast(res.msg, res.ok ? 'g' : 'b')
-    if (res.ok) { save(); syncWorldParcels(); openParcel(c, r); renderAll() }
+    if (res.ok) { saveNow(); syncWorldParcels(); openParcel(c, r); renderAll() }
   })
   const pd = document.getElementById('pdemol')
   if (pd) pd.addEventListener('click', () => {
+    // YIKIM ONAYI: istifli minide tek tık 3 sahayı birden götürüyordu — sayıyı söyleyerek sor
+    const bb = game.buildAt(c, r)
+    const cnt = bb?.kind === 'mini' ? (bb.count ?? 1) : 1
+    const nm = bb ? BUILDS[bb.kind].label : ''
+    if (!confirm(cnt > 1
+      ? `${nm} (${cnt} adet birden) yıkılacak — %40 iade. Emin misin?`
+      : `${nm} yıkılacak — %40 iade. Emin misin?`)) return
     const res = game.removeBuild(c, r)
     if (res.ok) audio.build(); else audio.bad()
     toast(res.msg, res.ok ? 'g' : 'b')
-    if (res.ok) { save(); syncWorldParcels(); openParcel(c, r); renderAll() }
+    if (res.ok) { saveNow(); syncWorldParcels(); openParcel(c, r); renderAll() }
   })
   const pb = document.getElementById('pbuy')
   if (pb) pb.addEventListener('click', () => {
     const res = game.buyParcel(c, r)
     if (res.ok) audio.build(); else audio.bad()
     toast(res.msg, res.ok ? 'g' : 'b')
-    if (res.ok) { save(); syncWorldParcels(); openParcel(c, r) }
+    if (res.ok) { saveNow(); syncWorldParcels(); openParcel(c, r) }
   })
   box.querySelectorAll<HTMLElement>('button[data-build]').forEach(btn =>
     btn.addEventListener('click', () => {
+      if (!confirmReplace(c, r, btn.dataset.build as BuildKind)) return
       const res = game.placeBuild(c, r, btn.dataset.build as BuildKind)
       if (res.ok) audio.build(); else audio.bad()
       toast(res.msg, res.ok ? 'g' : 'b')
-      if (res.ok) { save(); syncWorldParcels(); box.classList.remove('show'); renderAll() }
+      if (res.ok) { saveNow(); syncWorldParcels(); box.classList.remove('show'); renderAll() }
     }))
 }
 
@@ -953,6 +973,11 @@ addEventListener('pointercancel', e => { touchPts.delete(e.pointerId); if (touch
 addEventListener('pointerup', e => {
   touchPts.delete(e.pointerId); if (touchPts.size < 2) pinchD = 0
   document.body.style.cursor = ''
+  // DRAG BAYRAĞI BURADA SÖNER: erken return'lü dallar (inşaat/düzenleme) bayrağı
+  // söndürmeyince kamera fareyi takip etmeye başlıyordu ("sürükleyemiyorum" kümesi)
+  const wasPress = dragging          // tekil parmak basışı mıydı (pinch/harici pointer değil)
+  const wasDrag = dragging && dragMoved > 6
+  dragging = false
   // ELİNDE YAPI VARKEN: sürükleme kontrolünden ÖNCE yerleştir (pan bu modda kapalı)
   if (pendingBuild) {
     if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar,#fbbtn,#fbmodal,#namemodal')) return
@@ -960,17 +985,18 @@ addEventListener('pointerup', e => {
     if (!hit) return
     const k = pendingBuild
     if (!game.ownsParcel(hit.c, hit.r)) { toast('Bu arsa senin değil — önce satın al.', 'b'); audio.bad(); openParcel(hit.c, hit.r); return }
+    if (!confirmReplace(hit.c, hit.r, k)) return
     const res = game.placeBuild(hit.c, hit.r, k)
     if (res.ok) {
       pendingBuild = null
       world.clearGhost()
       audio.build(); toast(res.msg, 'g')
-      save(); syncWorldParcels(); renderAll()
+      saveNow(); syncWorldParcels(); renderAll()
     } else { audio.bad(); toast(res.msg, 'b') }
     return
   }
-  // DÜZENLEME MODU: yapı seç → boş arsaya taşı
-  if (editMode && !pendingBuild) {
+  // DÜZENLEME MODU: yapı seç → boş arsaya taşı (pan jesti tıklama SAYILMAZ)
+  if (editMode && !pendingBuild && wasPress && !wasDrag) {
     if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#locbar,#fbbtn,#fbmodal,#namemodal')) { /* UI */ }
     else {
       const hit = world.pickParcel(e.clientX, e.clientY)
@@ -996,9 +1022,7 @@ addEventListener('pointerup', e => {
       }
     }
   }
-  if (!dragging) return
-  dragging = false
-  if (dragMoved > 6) return                    // sürükleme yaptıysa tıklama sayma
+  if (!wasPress || wasDrag) return       // pinch artığı ya da sürükleme — tıklama sayma
   if ((e.target as HTMLElement).closest('#desk,#queue,#office,#rail,#zoombar,#parcel,#hud,#fbbtn,#fbmodal,#namemodal')) return
   if (world.pickYazihane(e.clientX, e.clientY)) { openOffice(); return }
   const hit = world.pickParcel(e.clientX, e.clientY)
@@ -1093,11 +1117,18 @@ function applyLocSwitch() {
   audio.setMood(game.activeLoc)
   selected = null; viewDay = -1
   qCache = ''; tabsCache = ''; calCache = ''; pickCache = ''
+  // MOD TEMİZLİĞİ: elde yapı/taşıma/düzenleme şube değişimini ATLATMASIN — eski
+  // şubenin (c,r)'siyle yeni şubede işlem yapılıyor, pan kilitleniyordu
+  pendingBuild = null; moveFrom = null
+  if (editMode) { editMode = false; $('editbtn').classList.remove('on') }
   const old = document.getElementById('c') as HTMLCanvasElement
-  world.renderer.dispose()
+  world.destroy()
   const c2 = old.cloneNode(false) as HTMLCanvasElement
   old.replaceWith(c2)
   world = new World(c2, game.activeLoc as LocTheme)
+  // TABELA: yeni World örneği isim bilmez, tema fallback'i ("SANAYİ SAHA") basıyordu —
+  // oyuncunun verdiği isim her şubede geçerli
+  if (game.facilityName) world.setSignName(game.facilityName)
   syncWorldParcels()
   save()
   renderAll()
@@ -1136,19 +1167,40 @@ function cloudPush(force = false, keepalive = false) {
     if (Date.now() - lastPushErrAt > 60_000) { lastPushErrAt = Date.now(); toast('Buluta kaydedilemedi — bağlantını kontrol et.', 'b') }
   })
 }
+// yerel kaydın hangi hesaba ait olduğu — açılıştaki yerel-önde kurtarma bunu doğrular
+const OWNER_KEY = 'halisaha-save-owner'
 function save() {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())) } catch { /* kota */ }
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(game.save()))
+    localStorage.setItem(OWNER_KEY, auth.currentEmail() ?? 'guest')
+  } catch { /* kota */ }
   if (game.bookings.length > 1800 && Date.now() - lastBookWarnAt > 300_000) {
     lastBookWarnAt = Date.now()
     toast(t('Takvim arşivi doluyor — en eski kayıtlar yakında düşecek.'), 'b')
   }
   cloudPush()
 }
+/** kritik an kaydı: yerel + ZORUNLU bulut push (şube/inşaat/personel/sezon 20sn diyetini bekleyemez).
+ *  Art arda alımlarda sunucu limitine (2 push/3sn) takılmamak için kısa tampon kullanır. */
+let forceTimer = 0
+function saveNow() {
+  save()
+  const since = Date.now() - lastPush
+  if (since >= 3000) cloudPush(true)
+  else if (!forceTimer) forceTimer = window.setTimeout(() => { forceTimer = 0; cloudPush(true) }, 3200 - since)
+}
 // ÇIKIŞ GARANTİSİ: sekme kapanırken son durum keepalive ile buluta gider —
 // yoksa son ≤20 sn'lik ilerleme (özellikle 0. dakikada verilen tesis adı) kayboluyordu
 window.addEventListener('pagehide', () => {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())) } catch { /* kota */ }
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())); localStorage.setItem(OWNER_KEY, auth.currentEmail() ?? 'guest') } catch { /* kota */ }
   cloudPush(true, true)
+})
+// SEKME GİZLENİNCE de push: pagehide'daki keepalive büyük save'de güvenilmez —
+// gizlenme anında sayfa hâlâ canlı, normal fetch rahatça tamamlanır ("çay molası" sigortası)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.save())); localStorage.setItem(OWNER_KEY, auth.currentEmail() ?? 'guest') } catch { /* kota */ }
+  cloudPush(true)
 })
 
 // ---------- döngü ----------
@@ -1191,8 +1243,11 @@ function frame() {
   const dt = Math.min(rawDt, 0.05)
 
   const prevDay = game.day
-  // İLK İŞ: tesise isim (gate kapalıyken, isim boşsa)
-  if (!game.facilityName && !$('gate').classList.contains('show') && !$('namemodal').classList.contains('show')) {
+  // İLK İŞ: tesise isim (gate/kilit ekranları kapalıyken, isim boşsa).
+  // Açılış yarışında gate'ten SONRA açılan isim modalı odağı çalıyordu ("kayıt ol'a
+  // basamıyorum") — gate açılan her yer isim modalını kapatır (aşağıda).
+  if (!game.facilityName && !$('gate').classList.contains('show') && !$('namemodal').classList.contains('show')
+      && !$('verifylock').classList.contains('show') && !$('cloudlock').classList.contains('show')) {
     $('namemodal').classList.add('show')
     setTimeout(() => ($('nameinput') as HTMLInputElement).focus(), 100)
   }
@@ -1205,6 +1260,7 @@ function frame() {
       gr.style.display = 'block'
       gr.textContent = `${game.day}. ${t('gündesin ve ilerlemen SADECE bu cihazda. Hesap aç: buluta taşınsın + ₺2.500 hediye.')}`
     }
+    $('namemodal').classList.remove('show')
     $('gate').classList.add('show')
   }
   // MİSAFİR SINIRI: 5. günden sonra misafirlik biter — kapı kalıcı, 'misafir devam' gizli.
@@ -1216,6 +1272,7 @@ function frame() {
       gr.textContent = t('Misafir deneme süresi bitti (5 gün). Ücretsiz hesap aç — tüm ilerlemen aynen taşınır, üstüne ₺2.500 hediye.')
     }
     ;($('gguest') as HTMLElement).style.display = 'none'
+    $('namemodal').classList.remove('show')
     $('gate').classList.add('show')
   }
   const gateOpen = $('gate').classList.contains('show') || $('verifylock').classList.contains('show')
@@ -1500,10 +1557,28 @@ setInterval(() => {
   if (auth.loggedIn()) {
     // K8 (BenelOil cloudBlocked dersi): bulut OKUNMADAN oyun başlamaz — gerçek bir
     // override kazasından sonra eklendi; yerel gün-40, buluttaki gün-60'ı ezmesin
+    // YEREL-ÖNDE KURTARMA: çıkış push'u düşmüşse bulut GERİDE kalıyor ve her girişte
+    // oyuncuyu eski güne atıyordu ("refresh'te 28. güne dönüyorum" kümesi). Yerel kayıt
+    // BU hesaba aitse ve bulutun önündeyse: yereli oynat + buluta yaz. Yıldız (sezon)
+    // kıyası günden önce gelir — başka cihazda sezon kapatıldıysa bulut kazanır.
+    const localAhead = (sv: Record<string, unknown>): boolean => {
+      if (localStorage.getItem(OWNER_KEY) !== (auth.currentEmail() ?? '')) return false
+      if (!localStorage.getItem(SAVE_KEY)) return false
+      const num = (v: unknown, d: number) => (typeof v === 'number' && isFinite(v) ? v : d)
+      const cStars = num(sv.stars, 0), cDay = num(sv.day, 1), cT = num(sv.t, 0)
+      if (game.stars !== cStars) return game.stars > cStars
+      if (game.day !== cDay) return game.day > cDay
+      return game.t > cT + 30 // aynı gün: 30 sn'den fazla ilerideyse yerel taze
+    }
     const tryPull = async (): Promise<boolean> => {
       try {
         const sv = await auth.pullSave()
-        if (sv) { game.load(sv as never); applyLocSwitch(); if (game.facilityName) world.setSignName(game.facilityName) }
+        if (sv && localAhead(sv as Record<string, unknown>)) {
+          const r = await auth.pushSave(game.save())
+          if (r.conflict && r.save) { game.load(r.save as never); applyLocSwitch(); if (game.facilityName) world.setSignName(game.facilityName) }
+          else toast(t('Buluttaki eski kayıt yerine cihazındaki güncel ilerleme yüklendi.'), 'g')
+        }
+        else if (sv) { game.load(sv as never); applyLocSwitch(); if (game.facilityName) world.setSignName(game.facilityName) }
         else await auth.pushSave(game.save())
         return true
       } catch { return false }
@@ -1539,6 +1614,7 @@ setInterval(() => {
       }
     }
   } else if (!localStorage.getItem(GUEST_OK)) {
+    $('namemodal').classList.remove('show') // açılış yarışı: isim modalı gate'in odağını çalmasın
     $('gate').classList.add('show')
   } else if (game.activeLoc !== 'mahalle') {
     applyLocSwitch()  // yenilemede doğru şube teması

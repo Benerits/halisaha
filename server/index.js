@@ -392,7 +392,7 @@ function auditCheat(email, kind, info) {
 
 // ---- HALI SAHA ekonomi tabloları (src/state.ts ile BİREBİR senkron) ----
 const HS_BUILD_COST = { pitch: 45000, mini: 22000, basket: 22000, voley: 16000, parking: 14000, garden: 9000, kantin: 9000, dus: 14000, wc: 4000 }
-const HS_SHOP = [['hasCanteen',9000],['hasFridge',3500],['hasCleats',4200],['hasKeeper',5000],['hasTost',3000],['hasBaklava',4500],['hasLights',11000],['hasShower',14000],['hasSchoolDeal',9000],['hasTeaRoom',7500],['hasCorporate',12000],['hasBillboard',8500],['hasRoadSign',12500],['docService',6000],['hasPhone2',5500],['hasWC',4000]]
+const HS_SHOP = [['hasCanteen',9000],['hasFridge',3500],['hasCleats',4200],['hasKeeper',5000],['hasTost',3000],['hasBaklava',4500],['hasLights',11000],['hasShower',14000],['hasSchoolDeal',12000],['hasTeaRoom',7500],['hasCorporate',12000],['hasBillboard',8500],['hasRoadSign',12500],['docService',6000],['hasPhone2',5500],['hasWC',4000]]
 const HS_LOC_COST = { sanayi: 120000, sahil: 300000 }
 function hsLocValue(sn) {
   if (!sn || typeof sn !== 'object') return 0
@@ -433,25 +433,8 @@ function maxIncomeRate(s) {
   return Math.max(20, (10 + pitches * 95 + courts * 10 + mudur * 10) * SAFETY)
 }
 
-/** ŞUBE KASASI CLAMP'İ: istemci tavanıyla BİREBİR (state.ts BRANCH_VAULT_HARD).
- *  Kurcalanmış save'de branchVault sonsuz para kapısı olmasın. */
-const BRANCH_VAULT_HARD = 220_000
-const VALID_LOCS = ['kasaba', 'cevreyolu', 'otoyol', 'marina', 'metropol']
-function clampBranchVault(s) {
-  if (!s) return
-  if (typeof s.branchVault !== 'object' || !s.branchVault || Array.isArray(s.branchVault)) {
-    delete s.branchVault
-    return
-  }
-  const out = {}
-  for (const k of Object.keys(s.branchVault)) {
-    if (!VALID_LOCS.includes(k)) continue
-    const v = Number(s.branchVault[k])
-    if (!isFinite(v) || v <= 0) continue
-    out[k] = Math.min(BRANCH_VAULT_HARD, Math.round(v))
-  }
-  s.branchVault = out
-}
+// (branchVault clamp'i SİLİNDİ: benzinlik kalıntısıydı — halisaha istemcisinde branchVault
+//  yok; yanlış loc whitelist'i ileride bağlanırsa tüm şube kasalarını sessizce silecekti)
 
 /** Jeton kovası tavanı: tek seferlik meşru sıçramayı (gün dönüşü + sözleşme ödemesi) karşılar */
 const ALLOW_BURST = 300_000  // halisaha: 2 günlük offline raporu + şube toplamı sığar
@@ -1029,13 +1012,28 @@ async function handleApi(req, res, url) {
           const newDay = Number(clean.day) || 1
           const newWealth = money + bval
           const prevBval = buildingValue(prevSave)
-          const freshStart = newDay <= 2 && bval <= 0 && newWealth <= START_MONEY * 1.5
+          // SEZONU ŞAMPİYON BİTİR: her şey sıfırlanır, yıldız +1 kalır. Guard bunu
+          // "kayıt silinmiş" sanıp 409'la ESKİ save'i geri yüklüyordu — oyuncu sezonu
+          // kapatamıyordu ("sezonu bitir çalışmıyor, eski kayıt geri geliyor" kümesi).
+          // Tek adımlık yıldız artışı meşru prestij kabul edilir ve loglanır.
+          const prevStars = Number(prevSave.stars) || 0
+          const newStars = Number(clean.stars) || 0
+          // meşru prestij ŞEKLİ: +1 yıldız + gerçekten sıfırlanmış oyun (gün ≤2, servet
+          // taze başlangıç civarı — 25k para + başlangıç otoparkı 14k). Şekle uymayan
+          // yıldız artışı hiledir → yıldız geri kırpılır, kayıt yine kabul edilir.
+          const prestige = newStars === prevStars + 1 && newDay <= 2 && newWealth <= START_MONEY * 1.5 + 14_000
+          if (newStars > prevStars && !prestige) clean.stars = prevStars
+          const freshStart = newDay <= 2 && bval <= 14_000 && newWealth <= START_MONEY * 1.5 + 14_000
           const hasProgress = prevDay > 1 || prevBval > 0 || prevWealth > START_MONEY
-          if (freshStart && hasProgress) {
+          if (freshStart && hasProgress && !prestige) {
             return json(res, 409, { conflict: true, save: prevSave, updatedAt: prev.rows[0]?.updated_at || null })
           }
-          if (newDay < prevDay - 1 && newWealth < prevWealth * 0.5) {
+          if (newDay < prevDay - 1 && newWealth < prevWealth * 0.5 && !prestige) {
             return json(res, 409, { conflict: true, save: prevSave, updatedAt: prev.rows[0]?.updated_at || null })
+          }
+          if (Number(clean.stars) !== prevStars) {
+            pool.query('INSERT INTO halisaha_starlog(email, prev, next, kind) VALUES ($1,$2,$3,$4)',
+              [email, prevStars, Number(clean.stars) || 0, prestige ? 'sezon' : 'degisim']).catch(() => {})
           }
         }
         let clamped = 0
